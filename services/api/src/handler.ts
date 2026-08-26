@@ -143,6 +143,26 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await blockCallCounterparty(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/admin/listener-applications') {
+      ensureDatabaseReady();
+      const { listListenerApplications } = await import('./routes/admin.ts');
+      return await listListenerApplications(req, res);
+    }
+
+    const adminApplicationMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)$/);
+    if (method === 'GET' && adminApplicationMatch) {
+      ensureDatabaseReady();
+      const { getListenerApplicationForAdmin } = await import('./routes/admin.ts');
+      return await getListenerApplicationForAdmin(req, res, adminApplicationMatch[1]);
+    }
+
+    const adminAssessmentMatch = url.pathname.match(/^\/v1\/admin\/listener-assessments\/([^/]+)\/review$/);
+    if (method === 'POST' && adminAssessmentMatch) {
+      ensureDatabaseReady();
+      const { reviewListenerAssessment } = await import('./routes/admin.ts');
+      return await reviewListenerAssessment(req, res, adminAssessmentMatch[1]);
+    }
+
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) {
       ensureSensitiveDataReady();

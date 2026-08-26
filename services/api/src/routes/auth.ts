@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { withTransaction } from '@yeki-hast/db';
+import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import {

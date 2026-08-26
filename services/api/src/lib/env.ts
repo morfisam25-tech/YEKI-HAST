@@ -34,3 +34,9 @@ export function validateOtpEnv(): void {
   requireInteger('OTP_IP_LIMIT_PER_15M', 20, 1, 1000);
   requireInteger('OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000);
 }
+
+// Local full API server startup must fail closed on the complete auth/security config.
+// Vercel routes intentionally use the narrower validators above per endpoint.
+export function validateEnv(): void {
+  validateOtpEnv();
+}

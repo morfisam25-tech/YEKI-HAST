@@ -118,6 +118,26 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await heartbeatListenerPresence(req, res);
     }
 
+    if (method === 'POST' && url.pathname === '/v1/calls/request') {
+      ensureDatabaseReady();
+      const { requestCall } = await import('./routes/calls.ts');
+      return await requestCall(req, res);
+    }
+
+    const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);
+    if (method === 'POST' && cancelMatch) {
+      ensureDatabaseReady();
+      const { cancelCall } = await import('./routes/calls.ts');
+      return await cancelCall(req, res, cancelMatch[1]);
+    }
+
+    const callMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)$/);
+    if (method === 'GET' && callMatch) {
+      ensureDatabaseReady();
+      const { getCall } = await import('./routes/calls.ts');
+      return await getCall(req, res, callMatch[1]);
+    }
+
     sendJson(res, 404, { error: 'not_found' });
   } catch (error) {
     if (res.headersSent) {

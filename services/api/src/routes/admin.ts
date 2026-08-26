@@ -21,6 +21,64 @@ function idFrom(value: string, code: string): string {
   return value;
 }
 
+export async function getAdminOperationsSummary(req: IncomingMessage, res: ServerResponse) {
+  await requireAdmin(req);
+
+  const result = await query<{
+    applications: string;
+    awaiting_assessment: string;
+    kyc_pending: string;
+    approved_listeners: string;
+    online_now: string;
+    live_calls: string;
+    safety_events: string;
+    caller_waitlist: string;
+    payouts_ready: string;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM app.listener_applications)::text applications,
+      (SELECT COUNT(*) FROM app.listener_applications WHERE status='assessment')::text awaiting_assessment,
+      (SELECT COUNT(*) FROM app.listener_applications WHERE status IN ('assessment_passed','kyc_pending','kyc_expired'))::text kyc_pending,
+      (SELECT COUNT(*) FROM app.listener_applications WHERE status IN ('approved','active'))::text approved_listeners,
+      (
+        SELECT COUNT(*)
+        FROM app.listener_presence p
+        JOIN app.listener_applications la ON la.user_id=p.listener_user_id
+        JOIN app.service_catalog s ON s.id=la.service_id AND s.code='human_listening'
+        JOIN app.listener_profiles lp ON lp.user_id=p.listener_user_id
+        LEFT JOIN private_data.listener_kyc k ON k.user_id=p.listener_user_id
+        WHERE p.status='online'
+          AND p.last_heartbeat_at > now() - interval '90 seconds'
+          AND la.status IN ('approved','active')
+          AND lp.is_verified=true
+          AND k.status='verified'
+      )::text online_now,
+      (
+        SELECT COUNT(*) FROM app.call_sessions
+        WHERE status IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+      )::text live_calls,
+      (SELECT COUNT(*) FROM app.safety_events)::text safety_events,
+      (SELECT COUNT(*) FROM app.waitlist_entries)::text caller_waitlist,
+      (SELECT COUNT(*) FROM app.payouts WHERE status='created')::text payouts_ready
+  `);
+
+  const row = result.rows[0];
+  sendJson(res, 200, {
+    generatedAt: new Date().toISOString(),
+    counts: {
+      applications: Number(row.applications),
+      awaitingAssessment: Number(row.awaiting_assessment),
+      kycPending: Number(row.kyc_pending),
+      approvedListeners: Number(row.approved_listeners),
+      onlineNow: Number(row.online_now),
+      liveCalls: Number(row.live_calls),
+      safetyEvents: Number(row.safety_events),
+      callerWaitlist: Number(row.caller_waitlist),
+      payoutsReady: Number(row.payouts_ready),
+    },
+  });
+}
+
 export async function listListenerApplications(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
   const url = new URL(req.url ?? '/', 'http://localhost');

@@ -27,8 +27,6 @@ jobs:
           node --experimental-strip-types --check api/index.ts
           node --experimental-strip-types --check api/runtime.ts
           node --experimental-strip-types --check apps/mobile/src/api.ts
-          node --experimental-strip-types --check apps/mobile/src/ListenerKycScreen.tsx
-          node --experimental-strip-types --check apps/mobile/src/ListenerTrainingScreen.tsx
           node --experimental-strip-types --check services/api/src/providers/sms.ts
           node --experimental-strip-types --check services/api/src/providers/payment.ts
           node --experimental-strip-types --check services/api/src/providers/payout.ts

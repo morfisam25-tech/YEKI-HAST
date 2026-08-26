@@ -59,6 +59,14 @@ export type ListenerApplicationResponse = {
   };
 };
 
+export type ListenerKycStatusResponse = {
+  applicationStatus: string;
+  status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
+  verifiedAt: string | null;
+  rejectedReasonCode: string | null;
+  updatedAt: string | null;
+};
+
 export type WalletResponse = {
   wallets: Array<{
     currencyCode: string;
@@ -123,7 +131,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
 
   let body: unknown = null;
   try { body = await response.json(); } catch {}
-  if (!response.ok && response.status !== 202) {
+  if (!response.ok) {
     const code = body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
       ? String((body as { error: string }).error)
       : 'request_failed';
@@ -226,5 +234,25 @@ export function submitListenerAssessment(
   return request('/v1/listener/assessment', {
     method: 'POST',
     body: JSON.stringify({ scenarioVersion: 'listener-beta-v1', answers }),
+  }, token);
+}
+
+export function getListenerKycStatus(token: string): Promise<ListenerKycStatusResponse> {
+  return request('/v1/listener/kyc', {}, token);
+}
+
+export function submitListenerKyc(
+  token: string,
+  input: {
+    legalName: string;
+    nationalId: string;
+    dateOfBirth: string;
+    bankIban: string;
+    bankAccountHolder?: string;
+  },
+): Promise<{ ok: true; status: 'pending'; applicationId: string }> {
+  return request('/v1/listener/kyc', {
+    method: 'POST',
+    body: JSON.stringify(input),
   }, token);
 }

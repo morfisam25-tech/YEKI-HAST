@@ -5,12 +5,71 @@ export interface SmsProvider {
 class DevSmsProvider implements SmsProvider {
   async sendOtp(): Promise<void> {
     // Deliberately no console logging of OTPs. In local development the API can return
-    // devCode only when DEV_EXPOSE_OTP=true and NODE_ENV is not production.
+    // devCode only when DEV_EXPOSE_OTP=true and NODE_ENV=development.
+  }
+}
+
+function required(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error('sms_provider_not_configured');
+  return value;
+}
+
+function kavenegarReceptor(phoneE164: string): string {
+  // Kavenegar accepts Iranian mobile numbers in local 09... form.
+  if (phoneE164.startsWith('+98')) return `0${phoneE164.slice(3)}`;
+  // Their Lookup docs specify 00 + country code for international receptors.
+  return `00${phoneE164.slice(1)}`;
+}
+
+class KavenegarSmsProvider implements SmsProvider {
+  readonly #apiKey: string;
+  readonly #template: string;
+
+  constructor() {
+    this.#apiKey = required('KAVENEGAR_API_KEY');
+    this.#template = required('KAVENEGAR_OTP_TEMPLATE');
+  }
+
+  async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {
+    const endpoint = `https://api.kavenegar.com/v1/${encodeURIComponent(this.#apiKey)}/verify/lookup.json`;
+    const body = new URLSearchParams({
+      receptor: kavenegarReceptor(input.phoneE164),
+      token: input.code,
+      template: this.#template,
+      type: 'sms',
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      // Never bubble the URL because it contains the API key.
+      throw new Error('sms_delivery_failed');
+    }
+
+    if (!response.ok) throw new Error('sms_delivery_failed');
+
+    let payload: unknown;
+    try { payload = await response.json(); }
+    catch { throw new Error('sms_delivery_failed'); }
+
+    const status = (payload as { return?: { status?: unknown } } | null)?.return?.status;
+    if (status !== 200) throw new Error('sms_delivery_failed');
   }
 }
 
 export function getSmsProvider(): SmsProvider {
-  const provider = process.env.SMS_PROVIDER ?? 'dev';
-  if (provider === 'dev') return new DevSmsProvider();
-  throw new Error(`SMS provider not implemented: ${provider}`);
+  const provider = process.env.SMS_PROVIDER?.trim() || (process.env.NODE_ENV === 'development' ? 'dev' : '');
+  if (provider === 'dev') {
+    if (process.env.NODE_ENV !== 'development') throw new Error('sms_provider_not_configured');
+    return new DevSmsProvider();
+  }
+  if (provider === 'kavenegar') return new KavenegarSmsProvider();
+  throw new Error('sms_provider_not_configured');
 }

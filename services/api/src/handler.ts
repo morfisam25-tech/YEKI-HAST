@@ -84,10 +84,23 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await getWallet(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/wallet/transactions') {
+      ensureDatabaseReady();
+      const { getWalletTransactions } = await import('./routes/payments.ts');
+      return await getWalletTransactions(req, res);
+    }
+
     if (method === 'POST' && url.pathname === '/v1/wallet/topups') {
       ensureDatabaseReady();
       const { createWalletTopup } = await import('./routes/payments.ts');
       return await createWalletTopup(req, res);
+    }
+
+    const topupVerifyMatch = url.pathname.match(/^\/v1\/wallet\/topups\/([^/]+)\/verify$/);
+    if (method === 'POST' && topupVerifyMatch) {
+      ensureDatabaseReady();
+      const { verifyWalletTopup } = await import('./routes/payments.ts');
+      return await verifyWalletTopup(req, res, topupVerifyMatch[1]);
     }
 
     const topupMatch = url.pathname.match(/^\/v1\/wallet\/topups\/([^/]+)$/);

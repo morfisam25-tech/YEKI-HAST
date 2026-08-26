@@ -70,6 +70,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await joinWaitlist(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/listeners') {
+      ensureDatabaseReady();
+      const { browseListeners } = await import('./routes/marketplace.ts');
+      return await browseListeners(req, res);
+    }
+
     if (method === 'POST' && url.pathname === '/v1/listener/application') {
       ensureDatabaseReady();
       const { createListenerApplication } = await import('./routes/listener.ts');
@@ -92,6 +98,24 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       ensureDatabaseReady();
       const { submitListenerAssessment } = await import('./routes/listener.ts');
       return await submitListenerAssessment(req, res);
+    }
+
+    if (method === 'GET' && url.pathname === '/v1/listener/presence') {
+      ensureDatabaseReady();
+      const { getListenerPresence } = await import('./routes/marketplace.ts');
+      return await getListenerPresence(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/listener/presence') {
+      ensureDatabaseReady();
+      const { setListenerPresence } = await import('./routes/marketplace.ts');
+      return await setListenerPresence(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/listener/presence/heartbeat') {
+      ensureDatabaseReady();
+      const { heartbeatListenerPresence } = await import('./routes/marketplace.ts');
+      return await heartbeatListenerPresence(req, res);
     }
 
     sendJson(res, 404, { error: 'not_found' });

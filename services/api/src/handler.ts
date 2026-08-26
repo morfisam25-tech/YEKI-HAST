@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { validateSecurityEnv } from './lib/security.ts';
+import { validateTelephonyEnv } from './providers/telephony.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
 function ensureDatabaseReady(): void {
@@ -18,6 +19,12 @@ function ensureSensitiveDataReady(): void {
   ensureDatabaseReady();
   try { validateSecurityEnv(); }
   catch { throw new HttpError(503, 'sensitive_data_not_configured'); }
+}
+
+function ensureCallReady(): void {
+  ensureDatabaseReady();
+  try { validateTelephonyEnv(); }
+  catch { throw new HttpError(503, 'telephony_not_configured'); }
 }
 
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -126,7 +133,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (method === 'POST' && url.pathname === '/v1/calls/request') {
-      ensureDatabaseReady();
+      ensureCallReady();
       const { requestCall } = await import('./routes/calls.ts');
       return await requestCall(req, res);
     }

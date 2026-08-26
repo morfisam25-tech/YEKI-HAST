@@ -27,8 +27,10 @@ jobs:
           node --experimental-strip-types --check api/index.ts
           node --experimental-strip-types --check apps/mobile/src/api.ts
           node --experimental-strip-types --check services/api/src/providers/sms.ts
+          node --experimental-strip-types --check services/api/src/providers/payment.ts
           node --experimental-strip-types --check services/api/src/providers/telephony.ts
           node --experimental-strip-types --check services/api/src/routes/auth.ts
+          node --experimental-strip-types --check services/api/src/routes/payments.ts
           node --experimental-strip-types --check services/api/src/routes/listener.ts
           node --experimental-strip-types --check services/api/src/routes/marketplace.ts
           node --experimental-strip-types --check services/api/src/routes/calls.ts

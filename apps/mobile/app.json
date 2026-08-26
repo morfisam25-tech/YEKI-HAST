@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "یکی هست",
+    "slug": "yeki-hast",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "app.yekihast.mobile"
+    }
+  }
+}

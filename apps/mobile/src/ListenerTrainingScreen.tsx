@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ListenerKycScreen from './ListenerKycScreen';
 import {
   completeListenerTraining,
   getErrorCode,
@@ -37,7 +38,7 @@ const modules: Array<{
   {
     key: 'platform_rules',
     title: '۴. قوانین پلتفرم',
-    body: 'قرار عاشقانه، سکس‌چت، درخواست شماره یا آیدی خارج از اپ و انتقال رابطه به بیرون از پلتفرم ممنوع است.',
+    body: 'قرار عاشقانه، سکس‌چت، درخواست شماره یا آیدی شخصی خارج از اپ و انتقال رابطه به بیرون از پلتفرم ممنوع است.',
   },
 ];
 
@@ -147,6 +148,10 @@ export default function ListenerTrainingScreen({ token, onDone }: Props) {
     );
   }
 
+  if (['assessment_passed', 'kyc_pending', 'kyc_expired'].includes(application.status)) {
+    return <ListenerKycScreen token={token} onDone={onDone} />;
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>آموزش شنونده</Text>
@@ -208,7 +213,7 @@ export default function ListenerTrainingScreen({ token, onDone }: Props) {
       {assessment?.result === 'passed' && (
         <View style={styles.notice}>
           <Text style={styles.sectionTitle}>آزمون تأیید شد</Text>
-          <Text style={styles.body}>مرحله بعد احراز هویت است. تا وقتی فرایند KYC رسمی قفل نشده، اطلاعات هویتی داخل این صفحه جمع نمی‌کنیم.</Text>
+          <Text style={styles.body}>احراز هویت برای این درخواست آماده است.</Text>
         </View>
       )}
 

@@ -23,6 +23,13 @@ type AttemptRow = {
   completed_at: string | null;
 };
 
+type VerificationOutcome = {
+  status: 'pending' | 'cancelled' | 'failed' | 'succeeded';
+  providerCode: number | null;
+  balanceMinor?: string | null;
+  idempotent?: boolean;
+};
+
 function parseAmountMinor(value: unknown): bigint {
   if (typeof value === 'number') {
     if (!Number.isSafeInteger(value) || value <= 0) throw new HttpError(400, 'invalid_amount');
@@ -77,6 +84,165 @@ function limitFrom(value: string | null): number {
   const parsed = value ? Number(value) : 50;
   if (!Number.isInteger(parsed) || parsed < 1) throw new HttpError(400, 'invalid_limit');
   return Math.min(parsed, 100);
+}
+
+function paymentProvider() {
+  try { return getPaymentProvider(); }
+  catch (error) {
+    if (error instanceof PaymentProviderError) throw new HttpError(503, 'payment_not_configured');
+    throw error;
+  }
+}
+
+async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOutcome> {
+  if (row.status === 'succeeded') {
+    const wallet = await query<{ balance_minor: string }>(
+      'SELECT balance_minor::text FROM app.wallets WHERE id=$1', [row.wallet_id],
+    );
+    return { status: 'succeeded', providerCode: 0, balanceMinor: wallet.rows[0]?.balance_minor ?? null, idempotent: true };
+  }
+  if (row.status === 'cancelled' || row.status === 'failed') {
+    return { status: row.status, providerCode: null, idempotent: true };
+  }
+  if (row.status !== 'pending') throw new HttpError(409, 'payment_state_conflict');
+  if (row.provider !== 'nextpay' || !row.provider_payment_id || !UUID_RE.test(row.provider_payment_id)) {
+    throw new HttpError(409, 'payment_not_ready_for_verification');
+  }
+  if (row.currency_code !== 'IRR') throw new HttpError(409, 'payment_currency_mismatch');
+
+  const provider = paymentProvider();
+  let verified;
+  try {
+    verified = await provider.verifyPayment({
+      providerPaymentId: row.provider_payment_id,
+      amountMinor: BigInt(row.amount_minor),
+      currencyCode: 'IRR',
+    });
+  } catch (error) {
+    if (error instanceof PaymentProviderError) {
+      console.error('payment_verify_provider_error', { attemptId: row.id, providerCode: error.providerCode });
+      throw new HttpError(502, 'payment_verification_unavailable');
+    }
+    throw error;
+  }
+
+  const disposition = nextPayVerificationDisposition(verified.providerCode);
+  if (disposition === 'pending') {
+    return { status: 'pending', providerCode: verified.providerCode };
+  }
+  if (disposition === 'cancelled' || disposition === 'failed') {
+    await query(`
+      UPDATE app.payment_attempts
+      SET status=$2, completed_at=COALESCE(completed_at, now())
+      WHERE id=$1 AND status='pending'
+    `, [row.id, disposition]);
+    return { status: disposition, providerCode: verified.providerCode };
+  }
+
+  if (!verified.paid || verified.orderId !== row.id || verified.amountMinor !== BigInt(row.amount_minor)) {
+    console.error('payment_verification_mismatch', {
+      attemptId: row.id,
+      providerOrderId: verified.orderId,
+      providerAmountMinor: verified.amountMinor?.toString() ?? null,
+      providerCode: verified.providerCode,
+    });
+    throw new HttpError(409, 'payment_verification_mismatch');
+  }
+
+  const credited = await withTransaction(async (client) => {
+    const locked = await client.query<AttemptRow>(`
+      SELECT id::text, user_id::text, wallet_id::text, market_id::text, provider,
+             currency_code, amount_minor::text, status::text, provider_payment_id,
+             provider_fee_minor::text, created_at::text, completed_at::text
+      FROM app.payment_attempts
+      WHERE id=$1
+      FOR UPDATE
+    `, [row.id]);
+    const current = locked.rows[0];
+    if (!current) throw new HttpError(404, 'payment_attempt_not_found');
+    if (current.status === 'succeeded') {
+      const wallet = await client.query<{ balance_minor: string }>(
+        'SELECT balance_minor::text FROM app.wallets WHERE id=$1', [current.wallet_id],
+      );
+      return { balanceMinor: wallet.rows[0]?.balance_minor ?? null, idempotent: true };
+    }
+    if (current.status !== 'pending') throw new HttpError(409, 'payment_state_conflict');
+
+    const wallet = await client.query<{ balance_minor: string }>(`
+      SELECT balance_minor::text
+      FROM app.wallets
+      WHERE id=$1 AND currency_code=$2
+      FOR UPDATE
+    `, [current.wallet_id, current.currency_code]);
+    if (!wallet.rows[0]) throw new HttpError(503, 'wallet_unavailable');
+
+    const existingTx = await client.query<{ balance_after_minor: string }>(`
+      SELECT balance_after_minor::text
+      FROM app.wallet_transactions
+      WHERE payment_attempt_id=$1 AND type='payment_topup'
+      LIMIT 1
+    `, [current.id]);
+    if (existingTx.rows[0]) {
+      await client.query(`
+        UPDATE app.payment_attempts
+        SET status='succeeded', completed_at=COALESCE(completed_at, now())
+        WHERE id=$1
+      `, [current.id]);
+      return { balanceMinor: existingTx.rows[0].balance_after_minor, idempotent: true };
+    }
+
+    const newBalance = BigInt(wallet.rows[0].balance_minor) + BigInt(current.amount_minor);
+    if (newBalance > MAX_BIGINT) throw new HttpError(409, 'wallet_balance_overflow');
+    await client.query(`
+      UPDATE app.wallets
+      SET balance_minor=$2::bigint, version=version+1
+      WHERE id=$1
+    `, [current.wallet_id, newBalance.toString()]);
+
+    await client.query(`
+      INSERT INTO app.wallet_transactions(
+        wallet_id, currency_code, type, delta_minor, balance_after_minor,
+        payment_attempt_id, created_by_user_id, reason_code, idempotency_key
+      )
+      VALUES ($1,$2,'payment_topup',$3,$4,$5,$6,'nextpay_verified',$7)
+    `, [
+      current.wallet_id,
+      current.currency_code,
+      current.amount_minor,
+      newBalance.toString(),
+      current.id,
+      current.user_id,
+      `payment-topup:${current.id}:credit`,
+    ]);
+
+    await client.query(`
+      UPDATE app.payment_attempts
+      SET status='succeeded', completed_at=now()
+      WHERE id=$1
+    `, [current.id]);
+
+    await client.query(`
+      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1,'payment_verified','payment_attempt',$2,
+              jsonb_build_object('provider','nextpay','providerReference',$3,'providerCode',$4,'amountMinor',$5,'currencyCode',$6))
+    `, [
+      current.user_id,
+      current.id,
+      verified.providerReference,
+      verified.providerCode,
+      current.amount_minor,
+      current.currency_code,
+    ]);
+
+    return { balanceMinor: newBalance.toString(), idempotent: false };
+  });
+
+  return {
+    status: 'succeeded',
+    providerCode: verified.providerCode,
+    balanceMinor: credited.balanceMinor,
+    idempotent: credited.idempotent,
+  };
 }
 
 export async function getWallet(req: IncomingMessage, res: ServerResponse) {
@@ -150,13 +316,7 @@ export async function getWalletTransactions(req: IncomingMessage, res: ServerRes
 
 export async function createWalletTopup(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
-  let provider;
-  try { provider = getPaymentProvider(); }
-  catch (error) {
-    if (error instanceof PaymentProviderError) throw new HttpError(503, 'payment_not_configured');
-    throw error;
-  }
-
+  const provider = paymentProvider();
   const body = await readJson<{ amountMinor?: unknown; idempotencyKey?: unknown }>(req);
   const amountMinor = parseAmountMinor(body.amountMinor);
   const clientKey = requireString(body.idempotencyKey, 'idempotencyKey', 8, 100);
@@ -268,14 +428,29 @@ export async function getWalletTopup(req: IncomingMessage, res: ServerResponse, 
   sendJson(res, 200, publicAttempt(result.rows[0]));
 }
 
-export async function nextPayCallback(req: IncomingMessage, res: ServerResponse) {
-  let provider;
-  try { provider = getPaymentProvider(); }
-  catch (error) {
-    if (error instanceof PaymentProviderError) throw new HttpError(503, 'payment_not_configured');
-    throw error;
-  }
+export async function verifyWalletTopup(req: IncomingMessage, res: ServerResponse, rawAttemptId: string) {
+  const { userId } = await requireAuth(req);
+  if (!UUID_RE.test(rawAttemptId)) throw new HttpError(400, 'invalid_payment_attempt');
+  const result = await query<AttemptRow>(`
+    SELECT id::text, user_id::text, wallet_id::text, market_id::text, provider,
+           currency_code, amount_minor::text, status::text, provider_payment_id,
+           provider_fee_minor::text, created_at::text, completed_at::text
+    FROM app.payment_attempts
+    WHERE id=$1 AND user_id=$2
+  `, [rawAttemptId, userId]);
+  const row = result.rows[0];
+  if (!row) throw new HttpError(404, 'payment_attempt_not_found');
+  const outcome = await verifyAndFinalizeAttempt(row);
+  sendJson(res, outcome.status === 'pending' ? 202 : 200, {
+    ok: outcome.status === 'succeeded',
+    attemptId: row.id,
+    currencyCode: row.currency_code,
+    amountMinor: row.amount_minor,
+    ...outcome,
+  });
+}
 
+export async function nextPayCallback(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const transId = url.searchParams.get('trans_id')?.trim() ?? '';
   const orderId = url.searchParams.get('order_id')?.trim() ?? '';
@@ -290,160 +465,12 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
   `, [orderId]);
   const row = initial.rows[0];
   if (!row || row.provider_payment_id !== transId) throw new HttpError(400, 'invalid_payment_callback');
-  if (row.status === 'succeeded') {
-    sendJson(res, 200, { ok: true, status: 'succeeded', attemptId: row.id, idempotent: true });
-    return;
-  }
-  if (row.status !== 'pending') {
-    sendJson(res, 200, { ok: false, status: row.status, attemptId: row.id });
-    return;
-  }
-
-  let verified;
-  try {
-    verified = await provider.verifyPayment({
-      providerPaymentId: transId,
-      amountMinor: BigInt(row.amount_minor),
-      currencyCode: 'IRR',
-    });
-  } catch (error) {
-    if (error instanceof PaymentProviderError) {
-      console.error('payment_verify_provider_error', { attemptId: row.id, providerCode: error.providerCode });
-      throw new HttpError(502, 'payment_verification_unavailable');
-    }
-    throw error;
-  }
-
-  const disposition = nextPayVerificationDisposition(verified.providerCode);
-  if (disposition === 'pending') {
-    sendJson(res, 202, {
-      ok: false,
-      status: 'pending',
-      attemptId: row.id,
-      providerCode: verified.providerCode,
-    });
-    return;
-  }
-  if (disposition === 'cancelled' || disposition === 'failed') {
-    await query(`
-      UPDATE app.payment_attempts
-      SET status=$2, completed_at=COALESCE(completed_at, now())
-      WHERE id=$1 AND status='pending'
-    `, [row.id, disposition]);
-    sendJson(res, 200, {
-      ok: false,
-      status: disposition,
-      attemptId: row.id,
-      providerCode: verified.providerCode,
-    });
-    return;
-  }
-
-  if (!verified.paid || verified.orderId !== row.id || verified.amountMinor !== BigInt(row.amount_minor)) {
-    console.error('payment_verification_mismatch', {
-      attemptId: row.id,
-      providerOrderId: verified.orderId,
-      providerAmountMinor: verified.amountMinor?.toString() ?? null,
-      providerCode: verified.providerCode,
-    });
-    throw new HttpError(409, 'payment_verification_mismatch');
-  }
-
-  const credited = await withTransaction(async (client) => {
-    const locked = await client.query<AttemptRow>(`
-      SELECT id::text, user_id::text, wallet_id::text, market_id::text, provider,
-             currency_code, amount_minor::text, status::text, provider_payment_id,
-             provider_fee_minor::text, created_at::text, completed_at::text
-      FROM app.payment_attempts
-      WHERE id=$1
-      FOR UPDATE
-    `, [row.id]);
-    const current = locked.rows[0];
-    if (!current) throw new HttpError(404, 'payment_attempt_not_found');
-    if (current.status === 'succeeded') {
-      const wallet = await client.query<{ balance_minor: string }>(
-        'SELECT balance_minor::text FROM app.wallets WHERE id=$1', [current.wallet_id],
-      );
-      return { balanceMinor: wallet.rows[0]?.balance_minor ?? null, idempotent: true };
-    }
-    if (current.status !== 'pending') throw new HttpError(409, 'payment_state_conflict');
-
-    const wallet = await client.query<{ balance_minor: string }>(`
-      SELECT balance_minor::text
-      FROM app.wallets
-      WHERE id=$1 AND currency_code=$2
-      FOR UPDATE
-    `, [current.wallet_id, current.currency_code]);
-    if (!wallet.rows[0]) throw new HttpError(503, 'wallet_unavailable');
-
-    const existingTx = await client.query<{ balance_after_minor: string }>(`
-      SELECT balance_after_minor::text
-      FROM app.wallet_transactions
-      WHERE payment_attempt_id=$1 AND type='payment_topup'
-      LIMIT 1
-    `, [current.id]);
-    if (existingTx.rows[0]) {
-      await client.query(`
-        UPDATE app.payment_attempts
-        SET status='succeeded', completed_at=COALESCE(completed_at, now())
-        WHERE id=$1
-      `, [current.id]);
-      return { balanceMinor: existingTx.rows[0].balance_after_minor, idempotent: true };
-    }
-
-    const newBalance = BigInt(wallet.rows[0].balance_minor) + BigInt(current.amount_minor);
-    if (newBalance > MAX_BIGINT) throw new HttpError(409, 'wallet_balance_overflow');
-    await client.query(`
-      UPDATE app.wallets
-      SET balance_minor=$2::bigint, version=version+1
-      WHERE id=$1
-    `, [current.wallet_id, newBalance.toString()]);
-
-    await client.query(`
-      INSERT INTO app.wallet_transactions(
-        wallet_id, currency_code, type, delta_minor, balance_after_minor,
-        payment_attempt_id, created_by_user_id, reason_code, idempotency_key
-      )
-      VALUES ($1,$2,'payment_topup',$3,$4,$5,$6,'nextpay_verified',$7)
-    `, [
-      current.wallet_id,
-      current.currency_code,
-      current.amount_minor,
-      newBalance.toString(),
-      current.id,
-      current.user_id,
-      `payment-topup:${current.id}:credit`,
-    ]);
-
-    await client.query(`
-      UPDATE app.payment_attempts
-      SET status='succeeded', completed_at=now()
-      WHERE id=$1
-    `, [current.id]);
-
-    await client.query(`
-      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
-      VALUES ($1,'payment_verified','payment_attempt',$2,
-              jsonb_build_object('provider','nextpay','providerReference',$3,'providerCode',$4,'amountMinor',$5,'currencyCode',$6))
-    `, [
-      current.user_id,
-      current.id,
-      verified.providerReference,
-      verified.providerCode,
-      current.amount_minor,
-      current.currency_code,
-    ]);
-
-    return { balanceMinor: newBalance.toString(), idempotent: false };
-  });
-
-  sendJson(res, 200, {
-    ok: true,
-    status: 'succeeded',
+  const outcome = await verifyAndFinalizeAttempt(row);
+  sendJson(res, outcome.status === 'pending' ? 202 : 200, {
+    ok: outcome.status === 'succeeded',
     attemptId: row.id,
     currencyCode: row.currency_code,
     amountMinor: row.amount_minor,
-    balanceMinor: credited.balanceMinor,
-    idempotent: credited.idempotent,
+    ...outcome,
   });
 }

@@ -34,6 +34,12 @@ export function otpHash(phoneE164: string, purpose: string, code: string): strin
     .digest('hex');
 }
 
+export function kycLookupHash(kind: 'national_id' | 'bank_iban', normalizedValue: string): string {
+  return createHmac('sha256', required('KYC_HASH_PEPPER'))
+    .update(`yeki-hast|kyc|${kind}|${normalizedValue}`)
+    .digest('hex');
+}
+
 export function safeEqualHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
@@ -88,6 +94,11 @@ export function validateSecurityEnv(): void {
   required('PHONE_HASH_PEPPER');
   required('IP_HASH_PEPPER');
   required('OTP_HASH_PEPPER');
+  encryptionKeyRing();
+}
+
+export function validateKycSecurityEnv(): void {
+  required('KYC_HASH_PEPPER');
   encryptionKeyRing();
 }
 

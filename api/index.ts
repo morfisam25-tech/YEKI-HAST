@@ -8,6 +8,11 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+function databaseHost(connectionString: string): string | null {
+  try { return new URL(connectionString).hostname || null; }
+  catch { return null; }
+}
+
 async function loadPgPool(connectionString: string) {
   const pg = await import('pg');
   return new pg.Pool({
@@ -74,6 +79,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, 503, { ok: false, stage: 'database_env_missing' });
       return;
     }
+    const dbHost = databaseHost(connectionString);
 
     let pool: Awaited<ReturnType<typeof loadPgPool>>;
     try {
@@ -108,6 +114,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           ok: false,
           stage: 'database_schema_missing',
           database: db?.database_name ?? 'unknown',
+          databaseHost: dbHost,
           appSchemaExists: db?.app_schema_exists ?? false,
           pricingTableExists: db?.pricing_table_exists ?? false,
           languagesTableExists: db?.languages_table_exists ?? false,
@@ -153,6 +160,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           ok: false,
           stage: 'active_market_pricing_missing',
           database: db.database_name,
+          databaseHost: dbHost,
           productCode,
           serviceCode,
           marketCode,
@@ -180,6 +188,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, 500, {
         ok: false,
         stage: 'bootstrap_query_failed',
+        databaseHost: dbHost,
         errorType: error instanceof Error ? error.name : 'unknown',
         sqlState: typeof sqlError?.code === 'string' ? sqlError.code : null,
       });

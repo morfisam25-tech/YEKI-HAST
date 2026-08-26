@@ -5,12 +5,8 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader('content-type', 'application/json; charset=utf-8');
   res.setHeader('content-length', Buffer.byteLength(payload));
+  res.setHeader('cache-control', 'no-store');
   res.end(payload);
-}
-
-function databaseHost(connectionString: string): string | null {
-  try { return new URL(connectionString).hostname || null; }
-  catch { return null; }
 }
 
 async function loadPgPool(connectionString: string) {
@@ -40,7 +36,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/ready') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
-      sendJson(res, 503, { ok: false, stage: 'database_env_missing' });
+      sendJson(res, 503, { ok: false, error: 'service_not_ready' });
       return;
     }
 
@@ -49,11 +45,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       pool = await loadPgPool(connectionString);
     } catch (error) {
       console.error('readiness_pg_import_failed', error);
-      sendJson(res, 500, {
-        ok: false,
-        stage: 'database_driver_failed',
-        errorType: error instanceof Error ? error.name : 'unknown',
-      });
+      sendJson(res, 503, { ok: false, error: 'service_not_ready' });
       return;
     }
 
@@ -62,11 +54,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, 200, { ok: true, database: 'ready' });
     } catch (error) {
       console.error('readiness_database_query_failed', error);
-      sendJson(res, 503, {
-        ok: false,
-        stage: 'database_query_failed',
-        errorType: error instanceof Error ? error.name : 'unknown',
-      });
+      sendJson(res, 503, { ok: false, error: 'service_not_ready' });
     } finally {
       await pool.end().catch(() => undefined);
     }
@@ -76,52 +64,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/v1/bootstrap') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
-      sendJson(res, 503, { ok: false, stage: 'database_env_missing' });
+      sendJson(res, 503, { error: 'service_not_ready' });
       return;
     }
-    const dbHost = databaseHost(connectionString);
 
     let pool: Awaited<ReturnType<typeof loadPgPool>>;
     try {
       pool = await loadPgPool(connectionString);
     } catch (error) {
       console.error('bootstrap_pg_import_failed', error);
-      sendJson(res, 500, {
-        ok: false,
-        stage: 'database_driver_failed',
-        errorType: error instanceof Error ? error.name : 'unknown',
-      });
+      sendJson(res, 503, { error: 'service_not_ready' });
       return;
     }
 
     try {
-      const diagnostic = await pool.query<{
-        database_name: string;
-        app_schema_exists: boolean;
-        pricing_table_exists: boolean;
-        languages_table_exists: boolean;
-      }>(`
-        SELECT
-          current_database() AS database_name,
-          to_regnamespace('app') IS NOT NULL AS app_schema_exists,
-          to_regclass('app.pricing_plans') IS NOT NULL AS pricing_table_exists,
-          to_regclass('app.languages') IS NOT NULL AS languages_table_exists
-      `);
-      const db = diagnostic.rows[0];
-
-      if (!db?.app_schema_exists || !db.pricing_table_exists || !db.languages_table_exists) {
-        sendJson(res, 503, {
-          ok: false,
-          stage: 'database_schema_missing',
-          database: db?.database_name ?? 'unknown',
-          databaseHost: dbHost,
-          appSchemaExists: db?.app_schema_exists ?? false,
-          pricingTableExists: db?.pricing_table_exists ?? false,
-          languagesTableExists: db?.languages_table_exists ?? false,
-        });
-        return;
-      }
-
       const productCode = process.env.DEFAULT_PRODUCT_CODE ?? 'yeki_hast';
       const serviceCode = process.env.DEFAULT_SERVICE_CODE ?? 'human_listening';
       const marketCode = process.env.DEFAULT_MARKET_CODE ?? 'ir';
@@ -156,15 +112,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const row = pricing.rows[0];
       if (!row) {
-        sendJson(res, 503, {
-          ok: false,
-          stage: 'active_market_pricing_missing',
-          database: db.database_name,
-          databaseHost: dbHost,
-          productCode,
-          serviceCode,
-          marketCode,
-        });
+        sendJson(res, 503, { error: 'active_market_pricing_missing' });
         return;
       }
 
@@ -183,15 +131,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
       });
     } catch (error) {
-      const sqlError = error as { code?: string };
       console.error('bootstrap_database_query_failed', error);
-      sendJson(res, 500, {
-        ok: false,
-        stage: 'bootstrap_query_failed',
-        databaseHost: dbHost,
-        errorType: error instanceof Error ? error.name : 'unknown',
-        sqlState: typeof sqlError?.code === 'string' ? sqlError.code : null,
-      });
+      sendJson(res, 500, { error: 'internal_error' });
     } finally {
       await pool.end().catch(() => undefined);
     }
@@ -203,10 +144,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return await handleApiRequest(req, res);
   } catch (error) {
     console.error('backend_import_failed', error);
-    sendJson(res, 500, {
-      ok: false,
-      stage: 'backend_import_failed',
-      errorType: error instanceof Error ? error.name : 'unknown',
-    });
+    sendJson(res, 500, { error: 'internal_error' });
   }
 }

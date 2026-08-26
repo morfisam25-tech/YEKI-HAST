@@ -3,6 +3,16 @@ import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
+function ensureDatabaseReady(): void {
+  try { validateDatabaseEnv(); }
+  catch { throw new HttpError(503, 'service_not_ready'); }
+}
+
+function ensureOtpReady(): void {
+  try { validateOtpEnv(); }
+  catch { throw new HttpError(503, 'auth_not_configured'); }
+}
+
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
     const method = req.method ?? 'GET';
@@ -24,50 +34,50 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (method === 'GET' && url.pathname === '/ready') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       await query('SELECT 1');
       sendJson(res, 200, { ok: true, database: 'ready' });
       return;
     }
 
     if (method === 'GET' && url.pathname === '/v1/bootstrap') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       const { bootstrap } = await import('./routes/bootstrap.ts');
       return await bootstrap(res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') {
-      validateOtpEnv();
+      ensureOtpReady();
       const { requestOtp } = await import('./routes/auth.ts');
       return await requestOtp(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/auth/otp/verify') {
-      validateOtpEnv();
+      ensureOtpReady();
       const { verifyOtp } = await import('./routes/auth.ts');
       return await verifyOtp(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/caller/age-gate') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       const { setAgeGate } = await import('./routes/caller.ts');
       return await setAgeGate(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/caller/waitlist') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       const { joinWaitlist } = await import('./routes/caller.ts');
       return await joinWaitlist(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/listener/application') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       const { createListenerApplication } = await import('./routes/listener.ts');
       return await createListenerApplication(req, res);
     }
 
     if (method === 'GET' && url.pathname === '/v1/listener/application') {
-      validateDatabaseEnv();
+      ensureDatabaseReady();
       const { getListenerApplication } = await import('./routes/listener.ts');
       return await getListenerApplication(req, res);
     }

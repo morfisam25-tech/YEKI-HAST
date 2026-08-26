@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction, query } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
+import { computeCallAuthorization } from '../domain/call-authorization.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -167,22 +168,14 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
     const walletRow = wallet.rows[0];
     if (!walletRow) throw new HttpError(503, 'wallet_unavailable');
 
-    const balance = BigInt(walletRow.balance_minor);
-    const reserved = BigInt(walletRow.reserved_minor);
-    const available = balance - reserved;
-    const callerRate = BigInt(ctx.caller_rate);
-    const increment = BigInt(ctx.billing_increment_seconds);
-    let maxBillable = (available * 60n) / callerRate;
-    maxBillable = (maxBillable / increment) * increment;
-    if (maxSeconds !== null) {
-      const requested = BigInt(maxSeconds);
-      const requestedRoundedDown = (requested / increment) * increment;
-      if (requestedRoundedDown < maxBillable) maxBillable = requestedRoundedDown;
-    }
-    if (maxBillable < increment) throw new HttpError(402, 'insufficient_balance');
-    const authorized = (callerRate * maxBillable + 59n) / 60n;
-    if (authorized > available) throw new HttpError(402, 'insufficient_balance');
-    if (maxBillable > BigInt(Number.MAX_SAFE_INTEGER)) throw new HttpError(500, 'billable_limit_overflow');
+    const authorization = computeCallAuthorization({
+      balanceMinor: BigInt(walletRow.balance_minor),
+      reservedMinor: BigInt(walletRow.reserved_minor),
+      callerRatePerMinuteMinor: BigInt(ctx.caller_rate),
+      billingIncrementSeconds: ctx.billing_increment_seconds,
+      requestedMaxSeconds: maxSeconds,
+    });
+    if (!authorization) throw new HttpError(402, 'insufficient_balance');
 
     const inserted = await client.query<{
       id: string; status: string; listener_user_id: string | null; currency_code: string;
@@ -201,7 +194,8 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
     `, [
       ctx.product_id, ctx.service_id, ctx.market_id, userId, selectedListenerId,
       clientRequestId, listenerGender, ctx.language_id, mood, topicCode, ctx.pricing_plan_id,
-      ctx.currency_code, ctx.caller_rate, ctx.listener_rate, authorized.toString(), Number(maxBillable),
+      ctx.currency_code, ctx.caller_rate, ctx.listener_rate,
+      authorization.authorizedMinor.toString(), authorization.maxBillableSeconds,
     ]);
     const row = inserted.rows[0];
 
@@ -210,7 +204,7 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
       SET reserved_minor=reserved_minor+$2::bigint, version=version+1
       WHERE id=$1 AND balance_minor-reserved_minor >= $2::bigint
       RETURNING id
-    `, [walletRow.id, authorized.toString()]);
+    `, [walletRow.id, authorization.authorizedMinor.toString()]);
     if (!walletUpdate.rowCount) throw new HttpError(409, 'wallet_reservation_conflict');
 
     await client.query(`

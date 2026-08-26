@@ -2,6 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction, query } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
+import {
+  LISTENER_TRAINING_MODULES,
+  isListenerTrainingModule,
+  listenerTrainingComplete,
+} from '../domain/listener-onboarding.ts';
 
 const proficiencies = new Set(['conversational', 'fluent', 'native']);
 
@@ -59,10 +64,108 @@ export async function createListenerApplication(req: IncomingMessage, res: Serve
         VALUES ($1,$2,$3)
       `, [applicationId, idByCode.get(language.code), language.proficiency]);
     }
+    for (const moduleKey of LISTENER_TRAINING_MODULES) {
+      await client.query(`
+        INSERT INTO app.listener_training_progress(application_id, module_key)
+        VALUES ($1,$2)
+        ON CONFLICT (application_id, module_key) DO NOTHING
+      `, [applicationId, moduleKey]);
+    }
+    await client.query(`
+      UPDATE app.listener_applications
+      SET status=CASE WHEN status='exploring' THEN 'training'::app.listener_application_status ELSE status END
+      WHERE id=$1
+    `, [applicationId]);
     return applicationId;
   });
 
-  sendJson(res, 200, { ok: true, applicationId, status: 'exploring' });
+  sendJson(res, 200, { ok: true, applicationId, status: 'training' });
+}
+
+export async function completeListenerTraining(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  const body = await readJson<{ moduleKey?: unknown }>(req);
+  if (!isListenerTrainingModule(body.moduleKey)) throw new HttpError(400, 'invalid_training_module');
+  const moduleKey = body.moduleKey;
+
+  const result = await withTransaction(async (client) => {
+    const application = await client.query<{ id: string; status: string }>(`
+      SELECT la.id::text, la.status::text
+      FROM app.listener_applications la
+      JOIN app.service_catalog s ON s.id=la.service_id
+      WHERE la.user_id=$1 AND s.code='human_listening'
+      FOR UPDATE
+    `, [userId]);
+    const row = application.rows[0];
+    if (!row) throw new HttpError(404, 'listener_application_not_found');
+    if (!['exploring', 'training', 'assessment'].includes(row.status)) throw new HttpError(409, 'training_locked');
+
+    await client.query(`
+      INSERT INTO app.listener_training_progress(application_id, module_key, status, progress_percent, completed_at)
+      VALUES ($1,$2,'completed',100,now())
+      ON CONFLICT (application_id, module_key) DO UPDATE SET
+        status='completed', progress_percent=100, completed_at=COALESCE(app.listener_training_progress.completed_at, now()), updated_at=now()
+    `, [row.id, moduleKey]);
+
+    const progress = await client.query<{ module_key: string; status: string; progress_percent: number }>(`
+      SELECT module_key, status::text, progress_percent
+      FROM app.listener_training_progress
+      WHERE application_id=$1
+    `, [row.id]);
+    const complete = listenerTrainingComplete(progress.rows);
+    const nextStatus = complete ? 'assessment' : 'training';
+    if (row.status === 'exploring' || row.status === 'training') {
+      await client.query('UPDATE app.listener_applications SET status=$2 WHERE id=$1', [row.id, nextStatus]);
+    }
+    return { applicationId: row.id, trainingComplete: complete, status: row.status === 'assessment' ? 'assessment' : nextStatus };
+  });
+
+  sendJson(res, 200, { ok: true, ...result });
+}
+
+export async function submitListenerAssessment(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  const body = await readJson<{ scenarioVersion?: unknown; answers?: unknown }>(req);
+  const scenarioVersion = requireString(body.scenarioVersion, 'scenarioVersion', 1, 80);
+  if (!body.answers || typeof body.answers !== 'object' || Array.isArray(body.answers)) {
+    throw new HttpError(400, 'invalid_assessment_answers');
+  }
+  const answersJson = JSON.stringify(body.answers);
+  if (answersJson.length > 12_000) throw new HttpError(400, 'assessment_answers_too_large');
+
+  const attemptId = await withTransaction(async (client) => {
+    const application = await client.query<{ id: string; status: string }>(`
+      SELECT la.id::text, la.status::text
+      FROM app.listener_applications la
+      JOIN app.service_catalog s ON s.id=la.service_id
+      WHERE la.user_id=$1 AND s.code='human_listening'
+      FOR UPDATE
+    `, [userId]);
+    const row = application.rows[0];
+    if (!row) throw new HttpError(404, 'listener_application_not_found');
+    if (!['training', 'assessment'].includes(row.status)) throw new HttpError(409, 'assessment_locked');
+
+    const progress = await client.query<{ module_key: string; status: string; progress_percent: number }>(`
+      SELECT module_key, status::text, progress_percent
+      FROM app.listener_training_progress
+      WHERE application_id=$1
+    `, [row.id]);
+    if (!listenerTrainingComplete(progress.rows)) throw new HttpError(409, 'training_incomplete');
+
+    const attempt = await client.query<{ id: string }>(`
+      INSERT INTO app.listener_assessment_attempts(application_id, result, scenario_version, answers)
+      VALUES ($1,'pending',$2,$3::jsonb)
+      RETURNING id::text
+    `, [row.id, scenarioVersion, answersJson]);
+    await client.query(`
+      UPDATE app.listener_applications
+      SET status='assessment', submitted_at=COALESCE(submitted_at, now())
+      WHERE id=$1
+    `, [row.id]);
+    return attempt.rows[0].id;
+  });
+
+  sendJson(res, 202, { ok: true, attemptId, status: 'pending' });
 }
 
 export async function getListenerApplication(req: IncomingMessage, res: ServerResponse) {
@@ -78,11 +181,38 @@ export async function getListenerApplication(req: IncomingMessage, res: ServerRe
     WHERE la.user_id=$1 AND s.code='human_listening'
   `, [userId]);
   if (!result.rows[0]) throw new HttpError(404, 'listener_application_not_found');
-  const langs = await query<{ code: string; proficiency: string }>(`
-    SELECT l.code, lal.proficiency::text
-    FROM app.listener_application_languages lal
-    JOIN app.languages l ON l.id=lal.language_id
-    WHERE lal.application_id=$1 ORDER BY l.code
-  `, [result.rows[0].id]);
-  sendJson(res, 200, { ...result.rows[0], languages: langs.rows });
+  const application = result.rows[0];
+  const [langs, progress, assessment] = await Promise.all([
+    query<{ code: string; proficiency: string }>(`
+      SELECT l.code, lal.proficiency::text
+      FROM app.listener_application_languages lal
+      JOIN app.languages l ON l.id=lal.language_id
+      WHERE lal.application_id=$1 ORDER BY l.code
+    `, [application.id]),
+    query<{ module_key: string; status: string; progress_percent: number; completed_at: string | null }>(`
+      SELECT module_key, status::text, progress_percent, completed_at::text
+      FROM app.listener_training_progress
+      WHERE application_id=$1
+    `, [application.id]),
+    query<{ id: string; result: string; score: string | null; scenario_version: string; created_at: string }>(`
+      SELECT id::text, result::text, score::text, scenario_version, created_at::text
+      FROM app.listener_assessment_attempts
+      WHERE application_id=$1
+      ORDER BY created_at DESC LIMIT 1
+    `, [application.id]),
+  ]);
+  const byModule = new Map(progress.rows.map((row) => [row.module_key, row]));
+  const training = LISTENER_TRAINING_MODULES.map((moduleKey) => byModule.get(moduleKey) ?? {
+    module_key: moduleKey,
+    status: 'not_started',
+    progress_percent: 0,
+    completed_at: null,
+  });
+  sendJson(res, 200, {
+    ...application,
+    languages: langs.rows,
+    training,
+    trainingComplete: listenerTrainingComplete(training),
+    latestAssessment: assessment.rows[0] ?? null,
+  });
 }

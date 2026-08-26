@@ -206,6 +206,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await blockCallCounterparty(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/admin/operations/summary') {
+      ensureDatabaseReady();
+      const { getAdminOperationsSummary } = await import('./routes/admin.ts');
+      return await getAdminOperationsSummary(req, res);
+    }
+
     if (method === 'GET' && url.pathname === '/v1/admin/listener-applications') {
       ensureDatabaseReady();
       const { listListenerApplications } = await import('./routes/admin.ts');

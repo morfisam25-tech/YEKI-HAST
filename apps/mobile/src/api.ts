@@ -59,6 +59,30 @@ export type ListenerApplicationResponse = {
   };
 };
 
+export type WalletResponse = {
+  wallets: Array<{
+    currencyCode: string;
+    balanceMinor: string;
+    reservedMinor: string;
+    availableMinor: string;
+    version: string;
+  }>;
+};
+
+export type WalletTopupResponse = {
+  ok?: true;
+  attemptId: string;
+  provider: string;
+  status: string;
+  currencyCode: string;
+  amountMinor: string;
+  providerPaymentId: string | null;
+  paymentUrl: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  idempotent?: boolean;
+};
+
 class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -119,6 +143,25 @@ export function verifyOtp(phoneE164: string, code: string): Promise<SessionRespo
     method: 'POST',
     body: JSON.stringify({ phone: phoneE164, code }),
   });
+}
+
+export function getWallet(token: string): Promise<WalletResponse> {
+  return request('/v1/wallet', {}, token);
+}
+
+export function createWalletTopup(
+  token: string,
+  amountMinor: string,
+  idempotencyKey: string,
+): Promise<WalletTopupResponse> {
+  return request('/v1/wallet/topups', {
+    method: 'POST',
+    body: JSON.stringify({ amountMinor, idempotencyKey }),
+  }, token);
+}
+
+export function getWalletTopup(token: string, attemptId: string): Promise<WalletTopupResponse> {
+  return request(`/v1/wallet/topups/${encodeURIComponent(attemptId)}`, {}, token);
 }
 
 export function createListenerApplication(

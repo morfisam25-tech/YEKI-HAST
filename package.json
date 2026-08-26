@@ -19,6 +19,7 @@
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "prevalidate:foundation": "node scripts/materialize-migration.mjs",
     "validate:foundation": "node scripts/validate-foundation.mjs",
+    "verify:security-config": "node scripts/verify-production-security-config.mjs",
     "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npm run db:migrate && node scripts/verify-production-db.mjs; else echo \"Skipping DB migration for $VERCEL_ENV\"; fi"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
+import { nextPayVerificationDisposition } from '../domain/payment-status.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { getPaymentProvider, PaymentProviderError } from '../providers/payment.ts';
@@ -72,6 +73,12 @@ function publicAttempt(row: AttemptRow) {
   };
 }
 
+function limitFrom(value: string | null): number {
+  const parsed = value ? Number(value) : 50;
+  if (!Number.isInteger(parsed) || parsed < 1) throw new HttpError(400, 'invalid_limit');
+  return Math.min(parsed, 100);
+}
+
 export async function getWallet(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
   const result = await query<{
@@ -92,6 +99,51 @@ export async function getWallet(req: IncomingMessage, res: ServerResponse) {
       reservedMinor: row.reserved_minor,
       availableMinor: (BigInt(row.balance_minor) - BigInt(row.reserved_minor)).toString(),
       version: row.version,
+    })),
+  });
+}
+
+export async function getWalletTransactions(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const rawCurrency = url.searchParams.get('currency')?.trim().toUpperCase() ?? null;
+  if (rawCurrency !== null && !/^[A-Z]{3}$/.test(rawCurrency)) throw new HttpError(400, 'invalid_currency');
+  const limit = limitFrom(url.searchParams.get('limit'));
+
+  const result = await query<{
+    id: string;
+    currency_code: string;
+    type: string;
+    delta_minor: string;
+    balance_after_minor: string;
+    call_session_id: string | null;
+    payment_attempt_id: string | null;
+    reason_code: string | null;
+    created_at: string;
+  }>(`
+    SELECT wt.id::text, wt.currency_code, wt.type::text,
+           wt.delta_minor::text, wt.balance_after_minor::text,
+           wt.call_session_id::text, wt.payment_attempt_id::text,
+           wt.reason_code, wt.created_at::text
+    FROM app.wallet_transactions wt
+    JOIN app.wallets w ON w.id=wt.wallet_id AND w.currency_code=wt.currency_code
+    WHERE w.user_id=$1
+      AND ($2::text IS NULL OR wt.currency_code=$2)
+    ORDER BY wt.created_at DESC, wt.id DESC
+    LIMIT $3
+  `, [userId, rawCurrency, limit]);
+
+  sendJson(res, 200, {
+    transactions: result.rows.map((row) => ({
+      id: row.id,
+      currencyCode: row.currency_code,
+      type: row.type,
+      deltaMinor: row.delta_minor,
+      balanceAfterMinor: row.balance_after_minor,
+      callId: row.call_session_id,
+      paymentAttemptId: row.payment_attempt_id,
+      reasonCode: row.reason_code,
+      createdAt: row.created_at,
     })),
   });
 }
@@ -252,7 +304,7 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     verified = await provider.verifyPayment({
       providerPaymentId: transId,
       amountMinor: BigInt(row.amount_minor),
-      currencyCode: row.currency_code === 'IRR' ? 'IRR' : 'IRT',
+      currencyCode: 'IRR',
     });
   } catch (error) {
     if (error instanceof PaymentProviderError) {
@@ -262,21 +314,37 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     throw error;
   }
 
-  if (!verified.paid) {
+  const disposition = nextPayVerificationDisposition(verified.providerCode);
+  if (disposition === 'pending') {
+    sendJson(res, 202, {
+      ok: false,
+      status: 'pending',
+      attemptId: row.id,
+      providerCode: verified.providerCode,
+    });
+    return;
+  }
+  if (disposition === 'cancelled' || disposition === 'failed') {
     await query(`
       UPDATE app.payment_attempts
-      SET status='failed', completed_at=COALESCE(completed_at, now())
+      SET status=$2, completed_at=COALESCE(completed_at, now())
       WHERE id=$1 AND status='pending'
-    `, [row.id]);
-    sendJson(res, 200, { ok: false, status: 'failed', attemptId: row.id, providerCode: verified.providerCode });
+    `, [row.id, disposition]);
+    sendJson(res, 200, {
+      ok: false,
+      status: disposition,
+      attemptId: row.id,
+      providerCode: verified.providerCode,
+    });
     return;
   }
 
-  if (verified.orderId !== row.id || verified.amountMinor !== BigInt(row.amount_minor)) {
+  if (!verified.paid || verified.orderId !== row.id || verified.amountMinor !== BigInt(row.amount_minor)) {
     console.error('payment_verification_mismatch', {
       attemptId: row.id,
       providerOrderId: verified.orderId,
       providerAmountMinor: verified.amountMinor?.toString() ?? null,
+      providerCode: verified.providerCode,
     });
     throw new HttpError(409, 'payment_verification_mismatch');
   }
@@ -324,6 +392,7 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     }
 
     const newBalance = BigInt(wallet.rows[0].balance_minor) + BigInt(current.amount_minor);
+    if (newBalance > MAX_BIGINT) throw new HttpError(409, 'wallet_balance_overflow');
     await client.query(`
       UPDATE app.wallets
       SET balance_minor=$2::bigint, version=version+1

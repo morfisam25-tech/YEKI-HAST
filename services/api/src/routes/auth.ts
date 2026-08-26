@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { withTransaction } from '../../../../packages/db/src/client.ts';
+import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import {
@@ -33,6 +33,10 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   try { phoneE164 = normalizeE164(requireString(body.phone, 'phone', 8, 20)); }
   catch { throw new HttpError(400, 'invalid_phone'); }
 
+  let smsProvider: ReturnType<typeof getSmsProvider>;
+  try { smsProvider = getSmsProvider(); }
+  catch { throw new HttpError(503, 'sms_delivery_unavailable'); }
+
   const ttlSeconds = integerEnv('OTP_TTL_SECONDS', 300);
   const phoneLimit = integerEnv('OTP_PHONE_LIMIT_PER_15M', 5);
   const ipLimit = integerEnv('OTP_IP_LIMIT_PER_15M', 20);
@@ -42,7 +46,7 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   const code = generateOtp();
   const codeHash = otpHash(phoneE164, purpose, code);
 
-  await withTransaction(async (client) => {
+  const challengeId = await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:otp_request_rate_limit', 0))");
 
     const counts = await client.query<{ phone_count: string; ip_count: string; global_count: string }>(`
@@ -63,13 +67,27 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
       SET consumed_at=now()
       WHERE phone_hash=$1 AND purpose=$2 AND consumed_at IS NULL
     `, [pHash, purpose]);
-    await client.query(`
+    const inserted = await client.query<{ id: string }>(`
       INSERT INTO private_data.otp_challenges(phone_hash, request_ip_hash, purpose, code_hash, expires_at)
       VALUES ($1,$2,$3,$4,now() + ($5::text || ' seconds')::interval)
+      RETURNING id::text
     `, [pHash, rIpHash, purpose, codeHash, ttlSeconds]);
+    return inserted.rows[0].id;
   });
 
-  await getSmsProvider().sendOtp({ phoneE164, code, ttlSeconds });
+  try {
+    await smsProvider.sendOtp({ phoneE164, code, ttlSeconds });
+  } catch {
+    try {
+      await query(
+        'UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL',
+        [challengeId],
+      );
+    } catch {
+      console.error('otp_cleanup_after_sms_failure_failed');
+    }
+    throw new HttpError(503, 'sms_delivery_unavailable');
+  }
 
   const devExpose = process.env.NODE_ENV === 'development' && process.env.DEV_EXPOSE_OTP === 'true';
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });

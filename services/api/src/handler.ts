@@ -1,11 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { query } from '@yeki-hast/db';
+import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { HttpError, sendJson } from './lib/http.ts';
-import { requestOtp, verifyOtp } from './routes/auth.ts';
-import { bootstrap } from './routes/bootstrap.ts';
-import { joinWaitlist, setAgeGate } from './routes/caller.ts';
-import { createListenerApplication, getListenerApplication } from './routes/listener.ts';
 
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
@@ -36,36 +32,43 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
     if (method === 'GET' && url.pathname === '/v1/bootstrap') {
       validateDatabaseEnv();
+      const { bootstrap } = await import('./routes/bootstrap.ts');
       return await bootstrap(res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') {
       validateOtpEnv();
+      const { requestOtp } = await import('./routes/auth.ts');
       return await requestOtp(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/auth/otp/verify') {
       validateOtpEnv();
+      const { verifyOtp } = await import('./routes/auth.ts');
       return await verifyOtp(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/caller/age-gate') {
       validateDatabaseEnv();
+      const { setAgeGate } = await import('./routes/caller.ts');
       return await setAgeGate(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/caller/waitlist') {
       validateDatabaseEnv();
+      const { joinWaitlist } = await import('./routes/caller.ts');
       return await joinWaitlist(req, res);
     }
 
     if (method === 'POST' && url.pathname === '/v1/listener/application') {
       validateDatabaseEnv();
+      const { createListenerApplication } = await import('./routes/listener.ts');
       return await createListenerApplication(req, res);
     }
 
     if (method === 'GET' && url.pathname === '/v1/listener/application') {
       validateDatabaseEnv();
+      const { getListenerApplication } = await import('./routes/listener.ts');
       return await getListenerApplication(req, res);
     }
 

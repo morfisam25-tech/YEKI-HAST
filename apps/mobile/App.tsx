@@ -13,12 +13,15 @@ import {
   createListenerApplication,
   getBootstrap,
   getErrorCode,
+  getListenerApplication,
   normalizeIranPhone,
   requestOtp,
   verifyOtp,
   type BootstrapLanguage,
 } from './src/api';
+import ListenerKycScreen from './src/ListenerKycScreen';
 import ListenerTrainingScreen from './src/ListenerTrainingScreen';
+import ListenerWorkScreen from './src/ListenerWorkScreen';
 
 type Screen =
   | 'home'
@@ -27,7 +30,9 @@ type Screen =
   | 'auth-phone'
   | 'auth-code'
   | 'listener-profile'
-  | 'listener-training';
+  | 'listener-training'
+  | 'listener-kyc'
+  | 'listener-work';
 
 type ChoiceProps = { label: string; selected?: boolean; onPress: () => void };
 
@@ -56,9 +61,18 @@ function errorMessage(code: string): string {
     sms_delivery_unavailable: 'ارسال پیامک موقتاً در دسترس نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
+    listener_application_not_found: 'درخواست شنونده هنوز ساخته نشده.',
+    unauthorized: 'نشست ورود معتبر نیست. دوباره وارد شو.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'خطایی رخ داد. دوباره امتحان کن.';
+}
+
+function screenForApplicationStatus(status: string): Screen {
+  if (status === 'approved' || status === 'active') return 'listener-work';
+  if (status === 'assessment_passed' || status === 'kyc_pending' || status === 'kyc_expired') return 'listener-kyc';
+  if (status === 'exploring' || status === 'training' || status === 'assessment') return 'listener-training';
+  return 'listener-training';
 }
 
 export default function App() {
@@ -103,6 +117,20 @@ export default function App() {
     });
   };
 
+  async function resumeListener(sessionToken: string) {
+    try {
+      const application = await getListenerApplication(sessionToken);
+      setScreen(screenForApplicationStatus(application.status));
+    } catch (cause) {
+      const code = getErrorCode(cause);
+      if (code === 'listener_application_not_found') {
+        setScreen('listener-profile');
+        return;
+      }
+      throw cause;
+    }
+  }
+
   async function sendCode() {
     setError('');
     setBusy(true);
@@ -124,7 +152,7 @@ export default function App() {
     try {
       const session = await verifyOtp(phoneE164, otp.trim());
       setToken(session.token);
-      setScreen('listener-profile');
+      await resumeListener(session.token);
     } catch (cause) {
       setError(errorMessage(getErrorCode(cause)));
     } finally {
@@ -292,6 +320,14 @@ export default function App() {
 
         {screen === 'listener-training' && token && (
           <ListenerTrainingScreen token={token} onDone={() => setScreen('home')} />
+        )}
+
+        {screen === 'listener-kyc' && token && (
+          <ListenerKycScreen token={token} onDone={() => setScreen('home')} />
+        )}
+
+        {screen === 'listener-work' && token && (
+          <ListenerWorkScreen token={token} onDone={() => setScreen('home')} />
         )}
       </ScrollView>
     </SafeAreaView>

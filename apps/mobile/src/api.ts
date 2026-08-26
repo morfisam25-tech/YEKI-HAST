@@ -29,8 +29,13 @@ export type SessionResponse = {
 };
 
 class ApiError extends Error {
-  constructor(readonly code: string, readonly status: number) {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(code: string, status: number) {
     super(code);
+    this.code = code;
+    this.status = status;
   }
 }
 

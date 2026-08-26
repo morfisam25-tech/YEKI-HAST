@@ -130,6 +130,7 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
         ON pres.listener_user_id=lp.user_id
         AND pres.product_id=$1 AND pres.service_id=$2 AND pres.market_id=$3
         AND pres.status='online'
+        AND pres.last_heartbeat_at > now() - interval '90 seconds'
       WHERE lp.is_verified=true
         AND ($5::uuid IS NULL OR lp.user_id=$5::uuid)
         AND ($6::text='any' OR lp.gender::text=$6)

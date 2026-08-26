@@ -8,7 +8,9 @@ export interface SubmitPayoutInput {
 
 export interface SubmitPayoutResult {
   providerReference: string;
-  providerTotalMinor: bigint | null;
+  // NextPay documents `total` in toman, even when checkout accepts currency=IRR.
+  // It is informational only and must never be used to mutate our IRR ledger.
+  providerReportedTotal: string | null;
 }
 
 export interface PayoutStatusResult {
@@ -52,12 +54,6 @@ function asInteger(value: unknown): number {
 function optionalText(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function optionalBigInt(value: unknown): bigint | null {
-  if (typeof value !== 'string' && typeof value !== 'number') return null;
-  const text = String(value).trim();
-  return /^\d+$/.test(text) ? BigInt(text) : null;
 }
 
 async function postForm(url: string, fields: Record<string, string>): Promise<Record<string, unknown>> {
@@ -119,7 +115,7 @@ class NextPayPayoutProvider implements PayoutProvider {
     if (!trace) throw new PayoutProviderError('payout_provider_invalid_response', code);
     return {
       providerReference: trace,
-      providerTotalMinor: optionalBigInt(body.total),
+      providerReportedTotal: optionalText(body.total),
     };
   }
 

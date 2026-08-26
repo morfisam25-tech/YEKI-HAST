@@ -226,6 +226,20 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await reviewListenerAssessment(req, res, adminAssessmentMatch[1]);
     }
 
+    const payoutDispatchMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/dispatch$/);
+    if (method === 'POST' && payoutDispatchMatch) {
+      ensureKycReady();
+      const { dispatchPayout } = await import('./routes/payouts.ts');
+      return await dispatchPayout(req, res, payoutDispatchMatch[1]);
+    }
+
+    const payoutReconcileMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/reconcile$/);
+    if (method === 'POST' && payoutReconcileMatch) {
+      ensureDatabaseReady();
+      const { reconcilePayout } = await import('./routes/payouts.ts');
+      return await reconcilePayout(req, res, payoutReconcileMatch[1]);
+    }
+
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) {
       ensureSensitiveDataReady();

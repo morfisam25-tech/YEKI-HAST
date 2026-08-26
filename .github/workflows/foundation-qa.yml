@@ -32,11 +32,14 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/auth.ts
           node --experimental-strip-types --check services/api/src/routes/payments.ts
           node --experimental-strip-types --check services/api/src/routes/listener.ts
+          node --experimental-strip-types --check services/api/src/routes/kyc.ts
           node --experimental-strip-types --check services/api/src/routes/marketplace.ts
           node --experimental-strip-types --check services/api/src/routes/calls.ts
           node --experimental-strip-types --check services/api/src/routes/safety.ts
           node --experimental-strip-types --check services/api/src/routes/admin.ts
           node --experimental-strip-types --check services/api/src/lib/admin.ts
+          node --experimental-strip-types --check services/api/src/lib/security.ts
+          node --experimental-strip-types --check services/api/src/domain/iran-identifiers.ts
           node --experimental-strip-types --check services/api/src/domain/listener-onboarding.ts
           node --experimental-strip-types --check services/api/src/domain/call-authorization.ts
           node --experimental-strip-types --check services/api/src/domain/payment-status.ts

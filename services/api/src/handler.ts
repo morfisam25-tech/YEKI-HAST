@@ -212,6 +212,18 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await listListenerApplications(req, res);
     }
 
+    const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
+    if (method === 'GET' && adminKycMatch) {
+      ensureDatabaseReady();
+      const { getListenerKycForAdmin } = await import('./routes/admin-kyc.ts');
+      return await getListenerKycForAdmin(req, res, adminKycMatch[1]);
+    }
+    if (method === 'POST' && adminKycMatch) {
+      ensureDatabaseReady();
+      const { reviewListenerKyc } = await import('./routes/admin-kyc.ts');
+      return await reviewListenerKyc(req, res, adminKycMatch[1]);
+    }
+
     const adminApplicationMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)$/);
     if (method === 'GET' && adminApplicationMatch) {
       ensureDatabaseReady();

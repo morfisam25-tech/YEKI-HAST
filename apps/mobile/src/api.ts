@@ -67,6 +67,14 @@ export type ListenerKycStatusResponse = {
   updatedAt: string | null;
 };
 
+export type ListenerPresenceResponse = {
+  status: 'online' | 'offline' | 'paused';
+  acceptsMale: boolean;
+  acceptsFemale: boolean;
+  onlineSince: string | null;
+  lastHeartbeatAt: string | null;
+};
+
 export type WalletResponse = {
   wallets: Array<{
     currencyCode: string;
@@ -255,4 +263,24 @@ export function submitListenerKyc(
     method: 'POST',
     body: JSON.stringify(input),
   }, token);
+}
+
+export function getListenerPresence(token: string): Promise<ListenerPresenceResponse> {
+  return request('/v1/listener/presence', {}, token);
+}
+
+export function setListenerPresence(
+  token: string,
+  status: 'online' | 'offline' | 'paused',
+  acceptsMale = true,
+  acceptsFemale = true,
+): Promise<{ ok: true; status: 'online' | 'offline' | 'paused'; acceptsMale: boolean; acceptsFemale: boolean; workSessionId: string | null }> {
+  return request('/v1/listener/presence', {
+    method: 'POST',
+    body: JSON.stringify({ status, acceptsMale, acceptsFemale }),
+  }, token);
+}
+
+export function heartbeatListenerPresence(token: string): Promise<{ ok: true; status: 'online' | 'paused' }> {
+  return request('/v1/listener/presence/heartbeat', { method: 'POST' }, token);
 }

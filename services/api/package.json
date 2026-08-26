@@ -1,0 +1,22 @@
+{
+  "name": "@yeki-hast/api",
+  "private": true,
+  "version": "0.0.8",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@yeki-hast/types": "0.0.1",
+    "@yeki-hast/domain": "0.0.1",
+    "@yeki-hast/db": "0.0.2",
+    "@yeki-hast/config": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "@types/pg": "^8.23.1"
+  }
+}

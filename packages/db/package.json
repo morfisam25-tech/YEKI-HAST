@@ -1,0 +1,7 @@
+{
+  "name": "@yeki-hast/db",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module",
+  "dependencies": { "pg": "^8.23.0" }
+}

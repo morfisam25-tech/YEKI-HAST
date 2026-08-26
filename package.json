@@ -1,0 +1,25 @@
+{
+  "name": "yeki-hast",
+  "private": true,
+  "version": "0.0.8",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm --workspace @yeki-hast/mobile run start",
+    "web": "npm --workspace @yeki-hast/web run dev",
+    "admin": "npm --workspace @yeki-hast/admin run dev",
+    "api": "npm --workspace @yeki-hast/api run dev",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate": "npm --workspace @yeki-hast/db run migrate",
+    "db:check": "npm --workspace @yeki-hast/db run check",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "validate:foundation": "node scripts/validate-foundation.mjs"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "type": "module"
+}

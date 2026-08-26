@@ -82,6 +82,18 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await getListenerApplication(req, res);
     }
 
+    if (method === 'POST' && url.pathname === '/v1/listener/training/complete') {
+      ensureDatabaseReady();
+      const { completeListenerTraining } = await import('./routes/listener.ts');
+      return await completeListenerTraining(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/listener/assessment') {
+      ensureDatabaseReady();
+      const { submitListenerAssessment } = await import('./routes/listener.ts');
+      return await submitListenerAssessment(req, res);
+    }
+
     sendJson(res, 404, { error: 'not_found' });
   } catch (error) {
     if (res.headersSent) {

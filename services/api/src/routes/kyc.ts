@@ -7,6 +7,7 @@ import {
   normalizeIranNationalId,
   normalizeIsoDate,
 } from '../domain/iran-identifiers.ts';
+import { jalaliToGregorianIso } from '../domain/persian-calendar.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { encryptPrivateText, kycLookupHash } from '../lib/security.ts';
@@ -17,12 +18,36 @@ function normalizeLegalName(value: unknown, field = 'legalName'): string {
   return name;
 }
 
+function normalizedBirthDate(body: { dateOfBirth?: unknown; dateOfBirthJalali?: unknown }): string {
+  let gregorianFromLegacy: string | null = null;
+  let gregorianFromJalali: string | null = null;
+
+  if (body.dateOfBirth !== undefined && body.dateOfBirth !== null && body.dateOfBirth !== '') {
+    const raw = requireString(body.dateOfBirth, 'dateOfBirth', 10, 16);
+    gregorianFromLegacy = normalizeIsoDate(raw);
+    if (!gregorianFromLegacy) throw new HttpError(400, 'invalid_date_of_birth');
+  }
+
+  if (body.dateOfBirthJalali !== undefined && body.dateOfBirthJalali !== null && body.dateOfBirthJalali !== '') {
+    const raw = requireString(body.dateOfBirthJalali, 'dateOfBirthJalali', 10, 10);
+    try { gregorianFromJalali = jalaliToGregorianIso(raw); }
+    catch { throw new HttpError(400, 'invalid_date_of_birth'); }
+  }
+
+  if (!gregorianFromLegacy && !gregorianFromJalali) throw new HttpError(400, 'invalid_date_of_birth');
+  if (gregorianFromLegacy && gregorianFromJalali && gregorianFromLegacy !== gregorianFromJalali) {
+    throw new HttpError(400, 'date_of_birth_mismatch');
+  }
+  return gregorianFromJalali ?? gregorianFromLegacy!;
+}
+
 export async function submitListenerKyc(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
   const body = await readJson<{
     legalName?: unknown;
     nationalId?: unknown;
     dateOfBirth?: unknown;
+    dateOfBirthJalali?: unknown;
     bankIban?: unknown;
     bankAccountHolder?: unknown;
   }>(req);
@@ -32,9 +57,7 @@ export async function submitListenerKyc(req: IncomingMessage, res: ServerRespons
   const nationalId = normalizeIranNationalId(rawNationalId);
   if (!isValidIranNationalId(nationalId)) throw new HttpError(400, 'invalid_national_id');
 
-  const rawBirth = requireString(body.dateOfBirth, 'dateOfBirth', 10, 16);
-  const dateOfBirth = normalizeIsoDate(rawBirth);
-  if (!dateOfBirth) throw new HttpError(400, 'invalid_date_of_birth');
+  const dateOfBirth = normalizedBirthDate(body);
   const birth = new Date(`${dateOfBirth}T00:00:00.000Z`);
   const today = new Date();
   if (birth.getTime() >= today.getTime() || birth.getUTCFullYear() < 1900) {
@@ -105,7 +128,8 @@ export async function submitListenerKyc(req: IncomingMessage, res: ServerRespons
           bank_iban_hash=EXCLUDED.bank_iban_hash,
           bank_account_holder_ciphertext=EXCLUDED.bank_account_holder_ciphertext,
           verified_at=NULL,
-          rejected_reason_code=NULL
+          rejected_reason_code=NULL,
+          updated_at=now()
       `, [
         userId,
         legalNameCiphertext,

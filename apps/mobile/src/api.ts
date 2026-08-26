@@ -28,6 +28,37 @@ export type SessionResponse = {
   expiresInHours: number;
 };
 
+export type ListenerTrainingModuleKey =
+  | 'active_listening'
+  | 'role_boundary'
+  | 'safety'
+  | 'platform_rules';
+
+export type ListenerApplicationResponse = {
+  id: string;
+  status: string;
+  nickname: string;
+  declared_gender: 'female' | 'male';
+  short_intro: string | null;
+  listening_style: string | null;
+  created_at: string;
+  languages: Array<{ code: string; proficiency: string }>;
+  training: Array<{
+    module_key: ListenerTrainingModuleKey;
+    status: string;
+    progress_percent: number;
+    completed_at: string | null;
+  }>;
+  trainingComplete: boolean;
+  latestAssessment: null | {
+    id: string;
+    result: 'pending' | 'passed' | 'failed';
+    score: string | null;
+    scenario_version: string;
+    created_at: string;
+  };
+};
+
 class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -103,5 +134,29 @@ export function createListenerApplication(
   return request('/v1/listener/application', {
     method: 'POST',
     body: JSON.stringify(input),
+  }, token);
+}
+
+export function getListenerApplication(token: string): Promise<ListenerApplicationResponse> {
+  return request('/v1/listener/application', {}, token);
+}
+
+export function completeListenerTraining(
+  token: string,
+  moduleKey: ListenerTrainingModuleKey,
+): Promise<{ ok: true; applicationId: string; trainingComplete: boolean; status: string }> {
+  return request('/v1/listener/training/complete', {
+    method: 'POST',
+    body: JSON.stringify({ moduleKey }),
+  }, token);
+}
+
+export function submitListenerAssessment(
+  token: string,
+  answers: Record<string, string>,
+): Promise<{ ok: true; attemptId: string; status: 'pending' }> {
+  return request('/v1/listener/assessment', {
+    method: 'POST',
+    body: JSON.stringify({ scenarioVersion: 'listener-beta-v1', answers }),
   }, token);
 }

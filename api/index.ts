@@ -89,6 +89,32 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     try {
+      const diagnostic = await pool.query<{
+        database_name: string;
+        app_schema_exists: boolean;
+        pricing_table_exists: boolean;
+        languages_table_exists: boolean;
+      }>(`
+        SELECT
+          current_database() AS database_name,
+          to_regnamespace('app') IS NOT NULL AS app_schema_exists,
+          to_regclass('app.pricing_plans') IS NOT NULL AS pricing_table_exists,
+          to_regclass('app.languages') IS NOT NULL AS languages_table_exists
+      `);
+      const db = diagnostic.rows[0];
+
+      if (!db?.app_schema_exists || !db.pricing_table_exists || !db.languages_table_exists) {
+        sendJson(res, 503, {
+          ok: false,
+          stage: 'database_schema_missing',
+          database: db?.database_name ?? 'unknown',
+          appSchemaExists: db?.app_schema_exists ?? false,
+          pricingTableExists: db?.pricing_table_exists ?? false,
+          languagesTableExists: db?.languages_table_exists ?? false,
+        });
+        return;
+      }
+
       const productCode = process.env.DEFAULT_PRODUCT_CODE ?? 'yeki_hast';
       const serviceCode = process.env.DEFAULT_SERVICE_CODE ?? 'human_listening';
       const marketCode = process.env.DEFAULT_MARKET_CODE ?? 'ir';
@@ -123,7 +149,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const row = pricing.rows[0];
       if (!row) {
-        sendJson(res, 503, { error: 'active_market_pricing_missing' });
+        sendJson(res, 503, {
+          ok: false,
+          stage: 'active_market_pricing_missing',
+          database: db.database_name,
+          productCode,
+          serviceCode,
+          marketCode,
+        });
         return;
       }
 
@@ -142,11 +175,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
       });
     } catch (error) {
+      const sqlError = error as { code?: string };
       console.error('bootstrap_database_query_failed', error);
       sendJson(res, 500, {
         ok: false,
         stage: 'bootstrap_query_failed',
         errorType: error instanceof Error ? error.name : 'unknown',
+        sqlState: typeof sqlError?.code === 'string' ? sqlError.code : null,
       });
     } finally {
       await pool.end().catch(() => undefined);

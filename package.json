@@ -15,7 +15,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:migrate": "npm --workspace @yeki-hast/db run migrate",
     "db:check": "npm --workspace @yeki-hast/db run check",
+    "pretest": "node scripts/materialize-migration.mjs",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "prevalidate:foundation": "node scripts/materialize-migration.mjs",
     "validate:foundation": "node scripts/validate-foundation.mjs",
     "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npm run db:migrate && node scripts/verify-production-db.mjs; else echo \"Skipping DB migration for $VERCEL_ENV\"; fi"
   },

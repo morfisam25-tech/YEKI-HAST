@@ -4,6 +4,7 @@
   "rewrites": [
     { "source": "/health", "destination": "/api/index" },
     { "source": "/ready", "destination": "/api/index" },
-    { "source": "/v1/:path*", "destination": "/api/index" }
+    { "source": "/v1/bootstrap", "destination": "/api/index" },
+    { "source": "/v1/:path*", "destination": "/api/runtime" }
   ]
 }

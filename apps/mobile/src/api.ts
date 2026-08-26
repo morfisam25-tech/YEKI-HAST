@@ -246,7 +246,7 @@ export function submitListenerKyc(
   input: {
     legalName: string;
     nationalId: string;
-    dateOfBirth: string;
+    dateOfBirthJalali: string;
     bankIban: string;
     bankAccountHolder?: string;
   },

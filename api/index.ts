@@ -22,6 +22,45 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const { handleApiRequest } = await import('../services/api/src/handler.ts');
-  return handleApiRequest(req, res);
+  if (method === 'GET' && url.pathname === '/ready') {
+    if (!process.env.DATABASE_URL?.trim()) {
+      sendJson(res, 503, { ok: false, stage: 'database_env_missing' });
+      return;
+    }
+
+    try {
+      const db = await import('../packages/db/src/client.ts');
+      try {
+        await db.query('SELECT 1');
+        sendJson(res, 200, { ok: true, database: 'ready' });
+      } catch (error) {
+        console.error('readiness_database_query_failed', error);
+        sendJson(res, 503, {
+          ok: false,
+          stage: 'database_query_failed',
+          errorType: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    } catch (error) {
+      console.error('readiness_database_module_failed', error);
+      sendJson(res, 500, {
+        ok: false,
+        stage: 'database_module_failed',
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
+    }
+    return;
+  }
+
+  try {
+    const { handleApiRequest } = await import('../services/api/src/handler.ts');
+    return await handleApiRequest(req, res);
+  } catch (error) {
+    console.error('backend_import_failed', error);
+    sendJson(res, 500, {
+      ok: false,
+      stage: 'backend_import_failed',
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+  }
 }

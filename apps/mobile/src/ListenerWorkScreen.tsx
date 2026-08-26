@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, StyleSheet, Text, TouchableOpacity, View, type AppStateStatus } from 'react-native';
 import {
   getErrorCode,
   getListenerPresence,
@@ -9,6 +9,7 @@ import {
 } from './api';
 
 type Props = { token: string; onDone: () => void };
+type PresenceStatus = 'online' | 'offline' | 'paused';
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
@@ -28,12 +29,19 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
   const [acceptsFemale, setAcceptsFemale] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const presenceRef = useRef<ListenerPresenceResponse | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  async function refresh() {
-    const value = await getListenerPresence(token);
+  function applyPresence(value: ListenerPresenceResponse) {
+    presenceRef.current = value;
     setPresence(value);
     setAcceptsMale(value.acceptsMale);
     setAcceptsFemale(value.acceptsFemale);
+  }
+
+  async function refresh() {
+    const value = await getListenerPresence(token);
+    applyPresence(value);
   }
 
   useEffect(() => {
@@ -41,8 +49,38 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
   }, [token]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previous = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === 'active') {
+        refresh().catch((cause) => setError(messageFor(getErrorCode(cause))));
+        return;
+      }
+
+      const current = presenceRef.current;
+      if (previous === 'active' && current && (current.status === 'online' || current.status === 'paused')) {
+        // Presence must never depend on background timers. Best-effort explicit offline;
+        // the server-side 90s stale guard remains the fallback if this request cannot leave the device.
+        setListenerPresence(token, 'offline', current.acceptsMale, current.acceptsFemale).catch(() => undefined);
+        applyPresence({
+          ...current,
+          status: 'offline',
+          onlineSince: null,
+          lastHeartbeatAt: null,
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [token]);
+
+  useEffect(() => {
     if (!presence || (presence.status !== 'online' && presence.status !== 'paused')) return;
+    if (appStateRef.current !== 'active') return;
+
     const timer = setInterval(() => {
+      if (appStateRef.current !== 'active') return;
       heartbeatListenerPresence(token).catch(async (cause) => {
         const code = getErrorCode(cause);
         setError(messageFor(code));
@@ -51,21 +89,68 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
         }
       });
     }, 30_000);
+
     return () => clearInterval(timer);
   }, [token, presence?.status]);
 
-  async function changeStatus(status: 'online' | 'offline' | 'paused') {
+  async function changeStatus(status: PresenceStatus) {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
-      await setListenerPresence(token, status, acceptsMale, acceptsFemale);
+      const result = await setListenerPresence(token, status, acceptsMale, acceptsFemale);
+      applyPresence({
+        status: result.status,
+        acceptsMale: result.acceptsMale,
+        acceptsFemale: result.acceptsFemale,
+        onlineSince: status === 'online' ? presenceRef.current?.onlineSince ?? new Date().toISOString() : null,
+        lastHeartbeatAt: status === 'offline' ? null : new Date().toISOString(),
+      });
       await refresh();
     } catch (cause) {
       setError(messageFor(getErrorCode(cause)));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function updateCallerPreference(kind: 'male' | 'female') {
+    if (!presence || busy) return;
+    const nextMale = kind === 'male' ? !acceptsMale : acceptsMale;
+    const nextFemale = kind === 'female' ? !acceptsFemale : acceptsFemale;
+    if (presence.status === 'online' && !nextMale && !nextFemale) {
+      setError(messageFor('no_callers_accepted'));
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const result = await setListenerPresence(token, presence.status, nextMale, nextFemale);
+      setAcceptsMale(result.acceptsMale);
+      setAcceptsFemale(result.acceptsFemale);
+      presenceRef.current = {
+        ...presence,
+        status: result.status,
+        acceptsMale: result.acceptsMale,
+        acceptsFemale: result.acceptsFemale,
+      };
+      setPresence(presenceRef.current);
+    } catch (cause) {
+      setError(messageFor(getErrorCode(cause)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function leaveWorkMode() {
+    const current = presenceRef.current;
+    if (current && (current.status === 'online' || current.status === 'paused')) {
+      try {
+        await setListenerPresence(token, 'offline', current.acceptsMale, current.acceptsFemale);
+      } catch {}
+    }
+    onDone();
   }
 
   if (!presence) {
@@ -89,19 +174,21 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
         </Text>
       </View>
 
-      <Text style={styles.helper}>تا وقتی Online یا Pause هستی، اپ هر ۳۰ ثانیه حضور تو را تأیید می‌کند. اگر ارتباط قطع شود، سرور بعد از ۹۰ ثانیه تو را برای Matching آفلاین حساب می‌کند.</Text>
+      <Text style={styles.helper}>Heartbeat فقط وقتی اپ باز و وضعیت Online یا Pause باشد هر ۳۰ ثانیه ارسال می‌شود. با رفتن اپ به پس‌زمینه، حضور به‌صورت امن Offline می‌شود؛ guard سرور هم بعد از ۹۰ ثانیه stale presence را رد می‌کند.</Text>
 
       <Text style={styles.label}>Callerهایی که می‌پذیری</Text>
       <View style={styles.row}>
         <TouchableOpacity
-          onPress={() => setAcceptsFemale((value) => !value)}
-          style={[styles.choice, acceptsFemale && styles.choiceSelected]}
+          disabled={busy}
+          onPress={() => updateCallerPreference('female')}
+          style={[styles.choice, acceptsFemale && styles.choiceSelected, busy && styles.disabled]}
         >
           <Text style={styles.choiceText}>زن {acceptsFemale ? '✓' : ''}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setAcceptsMale((value) => !value)}
-          style={[styles.choice, acceptsMale && styles.choiceSelected]}
+          disabled={busy}
+          onPress={() => updateCallerPreference('male')}
+          style={[styles.choice, acceptsMale && styles.choiceSelected, busy && styles.disabled]}
         >
           <Text style={styles.choiceText}>مرد {acceptsMale ? '✓' : ''}</Text>
         </TouchableOpacity>
@@ -115,22 +202,22 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
         </TouchableOpacity>
       )}
       {isOnline && (
-        <TouchableOpacity disabled={busy} onPress={() => changeStatus('paused')} style={styles.pauseButton}>
+        <TouchableOpacity disabled={busy} onPress={() => changeStatus('paused')} style={[styles.pauseButton, busy && styles.disabled]}>
           <Text style={styles.pauseText}>Pause</Text>
         </TouchableOpacity>
       )}
       {(isOnline || isPaused) && (
-        <TouchableOpacity disabled={busy} onPress={() => changeStatus('offline')} style={styles.secondaryButton}>
+        <TouchableOpacity disabled={busy} onPress={() => changeStatus('offline')} style={[styles.secondaryButton, busy && styles.disabled]}>
           <Text style={styles.secondaryText}>Offline و پایان شیفت</Text>
         </TouchableOpacity>
       )}
       {isPaused && (
-        <TouchableOpacity disabled={busy || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={styles.primaryButton}>
+        <TouchableOpacity disabled={busy || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={[styles.primaryButton, (busy || (!acceptsMale && !acceptsFemale)) && styles.disabled]}>
           <Text style={styles.primaryText}>ادامه کار</Text>
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity onPress={onDone} style={styles.secondaryButton}>
+      <TouchableOpacity disabled={busy} onPress={leaveWorkMode} style={[styles.secondaryButton, busy && styles.disabled]}>
         <Text style={styles.secondaryText}>برگشت به خانه</Text>
       </TouchableOpacity>
     </View>

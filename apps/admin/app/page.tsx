@@ -17,6 +17,41 @@ type Summary = {
   };
 };
 
+type ApplicationListItem = {
+  id: string;
+  userId: string;
+  status: string;
+  nickname: string;
+  gender: string;
+  submittedAt: string | null;
+  createdAt: string;
+  latestAssessment: null | { id: string; result: string; score: number | null; createdAt: string };
+};
+
+type ApplicationDetail = ApplicationListItem & {
+  shortIntro: string | null;
+  listeningStyle: string | null;
+  languages: Array<{ code: string; nameFa: string; proficiency: string }>;
+  training: Array<{ module_key: string; status: string; progress_percent: number }>;
+  assessments: Array<{
+    id: string;
+    result: string;
+    score: number | null;
+    scenarioVersion: string;
+    answers: Record<string, unknown>;
+    createdAt: string;
+  }>;
+};
+
+type KycDetail = {
+  applicationId: string;
+  status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
+  rejectedReasonCode: string | null;
+  verifiedAt: string | null;
+  updatedAt: string | null;
+  completeness: Record<string, boolean>;
+};
+
 const labels: Array<[keyof Summary['counts'], string]> = [
   ['applications', 'درخواست‌های شنونده'],
   ['awaitingAssessment', 'در انتظار بررسی آزمون'],
@@ -37,8 +72,13 @@ function messageFor(code: string): string {
     sms_delivery_unavailable: 'ارسال پیامک در دسترس نیست.',
     admin_required: 'این حساب دسترسی ادمین فعال ندارد.',
     unauthorized: 'نشست ادمین معتبر نیست.',
+    assessment_already_reviewed: 'این آزمون قبلاً بررسی شده.',
+    assessment_attempt_superseded: 'آزمون جدیدتری وجود دارد؛ این مورد قابل بررسی نیست.',
+    application_not_in_assessment: 'درخواست دیگر در مرحله آزمون نیست.',
+    kyc_already_verified: 'KYC قبلاً verified شده و review دستی مجاز نیست.',
+    invalid_kyc_review_action: 'عملیات KYC مجاز نیست.',
   };
-  return messages[code] ?? 'درخواست انجام نشد.';
+  return messages[code] ?? `درخواست انجام نشد: ${code}`;
 }
 
 async function api(path: string, init?: RequestInit) {
@@ -56,20 +96,57 @@ async function api(path: string, init?: RequestInit) {
 
 export default function AdminPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [applications, setApplications] = useState<ApplicationListItem[]>([]);
+  const [selected, setSelected] = useState<ApplicationDetail | null>(null);
+  const [kyc, setKyc] = useState<KycDetail | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [reviewScore, setReviewScore] = useState('100');
+  const [kycReason, setKycReason] = useState('identity_review_required');
 
   async function loadSummary() {
     const value = await api('/api/summary') as unknown as Summary;
     setSummary(value);
   }
 
+  async function loadApplications() {
+    const value = await api('/api/ops/listener-applications?limit=50') as { applications: ApplicationListItem[] };
+    setApplications(value.applications);
+  }
+
+  async function loadApplication(applicationId: string) {
+    setBusy(true);
+    setError('');
+    try {
+      const [detail, kycDetail] = await Promise.all([
+        api(`/api/ops/listener-applications/${encodeURIComponent(applicationId)}`) as unknown as Promise<ApplicationDetail>,
+        api(`/api/ops/listener-applications/${encodeURIComponent(applicationId)}/kyc`)
+          .catch((cause) => {
+            if (cause instanceof Error && cause.message === 'listener_application_not_found') return null;
+            throw cause;
+          }) as Promise<KycDetail | null>,
+      ]);
+      setSelected(detail);
+      setKyc(kycDetail);
+      const latest = detail.assessments[0];
+      setReviewScore(latest?.score === null || latest?.score === undefined ? '100' : String(latest.score));
+    } catch (cause) {
+      setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDashboard() {
+    await Promise.all([loadSummary(), loadApplications()]);
+  }
+
   useEffect(() => {
-    loadSummary()
+    loadDashboard()
       .catch(() => setSummary(null))
       .finally(() => setCheckingSession(false));
   }, []);
@@ -83,9 +160,7 @@ export default function AdminPage() {
       setCodeSent(true);
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   async function verifyCode() {
@@ -94,33 +169,80 @@ export default function AdminPage() {
     setError('');
     try {
       await api('/api/auth/verify', { method: 'POST', body: JSON.stringify({ phone, code }) });
-      await loadSummary();
+      await loadDashboard();
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   async function refresh() {
     if (busy) return;
     setBusy(true);
     setError('');
-    try { await loadSummary(); }
-    catch (cause) { setError(messageFor(cause instanceof Error ? cause.message : 'request_failed')); }
-    finally { setBusy(false); }
+    try {
+      await loadDashboard();
+      if (selected) await loadApplication(selected.id);
+    } catch (cause) {
+      setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
+    } finally { setBusy(false); }
+  }
+
+  async function reviewAssessment(result: 'passed' | 'failed') {
+    const attempt = selected?.assessments[0];
+    if (!attempt || attempt.result !== 'pending' || busy) return;
+    const score = Number(reviewScore);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      setError('امتیاز باید بین ۰ تا ۱۰۰ باشد.');
+      return;
+    }
+    if (!window.confirm(result === 'passed' ? 'قبولی این آزمون ثبت شود؟' : 'رد این آزمون ثبت شود؟')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/api/ops/listener-assessments/${encodeURIComponent(attempt.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ result, score }),
+      });
+      await loadDashboard();
+      await loadApplication(selected.id);
+    } catch (cause) {
+      setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
+    } finally { setBusy(false); }
+  }
+
+  async function reviewKyc(action: 'reject' | 'expire') {
+    if (!selected || !kyc || kyc.status === 'verified' || busy) return;
+    const reasonCode = kycReason.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(reasonCode)) {
+      setError('Reason code معتبر نیست.');
+      return;
+    }
+    if (!window.confirm(action === 'reject' ? 'KYC رد شود؟' : 'KYC منقضی شود و نیاز به ارسال دوباره داشته باشد؟')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/api/ops/listener-applications/${encodeURIComponent(selected.id)}/kyc`, {
+        method: 'POST',
+        body: JSON.stringify({ action, reasonCode }),
+      });
+      await loadDashboard();
+      await loadApplication(selected.id);
+    } catch (cause) {
+      setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
+    } finally { setBusy(false); }
   }
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     setSummary(null);
+    setApplications([]);
+    setSelected(null);
+    setKyc(null);
     setCode('');
     setCodeSent(false);
   }
 
-  if (checkingSession) {
-    return <main><div className="panel"><h1>یکی هست / عملیات</h1><p>در حال بررسی نشست ادمین…</p></div></main>;
-  }
+  if (checkingSession) return <main><div className="panel"><h1>یکی هست / عملیات</h1><p>در حال بررسی نشست ادمین…</p></div></main>;
 
   if (!summary) {
     return (
@@ -128,7 +250,7 @@ export default function AdminPage() {
         <section className="panel authPanel">
           <p className="kicker">YEKI HAST · ADMIN</p>
           <h1>ورود عملیات</h1>
-          <p className="muted">ورود با همان OTP اصلی انجام می‌شود. فقط حسابی که در سیستم نقش ادمین فعال دارد وارد پنل می‌شود.</p>
+          <p className="muted">ورود با OTP اصلی انجام می‌شود و فقط حساب دارای نقش ادمین فعال وارد می‌شود.</p>
           <label>شماره موبایل</label>
           <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0912..." inputMode="tel" dir="ltr" />
           {!codeSent ? (
@@ -147,6 +269,8 @@ export default function AdminPage() {
     );
   }
 
+  const latestAssessment = selected?.assessments[0] ?? null;
+
   return (
     <main>
       <header className="topbar">
@@ -162,23 +286,73 @@ export default function AdminPage() {
       </header>
 
       <section className="grid">
-        {labels.map(([key, label]) => (
-          <article key={key}>
-            <small>{label}</small>
-            <strong>{summary.counts[key].toLocaleString('fa-IR')}</strong>
-          </article>
-        ))}
+        {labels.map(([key, label]) => <article key={key}><small>{label}</small><strong>{summary.counts[key].toLocaleString('fa-IR')}</strong></article>)}
       </section>
 
       {error && <p className="error">{error}</p>}
 
-      <section className="panel">
-        <h2>تعریف آمار</h2>
-        <div className="definitions">
-          <p><b>آنلاین همین حالا:</b> فقط Listener تأییدشده با KYC verified و heartbeat کمتر از ۹۰ ثانیه.</p>
-          <p><b>تماس فعال:</b> sessionهایی که هنوز در مسیر اتصال یا connected هستند.</p>
-          <p><b>پرداخت آماده ارسال:</b> payout با status=created؛ ارسال همچنان KYC verified می‌خواهد.</p>
-          <p><b>رویداد ایمنی:</b> شمار کل safety eventهای ثبت‌شده؛ جزئیات حساس در این نمای خلاصه نمایش داده نمی‌شود.</p>
+      <section className="opsLayout">
+        <div className="panel queuePanel">
+          <div className="sectionHeader"><div><p className="kicker">LISTENER PIPELINE</p><h2>صف بررسی شنونده</h2></div><span>{applications.length.toLocaleString('fa-IR')} مورد</span></div>
+          <div className="queue">
+            {applications.map((item) => (
+              <button key={item.id} className={`queueItem ${selected?.id === item.id ? 'active' : ''}`} onClick={() => loadApplication(item.id)}>
+                <b>{item.nickname}</b>
+                <span>{item.status}</span>
+                <small>{item.latestAssessment ? `assessment: ${item.latestAssessment.result}` : 'بدون آزمون'}</small>
+              </button>
+            ))}
+            {!applications.length && <p className="muted">درخواستی وجود ندارد.</p>}
+          </div>
+        </div>
+
+        <div className="panel detailPanel">
+          {!selected ? <p className="muted">یک درخواست را از صف انتخاب کن.</p> : (
+            <>
+              <div className="sectionHeader"><div><p className="kicker">APPLICATION</p><h2>{selected.nickname}</h2></div><span className="statusPill">{selected.status}</span></div>
+              <div className="facts">
+                <p><b>جنسیت:</b> {selected.gender}</p>
+                <p><b>زبان:</b> {selected.languages.map((x) => `${x.nameFa} (${x.proficiency})`).join('، ') || '—'}</p>
+                <p><b>Training:</b> {selected.training.filter((x) => x.status === 'completed').length}/{selected.training.length}</p>
+              </div>
+
+              {latestAssessment && (
+                <section className="subPanel">
+                  <h3>آخرین آزمون</h3>
+                  <p className="muted">وضعیت: <b>{latestAssessment.result}</b> · نسخه: {latestAssessment.scenarioVersion}</p>
+                  <pre>{JSON.stringify(latestAssessment.answers, null, 2)}</pre>
+                  {latestAssessment.result === 'pending' && (
+                    <div className="reviewRow">
+                      <input value={reviewScore} onChange={(e) => setReviewScore(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" dir="ltr" aria-label="Assessment score" />
+                      <button disabled={busy} onClick={() => reviewAssessment('passed')}>قبول</button>
+                      <button className="danger" disabled={busy} onClick={() => reviewAssessment('failed')}>رد</button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="subPanel">
+                <div className="sectionHeader"><h3>KYC</h3><span className="statusPill">{kyc?.status ?? 'نامشخص'}</span></div>
+                {kyc ? (
+                  <>
+                    <div className="facts compact">
+                      {Object.entries(kyc.completeness).map(([key, value]) => <p key={key}>{value ? '✓' : '✕'} {key}</p>)}
+                    </div>
+                    {kyc.rejectedReasonCode && <p className="muted">Reason: {kyc.rejectedReasonCode}</p>}
+                    {kyc.status === 'verified' ? (
+                      <p className="safeNotice">Verified توسط جریان verification ثبت شده است. هیچ دکمه manual verify در پنل وجود ندارد.</p>
+                    ) : kyc.status !== 'not_started' ? (
+                      <div className="reviewRow wide">
+                        <input value={kycReason} onChange={(e) => setKycReason(e.target.value)} dir="ltr" aria-label="KYC reason code" />
+                        <button className="danger" disabled={busy} onClick={() => reviewKyc('reject')}>Reject</button>
+                        <button className="ghost" disabled={busy} onClick={() => reviewKyc('expire')}>Expire</button>
+                      </div>
+                    ) : <p className="muted">KYC هنوز ارسال نشده است.</p>}
+                  </>
+                ) : <p className="muted">وضعیت KYC قابل خواندن نیست.</p>}
+              </section>
+            </>
+          )}
         </div>
       </section>
     </main>

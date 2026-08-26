@@ -18,6 +18,9 @@
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "validate:foundation": "node scripts/validate-foundation.mjs"
   },
+  "dependencies": {
+    "pg": "^8.23.0"
+  },
   "engines": {
     "node": ">=22.13.0"
   },

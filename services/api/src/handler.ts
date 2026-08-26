@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
+import { validateSecurityEnv } from './lib/security.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
 function ensureDatabaseReady(): void {
@@ -11,6 +12,12 @@ function ensureDatabaseReady(): void {
 function ensureOtpReady(): void {
   try { validateOtpEnv(); }
   catch { throw new HttpError(503, 'auth_not_configured'); }
+}
+
+function ensureSensitiveDataReady(): void {
+  ensureDatabaseReady();
+  try { validateSecurityEnv(); }
+  catch { throw new HttpError(503, 'sensitive_data_not_configured'); }
 }
 
 export async function handleApiRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -122,6 +129,25 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       ensureDatabaseReady();
       const { requestCall } = await import('./routes/calls.ts');
       return await requestCall(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/safety/report') {
+      ensureSensitiveDataReady();
+      const { reportCall } = await import('./routes/safety.ts');
+      return await reportCall(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/safety/block') {
+      ensureDatabaseReady();
+      const { blockCallCounterparty } = await import('./routes/safety.ts');
+      return await blockCallCounterparty(req, res);
+    }
+
+    const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
+    if (method === 'POST' && safetyExitMatch) {
+      ensureSensitiveDataReady();
+      const { safetyExitCall } = await import('./routes/safety.ts');
+      return await safetyExitCall(req, res, safetyExitMatch[1]);
     }
 
     const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '@yeki-hast/db';
+import { validateEnv } from './lib/env.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 import { requestOtp, verifyOtp } from './routes/auth.ts';
 import { bootstrap } from './routes/bootstrap.ts';
@@ -19,7 +20,13 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       });
       return;
     }
-    if (method === 'GET' && url.pathname === '/health') { sendJson(res, 200, { ok: true, service: 'yeki-hast-api', version: '0.0.8' }); return; }
+    if (method === 'GET' && url.pathname === '/health') {
+      sendJson(res, 200, { ok: true, service: 'yeki-hast-api', version: '0.0.8' });
+      return;
+    }
+
+    validateEnv();
+
     if (method === 'GET' && url.pathname === '/ready') { await query('SELECT 1'); sendJson(res, 200, { ok: true, database: 'ready' }); return; }
     if (method === 'GET' && url.pathname === '/v1/bootstrap') return await bootstrap(res);
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') return await requestOtp(req, res);

@@ -1,0 +1,36 @@
+name: Foundation QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Runtime syntax checks
+        run: |
+          node --experimental-strip-types --check api/index.ts
+          node --experimental-strip-types --check services/api/src/providers/sms.ts
+          node --experimental-strip-types --check services/api/src/routes/auth.ts
+          node --experimental-strip-types --check services/api/src/handler.ts
+
+      - name: Foundation tests
+        run: npm test
+
+      - name: Foundation invariant validator
+        run: npm run validate:foundation

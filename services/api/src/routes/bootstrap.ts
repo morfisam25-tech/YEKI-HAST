@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http';
-import { query } from '@yeki-hast/db';
+import { query } from '../../../../packages/db/src/client.ts';
 import { sendJson } from '../lib/http.ts';
 
 export async function bootstrap(res: ServerResponse) {

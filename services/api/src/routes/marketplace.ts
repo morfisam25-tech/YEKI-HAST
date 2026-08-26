@@ -3,6 +3,8 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
+const PRESENCE_STALE_MS = 90_000;
+
 function optionalGender(value: string | null): 'female' | 'male' | null {
   if (!value || value === 'any') return null;
   if (value === 'female' || value === 'male') return value;
@@ -20,6 +22,13 @@ function limitFrom(value: string | null): number {
   const parsed = value ? Number(value) : 20;
   if (!Number.isInteger(parsed) || parsed < 1) throw new HttpError(400, 'invalid_limit');
   return Math.min(parsed, 50);
+}
+
+function isStale(status: string, lastHeartbeatAt: string | null): boolean {
+  if (status !== 'online' && status !== 'paused') return false;
+  if (!lastHeartbeatAt) return true;
+  const timestamp = Date.parse(lastHeartbeatAt);
+  return !Number.isFinite(timestamp) || Date.now() - timestamp > PRESENCE_STALE_MS;
 }
 
 export async function browseListeners(req: IncomingMessage, res: ServerResponse) {
@@ -63,7 +72,12 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       sp.completed_calls,
       sp.rating_average::text,
       sp.rating_count,
-      COALESCE(pres.status::text, 'offline') presence_status,
+      CASE
+        WHEN pres.status IN ('online','paused')
+             AND (pres.last_heartbeat_at IS NULL OR pres.last_heartbeat_at <= now() - interval '90 seconds')
+          THEN 'offline'
+        ELSE COALESCE(pres.status::text, 'offline')
+      END presence_status,
       COALESCE((
         SELECT jsonb_agg(jsonb_build_object(
           'code', l.code,
@@ -92,8 +106,12 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
         JOIN app.languages l2 ON l2.id=ll2.language_id
         WHERE ll2.listener_user_id=lp.user_id AND l2.code=$2 AND l2.is_active=true
       ))
-      AND ($3::boolean=false OR pres.status='online')
-    ORDER BY (pres.status='online') DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
+      AND ($3::boolean=false OR (
+        pres.status='online' AND pres.last_heartbeat_at > now() - interval '90 seconds'
+      ))
+    ORDER BY (
+      pres.status='online' AND pres.last_heartbeat_at > now() - interval '90 seconds'
+    ) DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
     LIMIT $4
   `, [gender, language, onlineOnly, limit]);
 
@@ -160,14 +178,35 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
     const ctx = context.rows[0];
     if (!ctx) throw new HttpError(503, 'marketplace_unavailable');
 
-    const current = await client.query<{ current_work_session_id: string | null; status: string }>(`
-      SELECT current_work_session_id::text, status::text
+    const current = await client.query<{
+      current_work_session_id: string | null;
+      status: string;
+      last_heartbeat_at: string | null;
+    }>(`
+      SELECT current_work_session_id::text, status::text, last_heartbeat_at::text
       FROM app.listener_presence
       WHERE listener_user_id=$1 AND product_id=$2 AND service_id=$3 AND market_id=$4
       FOR UPDATE
     `, [userId, ctx.product_id, ctx.service_id, ctx.market_id]);
 
     let workSessionId = current.rows[0]?.current_work_session_id ?? null;
+    if (current.rows[0] && isStale(current.rows[0].status, current.rows[0].last_heartbeat_at)) {
+      if (workSessionId) {
+        await client.query(`
+          UPDATE app.listener_work_sessions
+          SET ended_at=COALESCE(ended_at, now()), ended_reason=COALESCE(ended_reason, 'heartbeat_timeout')
+          WHERE id=$1
+        `, [workSessionId]);
+      }
+      await client.query(`
+        UPDATE app.listener_presence
+        SET status='offline', current_work_session_id=NULL, online_since=NULL,
+            auto_offline_reason='heartbeat_timeout', updated_at=now()
+        WHERE listener_user_id=$1 AND product_id=$2 AND service_id=$3 AND market_id=$4
+      `, [userId, ctx.product_id, ctx.service_id, ctx.market_id]);
+      workSessionId = null;
+    }
+
     if (status === 'online' && !workSessionId) {
       const workSession = await client.query<{ id: string }>(`
         INSERT INTO app.listener_work_sessions(listener_user_id, product_id, service_id, market_id)
@@ -239,6 +278,7 @@ export async function heartbeatListenerPresence(req: IncomingMessage, res: Serve
       AND pres.service_id=s.id AND s.code='human_listening'
       AND pres.market_id=m.id AND m.code='ir'
       AND pres.status IN ('online','paused')
+      AND pres.last_heartbeat_at > now() - interval '90 seconds'
     RETURNING pres.status::text
   `, [userId]);
   if (!result.rows[0]) throw new HttpError(409, 'listener_not_online');
@@ -247,33 +287,65 @@ export async function heartbeatListenerPresence(req: IncomingMessage, res: Serve
 
 export async function getListenerPresence(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
-  const result = await query<{
-    status: string;
-    accepts_male: boolean;
-    accepts_female: boolean;
-    online_since: string | null;
-    last_heartbeat_at: string | null;
-  }>(`
-    SELECT pres.status::text, pres.accepts_male, pres.accepts_female,
-           pres.online_since::text, pres.last_heartbeat_at::text
-    FROM app.listener_presence pres
-    JOIN app.products p ON p.id=pres.product_id AND p.code='yeki_hast'
-    JOIN app.service_catalog s ON s.id=pres.service_id AND s.code='human_listening'
-    JOIN app.markets m ON m.id=pres.market_id AND m.code='ir'
-    WHERE pres.listener_user_id=$1
-  `, [userId]);
-  const row = result.rows[0];
-  sendJson(res, 200, row ? {
-    status: row.status,
-    acceptsMale: row.accepts_male,
-    acceptsFemale: row.accepts_female,
-    onlineSince: row.online_since,
-    lastHeartbeatAt: row.last_heartbeat_at,
-  } : {
-    status: 'offline',
-    acceptsMale: true,
-    acceptsFemale: true,
-    onlineSince: null,
-    lastHeartbeatAt: null,
+  const result = await withTransaction(async (client) => {
+    const rowResult = await client.query<{
+      status: string;
+      accepts_male: boolean;
+      accepts_female: boolean;
+      online_since: string | null;
+      last_heartbeat_at: string | null;
+      current_work_session_id: string | null;
+    }>(`
+      SELECT pres.status::text, pres.accepts_male, pres.accepts_female,
+             pres.online_since::text, pres.last_heartbeat_at::text,
+             pres.current_work_session_id::text
+      FROM app.listener_presence pres
+      JOIN app.products p ON p.id=pres.product_id AND p.code='yeki_hast'
+      JOIN app.service_catalog s ON s.id=pres.service_id AND s.code='human_listening'
+      JOIN app.markets m ON m.id=pres.market_id AND m.code='ir'
+      WHERE pres.listener_user_id=$1
+      FOR UPDATE OF pres
+    `, [userId]);
+    const row = rowResult.rows[0];
+    if (!row) {
+      return { status: 'offline', acceptsMale: true, acceptsFemale: true, onlineSince: null, lastHeartbeatAt: null };
+    }
+
+    if (isStale(row.status, row.last_heartbeat_at)) {
+      if (row.current_work_session_id) {
+        await client.query(`
+          UPDATE app.listener_work_sessions
+          SET ended_at=COALESCE(ended_at, now()), ended_reason=COALESCE(ended_reason, 'heartbeat_timeout')
+          WHERE id=$1
+        `, [row.current_work_session_id]);
+      }
+      await client.query(`
+        UPDATE app.listener_presence pres
+        SET status='offline', current_work_session_id=NULL, online_since=NULL,
+            auto_offline_reason='heartbeat_timeout', updated_at=now()
+        FROM app.products p, app.service_catalog s, app.markets m
+        WHERE pres.listener_user_id=$1
+          AND pres.product_id=p.id AND p.code='yeki_hast'
+          AND pres.service_id=s.id AND s.code='human_listening'
+          AND pres.market_id=m.id AND m.code='ir'
+      `, [userId]);
+      return {
+        status: 'offline',
+        acceptsMale: row.accepts_male,
+        acceptsFemale: row.accepts_female,
+        onlineSince: null,
+        lastHeartbeatAt: row.last_heartbeat_at,
+      };
+    }
+
+    return {
+      status: row.status,
+      acceptsMale: row.accepts_male,
+      acceptsFemale: row.accepts_female,
+      onlineSince: row.online_since,
+      lastHeartbeatAt: row.last_heartbeat_at,
+    };
   });
+
+  sendJson(res, 200, result);
 }

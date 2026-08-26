@@ -18,6 +18,7 @@ import {
   verifyOtp,
   type BootstrapLanguage,
 } from './src/api';
+import ListenerTrainingScreen from './src/ListenerTrainingScreen';
 
 type Screen =
   | 'home'
@@ -289,19 +290,8 @@ export default function App() {
           </View>
         )}
 
-        {screen === 'listener-training' && (
-          <View style={styles.card}>
-            <Text style={styles.titleSmall}>درخواستت ثبت شد</Text>
-            <Text style={styles.scenario}>Caller: «اصلاً نمی‌دونم چی بگم. فقط اعصاب ندارم و دلم می‌خواست یکی اون طرف خط باشه.»</Text>
-            <Text style={styles.good}>پاسخ مناسب: «باشه. لازم نیست از جایی خاص شروع کنی. من اینجام و گوش می‌دم.»</Text>
-            <Text style={styles.bad}>پاسخ نامناسب: «به نظرم تو افسردگی داری و باید بری پیش روان‌شناس.»</Text>
-            <Text style={styles.body}>
-              آموزش و آزمون کامل در مرحله بعد فعال می‌شود. احراز هویت فقط بعد از قبولی و پیش از شروع کار انجام می‌شود.
-            </Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('home')}>
-              <Text style={styles.primaryButtonText}>تمام</Text>
-            </TouchableOpacity>
-          </View>
+        {screen === 'listener-training' && token && (
+          <ListenerTrainingScreen token={token} onDone={() => setScreen('home')} />
         )}
       </ScrollView>
     </SafeAreaView>
@@ -339,7 +329,4 @@ const styles = StyleSheet.create({
   rule: { backgroundColor: '#f6f5f1', padding: 12, borderRadius: 12 },
   ruleText: { color: '#40413c', textAlign: 'right', lineHeight: 23 },
   disabled: { opacity: 0.35 },
-  scenario: { backgroundColor: '#f3f1ec', padding: 14, borderRadius: 14, textAlign: 'right', color: '#343530', lineHeight: 25 },
-  good: { backgroundColor: '#eef3ea', padding: 14, borderRadius: 14, textAlign: 'right', color: '#34402f', lineHeight: 25 },
-  bad: { backgroundColor: '#f6ecea', padding: 14, borderRadius: 14, textAlign: 'right', color: '#5d3935', lineHeight: 25 },
 });

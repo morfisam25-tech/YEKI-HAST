@@ -17,7 +17,7 @@
     "db:check": "npm --workspace @yeki-hast/db run check",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "validate:foundation": "node scripts/validate-foundation.mjs",
-    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npm run db:migrate; else echo \"Skipping DB migration for $VERCEL_ENV\"; fi"
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npm run db:migrate && node scripts/verify-production-db.mjs; else echo \"Skipping DB migration for $VERCEL_ENV\"; fi"
   },
   "dependencies": {
     "pg": "^8.23.0"

@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import { query } from '@yeki-hast/db';
+import { query } from '../../../../packages/db/src/client.ts';
 import { HttpError } from './http.ts';
 import { tokenHash } from './security.ts';
 export interface AuthenticatedUser { userId: string }

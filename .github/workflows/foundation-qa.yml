@@ -25,6 +25,7 @@ jobs:
       - name: Runtime syntax checks
         run: |
           node --experimental-strip-types --check api/index.ts
+          node --experimental-strip-types --check api/runtime.ts
           node --experimental-strip-types --check apps/mobile/src/api.ts
           node --experimental-strip-types --check services/api/src/providers/sms.ts
           node --experimental-strip-types --check services/api/src/providers/payment.ts
@@ -38,6 +39,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/calls.ts
           node --experimental-strip-types --check services/api/src/routes/safety.ts
           node --experimental-strip-types --check services/api/src/routes/admin.ts
+          node --experimental-strip-types --check services/api/src/routes/payouts.ts
           node --experimental-strip-types --check services/api/src/lib/admin.ts
           node --experimental-strip-types --check services/api/src/lib/security.ts
           node --experimental-strip-types --check services/api/src/domain/iran-identifiers.ts

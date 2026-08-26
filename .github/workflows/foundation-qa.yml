@@ -39,6 +39,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/lib/admin.ts
           node --experimental-strip-types --check services/api/src/domain/listener-onboarding.ts
           node --experimental-strip-types --check services/api/src/domain/call-authorization.ts
+          node --experimental-strip-types --check services/api/src/domain/payment-status.ts
           node --experimental-strip-types --check services/api/src/handler.ts
 
       - name: Foundation tests

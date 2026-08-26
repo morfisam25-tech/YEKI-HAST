@@ -10,6 +10,15 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   try {
     const method = req.method ?? 'GET';
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (method === 'GET' && url.pathname === '/') {
+      sendJson(res, 200, {
+        ok: true,
+        service: 'yeki-hast-api',
+        version: '0.0.8',
+        endpoints: ['/health', '/ready', '/v1/bootstrap'],
+      });
+      return;
+    }
     if (method === 'GET' && url.pathname === '/health') { sendJson(res, 200, { ok: true, service: 'yeki-hast-api', version: '0.0.8' }); return; }
     if (method === 'GET' && url.pathname === '/ready') { await query('SELECT 1'); sendJson(res, 200, { ok: true, database: 'ready' }); return; }
     if (method === 'GET' && url.pathname === '/v1/bootstrap') return await bootstrap(res);

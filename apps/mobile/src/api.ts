@@ -69,17 +69,33 @@ export type WalletResponse = {
   }>;
 };
 
+export type WalletTransactionsResponse = {
+  transactions: Array<{
+    id: string;
+    currencyCode: string;
+    type: string;
+    deltaMinor: string;
+    balanceAfterMinor: string;
+    callId: string | null;
+    paymentAttemptId: string | null;
+    reasonCode: string | null;
+    createdAt: string;
+  }>;
+};
+
 export type WalletTopupResponse = {
-  ok?: true;
+  ok?: boolean;
   attemptId: string;
-  provider: string;
+  provider?: string;
   status: string;
   currencyCode: string;
   amountMinor: string;
-  providerPaymentId: string | null;
-  paymentUrl: string | null;
-  createdAt: string;
-  completedAt: string | null;
+  providerPaymentId?: string | null;
+  paymentUrl?: string | null;
+  createdAt?: string;
+  completedAt?: string | null;
+  providerCode?: number | null;
+  balanceMinor?: string | null;
   idempotent?: boolean;
 };
 
@@ -107,7 +123,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
 
   let body: unknown = null;
   try { body = await response.json(); } catch {}
-  if (!response.ok) {
+  if (!response.ok && response.status !== 202) {
     const code = body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
       ? String((body as { error: string }).error)
       : 'request_failed';
@@ -149,6 +165,11 @@ export function getWallet(token: string): Promise<WalletResponse> {
   return request('/v1/wallet', {}, token);
 }
 
+export function getWalletTransactions(token: string, currencyCode = 'IRR', limit = 50): Promise<WalletTransactionsResponse> {
+  const params = new URLSearchParams({ currency: currencyCode, limit: String(limit) });
+  return request(`/v1/wallet/transactions?${params.toString()}`, {}, token);
+}
+
 export function createWalletTopup(
   token: string,
   amountMinor: string,
@@ -162,6 +183,10 @@ export function createWalletTopup(
 
 export function getWalletTopup(token: string, attemptId: string): Promise<WalletTopupResponse> {
   return request(`/v1/wallet/topups/${encodeURIComponent(attemptId)}`, {}, token);
+}
+
+export function verifyWalletTopup(token: string, attemptId: string): Promise<WalletTopupResponse> {
+  return request(`/v1/wallet/topups/${encodeURIComponent(attemptId)}/verify`, { method: 'POST' }, token);
 }
 
 export function createListenerApplication(

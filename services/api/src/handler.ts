@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
-import { validateSecurityEnv } from './lib/security.ts';
+import { validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
@@ -19,6 +19,12 @@ function ensureSensitiveDataReady(): void {
   ensureDatabaseReady();
   try { validateSecurityEnv(); }
   catch { throw new HttpError(503, 'sensitive_data_not_configured'); }
+}
+
+function ensureKycReady(): void {
+  ensureDatabaseReady();
+  try { validateKycSecurityEnv(); }
+  catch { throw new HttpError(503, 'kyc_not_configured'); }
 }
 
 function ensureCallReady(): void {
@@ -150,6 +156,18 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       ensureDatabaseReady();
       const { submitListenerAssessment } = await import('./routes/listener.ts');
       return await submitListenerAssessment(req, res);
+    }
+
+    if (method === 'GET' && url.pathname === '/v1/listener/kyc') {
+      ensureDatabaseReady();
+      const { getListenerKycStatus } = await import('./routes/kyc.ts');
+      return await getListenerKycStatus(req, res);
+    }
+
+    if (method === 'POST' && url.pathname === '/v1/listener/kyc') {
+      ensureKycReady();
+      const { submitListenerKyc } = await import('./routes/kyc.ts');
+      return await submitListenerKyc(req, res);
     }
 
     if (method === 'GET' && url.pathname === '/v1/listener/presence') {

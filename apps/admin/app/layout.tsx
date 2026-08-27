@@ -12,6 +12,7 @@ const navStyle: CSSProperties = {
   background: 'rgba(8, 12, 18, 0.96)',
   borderBottom: '1px solid rgba(255,255,255,0.08)',
   backdropFilter: 'blur(12px)',
+  overflowX: 'auto',
 };
 
 const linkStyle: CSSProperties = {
@@ -21,6 +22,7 @@ const linkStyle: CSSProperties = {
   borderRadius: '10px',
   border: '1px solid rgba(255,255,255,0.10)',
   fontSize: '13px',
+  whiteSpace: 'nowrap',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -31,7 +33,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a style={linkStyle} href="/">داشبورد</a>
           <a style={linkStyle} href="/calls">تماس‌ها</a>
           <a style={linkStyle} href="/safety">ایمنی</a>
-          <a style={linkStyle} href="/payouts">پرداخت‌ها</a>
+          <a style={linkStyle} href="/payments">شارژها</a>
+          <a style={linkStyle} href="/payouts">تسویه‌ها</a>
         </nav>
         {children}
       </body>

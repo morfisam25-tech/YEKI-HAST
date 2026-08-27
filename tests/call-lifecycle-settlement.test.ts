@@ -15,6 +15,12 @@ test('provider lifecycle cannot skip caller/listener transition order', () => {
   assert.match(lifecycle, /provider_bridge_mismatch/);
 });
 
+test('stale caller-answered callback is idempotent after listener dialing already started', () => {
+  assert.match(lifecycle, /input\.toStatus === 'caller_answered' && row\.status === 'calling_listener'/);
+  assert.match(lifecycle, /return \{ callId: input\.callId, status: row\.status, idempotent: true \}/);
+  assert.match(lifecycle, /if \(row\.status !== input\.fromStatus\) throw new Error\('invalid_call_transition'\)/);
+});
+
 test('settlement locks call and wallet before mutating money', () => {
   assert.match(lifecycle, /FROM app\.call_sessions[\s\S]*?FOR UPDATE/);
   assert.match(lifecycle, /FROM app\.wallets[\s\S]*?FOR UPDATE/);

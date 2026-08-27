@@ -29,11 +29,20 @@ test('call anomaly diagnostics flag duplicate active calls for one caller', () =
   assert.doesNotMatch(page, /repair-duplicate|force-cancel-duplicate/);
 });
 
+test('call anomaly diagnostics flag duplicate active calls for one listener', () => {
+  assert.match(anomalies, /duplicateActiveListeners/);
+  assert.match(anomalies, /listener_user_id IS NOT NULL/);
+  assert.match(anomalies, /GROUP BY listener_user_id/);
+  assert.match(page, /duplicateActiveListeners/);
+  assert.match(page, /listener_has_multiple_active_calls/);
+  assert.doesNotMatch(page, /repair-listener-duplicate|force-cancel-listener-duplicate/);
+});
+
 test('call anomaly diagnostics cover every terminal end-time invariant including missed calls', () => {
-  assert.match(anomalies, /(?:cs\.)?caller_charge_minor > (?:cs\.)?authorized_minor/);
-  assert.match(anomalies, /(?:cs\.)?listener_earning_minor > (?:cs\.)?caller_charge_minor/);
-  assert.match(anomalies, /(?:cs\.)?status::text='connected' AND (?:cs\.)?billing_started_at IS NULL/);
-  assert.match(anomalies, /(?:cs\.)?status::text IN \('completed','missed','cancelled','failed','safety_terminated'\) AND (?:cs\.)?ended_at IS NULL/);
+  assert.match(anomalies, /(?:cs\.)?caller_charge_minor > (?:cs\.)?authorized_minor|caller_charge_minor > authorized_minor/);
+  assert.match(anomalies, /(?:cs\.)?listener_earning_minor > (?:cs\.)?caller_charge_minor|listener_earning_minor > caller_charge_minor/);
+  assert.match(anomalies, /status::text='connected' AND billing_started_at IS NULL/);
+  assert.match(anomalies, /status::text IN \('completed','missed','cancelled','failed','safety_terminated'\) AND ended_at IS NULL/);
   assert.match(anomalies, /invariantViolations/);
   assert.match(calls, /'connected', 'completed', 'missed', 'cancelled', 'failed', 'safety_terminated'/);
   assert.match(page, /<option value="missed">missed<\/option>/);

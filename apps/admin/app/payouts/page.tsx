@@ -27,6 +27,14 @@ type PayoutCandidate = {
   kycStatus: string;
 };
 
+type PendingEarningBacklog = {
+  currencyCode: string;
+  pendingMinor: string;
+  earningCount: number;
+  listenerCount: number;
+  oldestPendingAt: string | null;
+};
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -51,6 +59,7 @@ function formatAmount(amountMinor: string, currencyCode: string): string {
 export default function PayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [candidates, setCandidates] = useState<PayoutCandidate[]>([]);
+  const [pendingBacklog, setPendingBacklog] = useState<PendingEarningBacklog[]>([]);
   const [status, setStatus] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -58,9 +67,10 @@ export default function PayoutsPage() {
   async function load() {
     setError('');
     const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
-    const value = await api<{ payouts: Payout[]; payoutCandidates: PayoutCandidate[] }>(`/api/ops/payouts${qs}`);
+    const value = await api<{ payouts: Payout[]; payoutCandidates: PayoutCandidate[]; pendingEarningBacklog: PendingEarningBacklog[] }>(`/api/ops/payouts${qs}`);
     setPayouts(value.payouts);
     setCandidates(value.payoutCandidates ?? []);
+    setPendingBacklog(value.pendingEarningBacklog ?? []);
   }
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : 'request_failed')); }, [status]);
@@ -94,6 +104,36 @@ export default function PayoutsPage() {
           <button className="ghost" onClick={() => load()} disabled={Boolean(busyId)}>به‌روزرسانی</button>
         </div>
       </header>
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <p className="kicker">PENDING EARNINGS</p>
+            <h2>درآمدهای هنوز آزاد‌نشده</h2>
+          </div>
+          <span className="statusPill">{pendingBacklog.reduce((sum, row) => sum + row.earningCount, 0).toLocaleString('fa-IR')}</span>
+        </div>
+        <p className="muted">این ارقام فقط backlog وضعیت `pending` هستند. از این بخش هیچ earning آزاد، payout-ready یا پرداخت نمی‌شود.</p>
+        <div className="queue">
+          {pendingBacklog.map((row) => (
+            <article key={row.currencyCode} className="subPanel">
+              <div className="sectionHeader">
+                <div>
+                  <p className="kicker">PENDING · {row.currencyCode}</p>
+                  <h3>{formatAmount(row.pendingMinor, row.currencyCode)}</h3>
+                </div>
+                <span className="statusPill">HOLD</span>
+              </div>
+              <div className="facts compact">
+                <p><b>Earnings:</b> {row.earningCount.toLocaleString('fa-IR')}</p>
+                <p><b>Listeners:</b> {row.listenerCount.toLocaleString('fa-IR')}</p>
+                <p><b>قدیمی‌ترین pending:</b> {row.oldestPendingAt ? new Date(row.oldestPendingAt).toLocaleString('fa-IR') : '—'}</p>
+              </div>
+            </article>
+          ))}
+          {!pendingBacklog.length && <p className="muted">earning در وضعیت pending وجود ندارد.</p>}
+        </div>
+      </section>
 
       <section className="panel">
         <div className="sectionHeader">

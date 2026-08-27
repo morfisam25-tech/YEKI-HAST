@@ -31,7 +31,14 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     if (row.provider_bridge_id) return { kind: 'already_dispatched' as const, status: row.status };
-    if (row.status !== 'routing' && row.status !== 'calling_caller') {
+
+    // Once a routing call is claimed as calling_caller, a provider submission may already
+    // have happened even when the bridge id was not persisted. Blind redispatch could create
+    // a second real call, so this state is reconciliation-only until provider truth is known.
+    if (row.status === 'calling_caller') {
+      throw new HttpError(503, 'telephony_dispatch_uncertain');
+    }
+    if (row.status !== 'routing') {
       throw new HttpError(409, 'call_cannot_be_dispatched');
     }
     if (!row.listener_user_id || !row.max_billable_seconds || row.max_billable_seconds < 1) {
@@ -50,19 +57,17 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       throw new HttpError(409, 'verified_phone_required');
     }
 
-    if (row.status === 'routing') {
-      const updated = await client.query(`
-        UPDATE app.call_sessions
-        SET status='calling_caller', telephony_provider=$2, updated_at=now()
-        WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
-        RETURNING id
-      `, [row.id, process.env.TELEPHONY_PROVIDER?.trim() || null]);
-      if (!updated.rowCount) throw new HttpError(409, 'call_dispatch_conflict');
-      await client.query(`
-        INSERT INTO app.call_events(call_session_id, status, source)
-        VALUES ($1,'calling_caller','api')
-      `, [row.id]);
-    }
+    const updated = await client.query(`
+      UPDATE app.call_sessions
+      SET status='calling_caller', telephony_provider=$2, updated_at=now()
+      WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
+      RETURNING id
+    `, [row.id, process.env.TELEPHONY_PROVIDER?.trim() || null]);
+    if (!updated.rowCount) throw new HttpError(409, 'call_dispatch_conflict');
+    await client.query(`
+      INSERT INTO app.call_events(call_session_id, status, source)
+      VALUES ($1,'calling_caller','api')
+    `, [row.id]);
 
     return {
       kind: 'claimed' as const,

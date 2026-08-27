@@ -7,13 +7,14 @@ const mobile = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.u
 
 test('block endpoint uses counterparty id internally but never returns it to either participant', () => {
   assert.match(safety, /await upsertBlock\(client, userId, call\.otherUserId, reasonCode\)/);
-  assert.match(safety, /sendJson\(res, 200, \{ ok: true, blocked: true \}\)/);
   const blockRoute = safety.slice(
     safety.indexOf('export async function blockCallCounterparty'),
     safety.indexOf('export async function safetyExitCall'),
   );
+  assert.match(blockRoute, /sendJson\(res, 200, \{ ok: true, blocked: true \}\)/);
   assert.doesNotMatch(blockRoute, /blockedUserId/);
-  assert.doesNotMatch(blockRoute, /otherUserId\s*[,}]/);
+  const responseLine = blockRoute.match(/sendJson\(res, 200, ([^\n]+)\)/)?.[1] ?? '';
+  assert.doesNotMatch(responseLine, /otherUserId|caller_user_id|listener_user_id/);
 });
 
 test('mobile block contract exposes only success state, not counterparty uuid', () => {

@@ -54,9 +54,10 @@ test('unconnected terminal callbacks release reservation without charging', () =
   assert.doesNotMatch(section, /listener_earnings/);
 });
 
-test('connected safety exit freezes end time and settles immediately', () => {
+test('connected safety exit requires known telephony identity, freezes end time and settles immediately', () => {
   assert.match(safety, /const stoppedAt = new Date\(\)/);
-  assert.match(safety, /status === 'connected' && !call\.provider_bridge_id/);
+  assert.match(safety, /call\.status === 'caller_answered' \|\| call\.status === 'calling_listener' \|\| call\.status === 'connected'/);
+  assert.match(safety, /&& !call\.provider_bridge_id/);
   assert.match(safety, /settleCallByProvider\(\{/);
   assert.match(safety, /Math\.floor\(\(result\.stoppedAt\.getTime\(\) - connectedAtMs\) \/ 1000\)/);
   assert.match(safety, /safety_settlement_pending/);

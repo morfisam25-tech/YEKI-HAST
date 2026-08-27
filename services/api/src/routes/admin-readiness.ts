@@ -34,6 +34,12 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && Number.isInteger(Number(process.env.CALLER_MINIMUM_AGE))
     && Number(process.env.CALLER_MINIMUM_AGE) >= 13
     && Number(process.env.CALLER_MINIMUM_AGE) <= 99;
+  const callerClosedBetaEnabled = process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true';
+  const callerLaunchReady = callerClosedBetaEnabled
+    && callerAgePolicyReady
+    && smsReady
+    && paymentReady
+    && telephonyReady;
 
   sendJson(res, 200, {
     ok: true,
@@ -45,6 +51,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       telephony: { provider: telephonyProvider, ready: telephonyReady },
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
       callerAgePolicy: { ready: callerAgePolicyReady },
+      callerClosedBeta: { enabled: callerClosedBetaEnabled },
+      callerLaunch: { ready: callerLaunchReady },
     },
     secretsIncluded: false,
   });

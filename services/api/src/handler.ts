@@ -230,6 +230,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await listAdminSafetyCases(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/admin/calls') {
+      ensureDatabaseReady();
+      const { listAdminCalls } = await import('./routes/admin-calls.ts');
+      return await listAdminCalls(req, res);
+    }
+
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) {
       ensureDatabaseReady();

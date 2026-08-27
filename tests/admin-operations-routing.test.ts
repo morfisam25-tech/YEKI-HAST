@@ -7,9 +7,11 @@ const proxy = await readFile(new URL('../apps/admin/app/api/ops/[...path]/route.
 
 test('admin operations routes stay wired in the API handler', () => {
   assert.match(handler, /\/v1\/admin\/payouts/);
+  assert.match(handler, /\/v1\/admin\/payment-attempts/);
   assert.match(handler, /\/v1\/admin\/safety-cases/);
   assert.match(handler, /\/v1\/admin\/calls/);
   assert.match(handler, /listAdminPayouts/);
+  assert.match(handler, /listAdminPaymentAttempts/);
   assert.match(handler, /listAdminSafetyCases/);
   assert.match(handler, /listAdminCalls/);
   assert.match(handler, /adminSafetyActionMatch/);

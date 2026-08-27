@@ -69,6 +69,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
     `, [status, limit, AMBIGUOUS_DISPATCH_MINUTES]),
     query<{
       listener_user_id: string;
+      market_id: string;
       currency_code: string;
       available_minor: string;
       earning_count: string;
@@ -76,6 +77,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       kyc_status: string | null;
     }>(`
       SELECT e.listener_user_id::text,
+             e.market_id::text,
              e.currency_code,
              COALESCE(SUM(e.amount_minor),0)::text AS available_minor,
              COUNT(*)::text AS earning_count,
@@ -85,7 +87,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       LEFT JOIN app.payout_items pi ON pi.earning_id=e.id
       LEFT JOIN private_data.listener_kyc k ON k.user_id=e.listener_user_id
       WHERE e.status='available' AND pi.id IS NULL
-      GROUP BY e.listener_user_id, e.currency_code, k.status
+      GROUP BY e.listener_user_id, e.market_id, e.currency_code, k.status
       ORDER BY MIN(e.created_at) ASC
       LIMIT 100
     `),
@@ -109,6 +111,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
     })),
     payoutCandidates: candidates.rows.map((row) => ({
       listenerUserId: row.listener_user_id,
+      marketId: row.market_id,
       currencyCode: row.currency_code,
       availableMinor: row.available_minor,
       earningCount: Number(row.earning_count),

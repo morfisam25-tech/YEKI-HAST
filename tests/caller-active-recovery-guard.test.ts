@@ -31,6 +31,14 @@ test('mobile reopens the server-side active call instead of creating a replaceme
   assert.match(screen, /setStage\('call'\)/);
 });
 
+test('request race recovers the winning active call instead of leaving caller stranded', () => {
+  assert.match(screen, /code === 'caller_call_already_active'/);
+  assert.match(screen, /const recovered = await getActiveCall\(token\)/);
+  assert.match(screen, /if \(recovered\.activeCall\)/);
+  assert.match(screen, /setCall\(recovered\.activeCall\)/);
+  assert.match(screen, /setStage\('call'\)/);
+});
+
 test('connected calls remain non-cancellable in caller UI while safety exit stays available', () => {
   assert.match(screen, /const cancellableStatuses = new Set\(\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'\]\)/);
   assert.doesNotMatch(screen, /cancellableStatuses[^\n]*connected/);

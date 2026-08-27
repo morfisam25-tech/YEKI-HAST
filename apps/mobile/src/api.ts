@@ -147,14 +147,17 @@ export type SafetyExitResponse = {
 };
 
 export type BrowseListener = {
-  userId: string;
+  id: string;
   nickname: string;
   gender: 'female' | 'male';
+  verified: boolean;
+  reliabilityScore: number;
   shortIntro: string | null;
   listeningStyle: string | null;
-  ratingAverage: string | null;
+  completedCalls: number;
+  ratingAverage: number | null;
   ratingCount: number;
-  reliabilityScore: string;
+  presence: string;
   languages: Array<{ code: string; nameFa: string; nameEn: string | null; proficiency: string }>;
 };
 

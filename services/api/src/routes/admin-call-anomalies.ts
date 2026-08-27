@@ -25,26 +25,48 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     LIMIT 100
   `);
 
-  const cancelTerminationUncertain = await query<{
+  const cancelTerminationPending = await query<{
     id: string;
     status: string;
     telephony_provider: string | null;
+    termination_state: string;
     event_at: string;
     updated_at: string;
   }>(`
-    SELECT DISTINCT ON (cs.id)
-           cs.id::text,
-           cs.status::text,
-           cs.telephony_provider,
-           ce.created_at::text AS event_at,
-           cs.updated_at::text
-    FROM app.call_sessions cs
-    JOIN app.call_events ce ON ce.call_session_id=cs.id
-    WHERE cs.status::text = ANY($1::text[])
-      AND ce.metadata->>'reason'='cancel_termination_result_uncertain'
-    ORDER BY cs.id, ce.created_at DESC
+    WITH termination_state AS (
+      SELECT cs.id,
+             cs.status,
+             cs.telephony_provider,
+             cs.updated_at,
+             MAX(ce.created_at) AS event_at,
+             BOOL_OR(ce.metadata->>'reason'='cancel_termination_started') AS has_started,
+             BOOL_OR(ce.metadata->>'reason'='cancel_termination_result_uncertain') AS has_uncertain,
+             BOOL_OR(ce.metadata->>'reason'='cancel_termination_confirmed') AS has_confirmed
+      FROM app.call_sessions cs
+      JOIN app.call_events ce ON ce.call_session_id=cs.id
+      WHERE cs.status::text = ANY($1::text[])
+        AND ce.metadata->>'reason' = ANY($2::text[])
+      GROUP BY cs.id, cs.status, cs.telephony_provider, cs.updated_at
+    )
+    SELECT id::text,
+           status::text,
+           telephony_provider,
+           CASE
+             WHEN has_confirmed THEN 'confirmed_local_finalize_pending'
+             WHEN has_uncertain THEN 'uncertain'
+             ELSE 'started_unresolved'
+           END AS termination_state,
+           event_at::text,
+           updated_at::text
+    FROM termination_state
+    WHERE has_started OR has_uncertain OR has_confirmed
+    ORDER BY event_at ASC
     LIMIT 100
-  `, [ACTIVE_CALL_STATUSES]);
+  `, [ACTIVE_CALL_STATUSES, [
+    'cancel_termination_started',
+    'cancel_termination_result_uncertain',
+    'cancel_termination_confirmed',
+  ]]);
 
   const missingBridge = await query<{
     id: string;
@@ -285,7 +307,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     },
     counts: {
       dispatchUncertain: dispatchUncertain.rowCount ?? dispatchUncertain.rows.length,
-      cancelTerminationUncertain: cancelTerminationUncertain.rowCount ?? cancelTerminationUncertain.rows.length,
+      cancelTerminationPending: cancelTerminationPending.rowCount ?? cancelTerminationPending.rows.length,
       missingBridge: missingBridge.rowCount ?? missingBridge.rows.length,
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
@@ -304,14 +326,16 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         reconciliationRequired: true,
         providerRedispatchAllowed: false,
       })),
-      cancelTerminationUncertain: cancelTerminationUncertain.rows.map((row) => ({
+      cancelTerminationPending: cancelTerminationPending.rows.map((row) => ({
         callId: row.id,
         status: row.status,
         telephonyProvider: row.telephony_provider,
+        terminationState: row.termination_state,
         eventAt: row.event_at,
         updatedAt: row.updated_at,
-        reconciliationRequired: true,
+        reconciliationRequired: row.termination_state !== 'confirmed_local_finalize_pending',
         providerTerminationRetryAllowed: false,
+        localFinalizeRetryAllowed: row.termination_state === 'confirmed_local_finalize_pending',
       })),
       missingBridge: missingBridge.rows.map((row) => ({
         callId: row.id,

@@ -9,6 +9,16 @@ const AMBIGUOUS_DISPATCH_MINUTES = 5;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CANDIDATE_VERSION_RE = /^[0-9a-f]{64}$/i;
 
+type PayoutConsistencyRow = {
+  amount_minor: string;
+  source_count: string;
+  source_total_minor: string;
+  earning_market_mismatch_count: string;
+  source_state_mismatch_count: string;
+  provider_state_mismatch: boolean;
+  paid_at_mismatch: boolean;
+};
+
 function limitFrom(value: string | null): number {
   if (!value) return 50;
   const parsed = Number(value);
@@ -55,6 +65,17 @@ function candidateVersionFor(
     .digest('hex');
 }
 
+function consistencyIssuesFor(row: PayoutConsistencyRow): string[] {
+  const issues: string[] = [];
+  if (Number(row.source_count) < 1) issues.push('no_sources');
+  if (BigInt(row.source_total_minor) !== BigInt(row.amount_minor)) issues.push('source_total_mismatch');
+  if (Number(row.earning_market_mismatch_count) > 0) issues.push('earning_market_mismatch');
+  if (Number(row.source_state_mismatch_count) > 0) issues.push('source_state_mismatch');
+  if (row.provider_state_mismatch) issues.push('provider_state_mismatch');
+  if (row.paid_at_mismatch) issues.push('paid_at_mismatch');
+  return issues;
+}
+
 export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -75,6 +96,11 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       updated_at: string;
       paid_at: string | null;
       source_count: string;
+      source_total_minor: string;
+      earning_market_mismatch_count: string;
+      source_state_mismatch_count: string;
+      provider_state_mismatch: boolean;
+      paid_at_mismatch: boolean;
       kyc_status: string | null;
     }>(`
       SELECT p.id::text,
@@ -93,9 +119,42 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
              p.updated_at::text,
              p.paid_at::text,
              COUNT(pi.id)::text AS source_count,
+             COALESCE(SUM(pi.amount_minor),0)::text AS source_total_minor,
+             COUNT(*) FILTER (
+               WHERE pi.earning_id IS NOT NULL
+                 AND e.market_id IS DISTINCT FROM p.market_id
+             )::text AS earning_market_mismatch_count,
+             COUNT(*) FILTER (
+               WHERE
+                 (
+                   pi.earning_id IS NOT NULL
+                   AND (
+                     (p.status::text='paid' AND e.status::text<>'paid')
+                     OR (p.status::text IN ('created','processing','failed') AND e.status::text<>'available')
+                   )
+                 )
+                 OR
+                 (
+                   pi.guarantee_assignment_id IS NOT NULL
+                   AND (
+                     (p.status::text='paid' AND g.status::text<>'settled')
+                     OR (p.status::text IN ('created','processing','failed') AND g.status::text<>'eligible')
+                   )
+                 )
+             )::text AS source_state_mismatch_count,
+             (
+               (p.status::text='created' AND (p.provider IS NOT NULL OR p.provider_reference IS NOT NULL))
+               OR (p.status::text IN ('processing','failed','paid') AND p.provider IS NULL)
+             ) AS provider_state_mismatch,
+             (
+               (p.status::text='paid' AND p.paid_at IS NULL)
+               OR (p.status::text<>'paid' AND p.paid_at IS NOT NULL)
+             ) AS paid_at_mismatch,
              k.status::text AS kyc_status
       FROM app.payouts p
       LEFT JOIN app.payout_items pi ON pi.payout_id=p.id
+      LEFT JOIN app.listener_earnings e ON e.id=pi.earning_id
+      LEFT JOIN app.listener_guarantee_assignments g ON g.id=pi.guarantee_assignment_id
       LEFT JOIN private_data.listener_kyc k ON k.user_id=p.listener_user_id
       WHERE ($1::text IS NULL OR p.status::text=$1)
       GROUP BY p.id, k.status
@@ -154,22 +213,30 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
     `),
   ]);
 
+  const payouts = result.rows.map((row) => ({
+    id: row.id,
+    listenerUserId: row.listener_user_id,
+    amountMinor: row.amount_minor,
+    currencyCode: row.currency_code,
+    status: row.status,
+    provider: row.provider,
+    dispatchNeedsReconciliation: row.dispatch_needs_reconciliation,
+    sourceCount: Number(row.source_count),
+    kycStatus: row.kyc_status ?? 'not_started',
+    consistencyIssues: consistencyIssuesFor(row),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    paidAt: row.paid_at,
+  }));
+
   sendJson(res, 200, {
     thresholds: { ambiguousDispatchMinutes: AMBIGUOUS_DISPATCH_MINUTES },
-    payouts: result.rows.map((row) => ({
-      id: row.id,
-      listenerUserId: row.listener_user_id,
-      amountMinor: row.amount_minor,
-      currencyCode: row.currency_code,
-      status: row.status,
-      provider: row.provider,
-      dispatchNeedsReconciliation: row.dispatch_needs_reconciliation,
-      sourceCount: Number(row.source_count),
-      kycStatus: row.kyc_status ?? 'not_started',
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      paidAt: row.paid_at,
-    })),
+    payouts,
+    listedConsistency: {
+      payoutCount: payouts.length,
+      payoutsWithIssues: payouts.filter((row) => row.consistencyIssues.length > 0).length,
+      issueCount: payouts.reduce((sum, row) => sum + row.consistencyIssues.length, 0),
+    },
     payoutCandidates: candidates.rows.map((row) => ({
       listenerUserId: row.listener_user_id,
       marketId: row.market_id,
@@ -192,6 +259,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       listenerCount: Number(row.listener_count),
       oldestPendingAt: row.oldest_pending_at,
     })),
+    consistencyDiagnosticsReadOnly: true,
     providerReferencesIncluded: false,
     bankDetailsIncluded: false,
   });

@@ -327,6 +327,12 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
     if (!['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'].includes(row.status)) {
       throw new HttpError(409, 'call_cannot_be_cancelled');
     }
+    if (row.status === 'calling_caller' && !row.provider_bridge_id) {
+      throw new HttpError(409, 'telephony_dispatch_uncertain');
+    }
+    if ((row.status === 'caller_answered' || row.status === 'calling_listener') && !row.provider_bridge_id) {
+      throw new HttpError(409, 'call_telephony_invariant');
+    }
 
     const authorized = BigInt(row.authorized_minor);
     if (authorized > 0n) {

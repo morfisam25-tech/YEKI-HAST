@@ -2,12 +2,19 @@ import type { IncomingMessage } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { HttpError } from './http.ts';
 import { tokenHash } from './security.ts';
+
 export interface AuthenticatedUser { userId: string }
-export async function requireAuth(req: IncomingMessage): Promise<AuthenticatedUser> {
+
+function bearerToken(req: IncomingMessage): string {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) throw new HttpError(401, 'unauthorized');
   const raw = header.slice(7).trim();
   if (!raw) throw new HttpError(401, 'unauthorized');
+  return raw;
+}
+
+export async function requireAuth(req: IncomingMessage): Promise<AuthenticatedUser> {
+  const raw = bearerToken(req);
   const result = await query<{ user_id: string }>(`
     UPDATE private_data.auth_sessions s SET last_seen_at=now()
     WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at > now()
@@ -18,6 +25,16 @@ export async function requireAuth(req: IncomingMessage): Promise<AuthenticatedUs
   if (!userId) throw new HttpError(401, 'unauthorized');
   return { userId };
 }
+
+export async function revokeCurrentSession(req: IncomingMessage): Promise<void> {
+  const raw = bearerToken(req);
+  await query(`
+    UPDATE private_data.auth_sessions
+    SET revoked_at=COALESCE(revoked_at, now())
+    WHERE token_hash=$1 AND revoked_at IS NULL
+  `, [tokenHash(raw)]);
+}
+
 export async function revokeAllSessions(userId: string): Promise<void> {
   await query(`UPDATE private_data.auth_sessions SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1 AND revoked_at IS NULL`, [userId]);
 }

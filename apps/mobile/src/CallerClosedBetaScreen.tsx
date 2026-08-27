@@ -13,6 +13,7 @@ import {
   type BrowseListener,
   type CallResponse,
 } from './api';
+import CallerWalletCard from './CallerWalletCard';
 
 type Props = {
   token: string;
@@ -262,6 +263,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           <Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text>
         </View>
       )}
+
+      {recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token={token} />}
 
       {recoveryComplete && recoveryBlocked && (
         <View style={styles.card}>

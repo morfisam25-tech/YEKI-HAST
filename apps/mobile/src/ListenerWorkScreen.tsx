@@ -7,6 +7,7 @@ import {
   setListenerPresence,
   type ListenerPresenceResponse,
 } from './api';
+import ListenerEarningsCard from './ListenerEarningsCard';
 
 type Props = { token: string; onDone: () => void };
 type PresenceStatus = 'online' | 'offline' | 'paused';
@@ -175,6 +176,8 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
       </View>
 
       <Text style={styles.helper}>Heartbeat فقط وقتی اپ باز و وضعیت Online یا Pause باشد هر ۳۰ ثانیه ارسال می‌شود. با رفتن اپ به پس‌زمینه، حضور به‌صورت امن Offline می‌شود؛ guard سرور هم بعد از ۹۰ ثانیه stale presence را رد می‌کند.</Text>
+
+      <ListenerEarningsCard token={token} />
 
       <Text style={styles.label}>Callerهایی که می‌پذیری</Text>
       <View style={styles.row}>

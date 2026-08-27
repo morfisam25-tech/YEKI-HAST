@@ -3,6 +3,7 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { nextPayVerificationDisposition } from '../domain/payment-status.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
+import { sendPaymentCallbackPage } from '../lib/payment-callback-page.ts';
 import { getPaymentProvider, PaymentProviderError } from '../providers/payment.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -73,7 +74,6 @@ function publicAttempt(row: AttemptRow) {
     status: row.status,
     currencyCode: row.currency_code,
     amountMinor: row.amount_minor,
-    providerPaymentId: row.provider_payment_id,
     paymentUrl: row.status === 'pending' && row.provider_payment_id ? paymentUrl(row.provider_payment_id) : null,
     createdAt: row.created_at,
     completedAt: row.completed_at,
@@ -506,11 +506,5 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     throw new HttpError(400, 'invalid_payment_callback');
   }
   const outcome = await verifyAndFinalizeAttempt(row, transId);
-  sendJson(res, outcome.status === 'pending' ? 202 : 200, {
-    ok: outcome.status === 'succeeded',
-    attemptId: row.id,
-    currencyCode: row.currency_code,
-    amountMinor: row.amount_minor,
-    ...outcome,
-  });
+  sendPaymentCallbackPage(res, outcome.status);
 }

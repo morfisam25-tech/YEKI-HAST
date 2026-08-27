@@ -12,13 +12,16 @@ import { StatusBar } from 'expo-status-bar';
 import {
   createListenerApplication,
   getBootstrap,
+  getCurrentSession,
   getErrorCode,
   getListenerApplication,
+  logoutCurrentSession,
   normalizeIranPhone,
   requestOtp,
   verifyOtp,
   type BootstrapLanguage,
 } from './src/api';
+import { clearStoredSession, loadStoredSession, saveStoredSession } from './src/session-storage';
 import CallerClosedBetaScreen from './src/CallerClosedBetaScreen';
 import ListenerKycScreen from './src/ListenerKycScreen';
 import ListenerTrainingScreen from './src/ListenerTrainingScreen';
@@ -83,6 +86,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [authPurpose, setAuthPurpose] = useState<AuthPurpose>('listener');
   const [callerBetaEnabled, setCallerBetaEnabled] = useState(false);
+  const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [sessionRestoreComplete, setSessionRestoreComplete] = useState(false);
   const [languageOptions, setLanguageOptions] = useState<BootstrapLanguage[]>(fallbackLanguages);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['fa']);
   const [phone, setPhone] = useState('');
@@ -109,8 +114,60 @@ export default function App() {
       })
       .catch(() => {
         setCallerBetaEnabled(false);
-      });
+      })
+      .finally(() => setBootstrapReady(true));
   }, []);
+
+  async function resumeListener(sessionToken: string) {
+    try {
+      const application = await getListenerApplication(sessionToken);
+      setScreen(screenForApplicationStatus(application.status));
+    } catch (cause) {
+      const code = getErrorCode(cause);
+      if (code === 'listener_application_not_found') {
+        setScreen('listener-profile');
+        return;
+      }
+      throw cause;
+    }
+  }
+
+  useEffect(() => {
+    if (!bootstrapReady) return;
+    let disposed = false;
+
+    async function restoreSession() {
+      try {
+        const stored = await loadStoredSession();
+        if (!stored || disposed) return;
+        await getCurrentSession(stored.token);
+        if (disposed) return;
+        setToken(stored.token);
+        setAuthPurpose(stored.purpose);
+        if (stored.purpose === 'caller') {
+          setScreen(callerBetaEnabled ? 'caller-beta' : 'waitlist');
+          return;
+        }
+        await resumeListener(stored.token);
+      } catch (cause) {
+        const code = getErrorCode(cause);
+        if (code === 'unauthorized') {
+          await clearStoredSession().catch(() => undefined);
+          if (!disposed) {
+            setToken('');
+            setScreen('home');
+          }
+          return;
+        }
+        if (!disposed) setError(errorMessage(code));
+      } finally {
+        if (!disposed) setSessionRestoreComplete(true);
+      }
+    }
+
+    void restoreSession();
+    return () => { disposed = true; };
+  }, [bootstrapReady, callerBetaEnabled]);
 
   const canContinueProfile = useMemo(
     () => nickname.trim().length >= 2 && gender !== null && selectedLanguages.length > 0,
@@ -126,20 +183,6 @@ export default function App() {
       return [...current, code];
     });
   };
-
-  async function resumeListener(sessionToken: string) {
-    try {
-      const application = await getListenerApplication(sessionToken);
-      setScreen(screenForApplicationStatus(application.status));
-    } catch (cause) {
-      const code = getErrorCode(cause);
-      if (code === 'listener_application_not_found') {
-        setScreen('listener-profile');
-        return;
-      }
-      throw cause;
-    }
-  }
 
   function beginListenerAuth() {
     setAuthPurpose('listener');
@@ -180,6 +223,7 @@ export default function App() {
     try {
       const session = await verifyOtp(phoneE164, otp.trim());
       setToken(session.token);
+      await saveStoredSession(session.token, authPurpose).catch(() => undefined);
       if (authPurpose === 'caller') {
         if (!callerBetaEnabled) {
           setScreen('waitlist');
@@ -192,6 +236,27 @@ export default function App() {
     } catch (cause) {
       setError(errorMessage(getErrorCode(cause)));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function logout() {
+    if (busy) return;
+    const currentToken = token;
+    setBusy(true);
+    try {
+      if (currentToken) await logoutCurrentSession(currentToken);
+    } catch {
+      // Local logout must still complete when the network is unavailable.
+    } finally {
+      await clearStoredSession().catch(() => undefined);
+      setToken('');
+      setAuthPurpose('listener');
+      setPhone('');
+      setPhoneE164('');
+      setOtp('');
+      setError('');
+      setScreen('home');
       setBusy(false);
     }
   }
@@ -215,10 +280,27 @@ export default function App() {
     }
   }
 
+  if (!sessionRestoreComplete) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <View style={styles.restorePage}>
+          <Text style={styles.brand}>یکی هست</Text>
+          <Text style={styles.helper}>در حال بررسی نشست امن…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (screen === 'caller-beta' && token) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
+        <View style={styles.sessionBar}>
+          <TouchableOpacity disabled={busy} onPress={logout}>
+            <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
+          </TouchableOpacity>
+        </View>
         <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />
       </SafeAreaView>
     );
@@ -380,6 +462,12 @@ export default function App() {
         {screen === 'listener-work' && token && (
           <ListenerWorkScreen token={token} onDone={() => setScreen('home')} />
         )}
+
+        {token && (
+          <TouchableOpacity disabled={busy} onPress={logout} style={styles.logoutButton}>
+            <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -388,6 +476,8 @@ export default function App() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f5f3ee' },
   page: { padding: 20, gap: 18, direction: 'rtl' },
+  restorePage: { flex: 1, padding: 24, justifyContent: 'center', gap: 12 },
+  sessionBar: { paddingHorizontal: 20, paddingTop: 10, alignItems: 'flex-start' },
   brand: { fontSize: 21, fontWeight: '800', textAlign: 'right', color: '#20211f', marginTop: 8 },
   hero: { backgroundColor: '#20211f', padding: 24, borderRadius: 24, gap: 14 },
   eyebrow: { color: '#c8c6bf', textAlign: 'right', fontSize: 13 },
@@ -415,5 +505,7 @@ const styles = StyleSheet.create({
   choiceTextSelected: { color: '#20211f', fontWeight: '800' },
   rule: { backgroundColor: '#f6f5f1', padding: 12, borderRadius: 12 },
   ruleText: { color: '#40413c', textAlign: 'right', lineHeight: 23 },
+  logoutButton: { borderWidth: 1, borderColor: '#d8d5cd', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16 },
+  logoutText: { color: '#55564f', textAlign: 'center', fontWeight: '700' },
   disabled: { opacity: 0.35 },
 });

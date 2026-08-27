@@ -32,7 +32,7 @@ test('admin recovery remains restricted to stale routing only', () => {
 
 test('caller dispatch backend also refuses blind retry from calling_caller', () => {
   assert.match(dispatch, /row\.status === 'calling_caller'/);
-  assert.match(dispatch, /throw new HttpError\(409, 'telephony_dispatch_reconcile_required'\)/);
+  assert.match(dispatch, /throw new HttpError\(503, 'telephony_dispatch_uncertain'\)/);
   assert.match(dispatch, /row\.status !== 'routing'/);
 });
 

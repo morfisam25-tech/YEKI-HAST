@@ -5,6 +5,7 @@ import { sendJson } from '../lib/http.ts';
 
 const PRECONNECT_STALE_MINUTES = 5;
 const CONNECTED_GRACE_SECONDS = 120;
+const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
 
 export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
@@ -65,12 +66,29 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
            COUNT(*)::int AS active_call_count,
            ARRAY_AGG(id::text ORDER BY requested_at ASC) AS call_ids
     FROM app.call_sessions
-    WHERE status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+    WHERE status::text = ANY($1::text[])
     GROUP BY caller_user_id
     HAVING COUNT(*) > 1
     ORDER BY COUNT(*) DESC, caller_user_id
     LIMIT 100
-  `);
+  `, [ACTIVE_CALL_STATUSES]);
+
+  const duplicateActiveListeners = await query<{
+    listener_user_id: string;
+    active_call_count: number;
+    call_ids: string[];
+  }>(`
+    SELECT listener_user_id::text,
+           COUNT(*)::int AS active_call_count,
+           ARRAY_AGG(id::text ORDER BY requested_at ASC) AS call_ids
+    FROM app.call_sessions
+    WHERE listener_user_id IS NOT NULL
+      AND status::text = ANY($1::text[])
+    GROUP BY listener_user_id
+    HAVING COUNT(*) > 1
+    ORDER BY COUNT(*) DESC, listener_user_id
+    LIMIT 100
+  `, [ACTIVE_CALL_STATUSES]);
 
   const underReservedWallets = await query<{
     user_id: string;
@@ -85,7 +103,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
              SUM(authorized_minor)::bigint AS required_reserved_minor,
              COUNT(*)::int AS active_call_count
       FROM app.call_sessions
-      WHERE status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+      WHERE status::text = ANY($1::text[])
       GROUP BY caller_user_id, currency_code
     )
     SELECT w.user_id::text,
@@ -99,7 +117,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     WHERE w.reserved_minor < a.required_reserved_minor
     ORDER BY (a.required_reserved_minor - w.reserved_minor) DESC
     LIMIT 100
-  `);
+  `, [ACTIVE_CALL_STATUSES]);
 
   const invariantViolations = await query<{
     id: string;
@@ -108,63 +126,117 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     authorized_minor: string;
     caller_charge_minor: string;
     listener_earning_minor: string;
+    charge_transaction_count: number;
+    charge_delta_total: string;
+    charge_source_mismatch_count: number;
+    earning_row_count: number;
+    earning_total: string;
+    earning_source_mismatch_count: number;
     updated_at: string;
   }>(`
-    SELECT cs.id::text,
-           cs.status::text,
+    WITH financial AS (
+      SELECT cs.*,
+             COALESCE(wt.charge_transaction_count, 0)::int AS charge_transaction_count,
+             COALESCE(wt.charge_delta_total, 0)::bigint AS charge_delta_total,
+             COALESCE(wt.charge_source_mismatch_count, 0)::int AS charge_source_mismatch_count,
+             COALESCE(le.earning_row_count, 0)::int AS earning_row_count,
+             COALESCE(le.earning_total, 0)::bigint AS earning_total,
+             COALESCE(le.earning_source_mismatch_count, 0)::int AS earning_source_mismatch_count
+      FROM app.call_sessions cs
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS charge_transaction_count,
+               COALESCE(SUM(tx.delta_minor), 0)::bigint AS charge_delta_total,
+               COUNT(*) FILTER (
+                 WHERE w.user_id IS DISTINCT FROM cs.caller_user_id
+                    OR tx.currency_code IS DISTINCT FROM cs.currency_code
+               )::int AS charge_source_mismatch_count
+        FROM app.wallet_transactions tx
+        LEFT JOIN app.wallets w ON w.id=tx.wallet_id
+        WHERE tx.call_session_id=cs.id AND tx.type='call_charge'
+      ) wt ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS earning_row_count,
+               COALESCE(SUM(e.amount_minor), 0)::bigint AS earning_total,
+               COUNT(*) FILTER (
+                 WHERE e.listener_user_id IS DISTINCT FROM cs.listener_user_id
+                    OR e.market_id IS DISTINCT FROM cs.market_id
+                    OR e.currency_code IS DISTINCT FROM cs.currency_code
+               )::int AS earning_source_mismatch_count
+        FROM app.listener_earnings e
+        WHERE e.call_session_id=cs.id
+      ) le ON true
+    )
+    SELECT id::text,
+           status::text,
            CASE
-             WHEN cs.caller_charge_minor > cs.authorized_minor THEN 'charge_exceeds_authorization'
-             WHEN cs.listener_earning_minor > cs.caller_charge_minor THEN 'earning_exceeds_charge'
-             WHEN cs.status::text='connected' AND cs.billing_started_at IS NULL THEN 'connected_without_billing_start'
-             WHEN cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
-                  AND cs.ended_at IS NOT NULL THEN 'active_with_end_time'
-             WHEN cs.status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL THEN 'terminal_without_end_time'
-             WHEN cs.status::text IN ('completed','safety_terminated')
-                  AND cs.caller_charge_minor > 0
-                  AND NOT EXISTS (
-                    SELECT 1 FROM app.wallet_transactions wt
-                    WHERE wt.call_session_id=cs.id AND wt.type='call_charge'
-                  ) THEN 'charge_without_wallet_transaction'
-             WHEN cs.status::text IN ('completed','safety_terminated')
-                  AND cs.listener_earning_minor > 0
-                  AND NOT EXISTS (
-                    SELECT 1 FROM app.listener_earnings le
-                    WHERE le.call_session_id=cs.id
-                  ) THEN 'earning_without_listener_earning'
+             WHEN caller_charge_minor > authorized_minor THEN 'charge_exceeds_authorization'
+             WHEN listener_earning_minor > caller_charge_minor THEN 'earning_exceeds_charge'
+             WHEN status::text='connected' AND billing_started_at IS NULL THEN 'connected_without_billing_start'
+             WHEN status::text = ANY($1::text[]) AND ended_at IS NOT NULL THEN 'active_with_end_time'
+             WHEN status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND ended_at IS NULL THEN 'terminal_without_end_time'
+             WHEN status::text IN ('missed','cancelled','failed')
+                  AND (caller_charge_minor <> 0 OR listener_earning_minor <> 0 OR charge_transaction_count > 0 OR earning_row_count > 0)
+               THEN 'unconnected_terminal_has_financials'
+             WHEN status::text IN ('completed','safety_terminated') AND caller_charge_minor > 0 AND charge_transaction_count=0
+               THEN 'charge_without_wallet_transaction'
+             WHEN status::text IN ('completed','safety_terminated') AND caller_charge_minor=0 AND charge_transaction_count>0
+               THEN 'unexpected_zero_charge_transaction'
+             WHEN status::text IN ('completed','safety_terminated') AND charge_transaction_count>1
+               THEN 'duplicate_call_charge_transactions'
+             WHEN status::text IN ('completed','safety_terminated') AND charge_delta_total <> -caller_charge_minor
+               THEN 'call_charge_amount_mismatch'
+             WHEN status::text IN ('completed','safety_terminated') AND charge_source_mismatch_count>0
+               THEN 'call_charge_source_mismatch'
+             WHEN status::text IN ('completed','safety_terminated') AND listener_earning_minor > 0 AND earning_row_count=0
+               THEN 'earning_without_listener_earning'
+             WHEN status::text IN ('completed','safety_terminated') AND listener_earning_minor=0 AND earning_row_count>0
+               THEN 'unexpected_zero_earning_row'
+             WHEN status::text IN ('completed','safety_terminated') AND earning_row_count>1
+               THEN 'duplicate_listener_earnings'
+             WHEN status::text IN ('completed','safety_terminated') AND earning_total <> listener_earning_minor
+               THEN 'listener_earning_amount_mismatch'
+             WHEN status::text IN ('completed','safety_terminated') AND earning_source_mismatch_count>0
+               THEN 'listener_earning_source_mismatch'
              ELSE 'unknown'
            END AS issue_code,
-           cs.authorized_minor::text,
-           cs.caller_charge_minor::text,
-           cs.listener_earning_minor::text,
-           cs.updated_at::text
-    FROM app.call_sessions cs
-    WHERE cs.caller_charge_minor > cs.authorized_minor
-       OR cs.listener_earning_minor > cs.caller_charge_minor
-       OR (cs.status::text='connected' AND cs.billing_started_at IS NULL)
+           authorized_minor::text,
+           caller_charge_minor::text,
+           listener_earning_minor::text,
+           charge_transaction_count,
+           charge_delta_total::text,
+           charge_source_mismatch_count,
+           earning_row_count,
+           earning_total::text,
+           earning_source_mismatch_count,
+           updated_at::text
+    FROM financial
+    WHERE caller_charge_minor > authorized_minor
+       OR listener_earning_minor > caller_charge_minor
+       OR (status::text='connected' AND billing_started_at IS NULL)
+       OR (status::text = ANY($1::text[]) AND ended_at IS NOT NULL)
+       OR (status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND ended_at IS NULL)
        OR (
-         cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
-         AND cs.ended_at IS NOT NULL
+         status::text IN ('missed','cancelled','failed')
+         AND (caller_charge_minor <> 0 OR listener_earning_minor <> 0 OR charge_transaction_count > 0 OR earning_row_count > 0)
        )
-       OR (cs.status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL)
        OR (
-         cs.status::text IN ('completed','safety_terminated')
-         AND cs.caller_charge_minor > 0
-         AND NOT EXISTS (
-           SELECT 1 FROM app.wallet_transactions wt
-           WHERE wt.call_session_id=cs.id AND wt.type='call_charge'
+         status::text IN ('completed','safety_terminated')
+         AND (
+           (caller_charge_minor > 0 AND charge_transaction_count=0)
+           OR (caller_charge_minor=0 AND charge_transaction_count>0)
+           OR charge_transaction_count>1
+           OR charge_delta_total <> -caller_charge_minor
+           OR charge_source_mismatch_count>0
+           OR (listener_earning_minor > 0 AND earning_row_count=0)
+           OR (listener_earning_minor=0 AND earning_row_count>0)
+           OR earning_row_count>1
+           OR earning_total <> listener_earning_minor
+           OR earning_source_mismatch_count>0
          )
        )
-       OR (
-         cs.status::text IN ('completed','safety_terminated')
-         AND cs.listener_earning_minor > 0
-         AND NOT EXISTS (
-           SELECT 1 FROM app.listener_earnings le
-           WHERE le.call_session_id=cs.id
-         )
-       )
-    ORDER BY cs.updated_at ASC
+    ORDER BY updated_at ASC
     LIMIT 100
-  `);
+  `, [ACTIVE_CALL_STATUSES]);
 
   sendJson(res, 200, {
     ok: true,
@@ -178,6 +250,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
       duplicateActiveCallers: duplicateActiveCallers.rowCount ?? duplicateActiveCallers.rows.length,
+      duplicateActiveListeners: duplicateActiveListeners.rowCount ?? duplicateActiveListeners.rows.length,
       underReservedWallets: underReservedWallets.rowCount ?? underReservedWallets.rows.length,
       invariantViolations: invariantViolations.rowCount ?? invariantViolations.rows.length,
     },
@@ -206,6 +279,11 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         activeCallCount: row.active_call_count,
         callIds: row.call_ids,
       })),
+      duplicateActiveListeners: duplicateActiveListeners.rows.map((row) => ({
+        listenerUserId: row.listener_user_id,
+        activeCallCount: row.active_call_count,
+        callIds: row.call_ids,
+      })),
       underReservedWallets: underReservedWallets.rows.map((row) => ({
         userId: row.user_id,
         currencyCode: row.currency_code,
@@ -220,11 +298,18 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         authorizedMinor: row.authorized_minor,
         callerChargeMinor: row.caller_charge_minor,
         listenerEarningMinor: row.listener_earning_minor,
+        chargeTransactionCount: row.charge_transaction_count,
+        chargeDeltaTotal: row.charge_delta_total,
+        chargeSourceMismatchCount: row.charge_source_mismatch_count,
+        earningRowCount: row.earning_row_count,
+        earningTotal: row.earning_total,
+        earningSourceMismatchCount: row.earning_source_mismatch_count,
         updatedAt: row.updated_at,
       })),
     },
     phoneNumbersIncluded: false,
     providerBridgeIdsIncluded: false,
     secretsIncluded: false,
+    diagnosticsReadOnly: true,
   });
 }

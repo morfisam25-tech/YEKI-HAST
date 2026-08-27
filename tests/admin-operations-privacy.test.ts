@@ -7,6 +7,7 @@ const paths = {
   safety: '../services/api/src/routes/admin-safety.ts',
   calls: '../services/api/src/routes/admin-calls.ts',
   payments: '../services/api/src/routes/admin-payments.ts',
+  waitlist: '../services/api/src/routes/admin-waitlist.ts',
 };
 
 const sources = Object.fromEntries(await Promise.all(
@@ -41,4 +42,11 @@ test('admin payment queue excludes wallet internals and idempotency keys', () =>
   assert.doesNotMatch(sources.payments, /idempotency_key/);
   assert.match(sources.payments, /walletDetailsIncluded: false/);
   assert.match(sources.payments, /idempotencyKeyIncluded: false/);
+});
+
+test('caller waitlist queue excludes phone and raw age assertion details', () => {
+  assert.doesNotMatch(sources.waitlist, /user_contacts/);
+  assert.doesNotMatch(sources.waitlist, /caller_age_assertions/);
+  assert.match(sources.waitlist, /phoneNumberIncluded: false/);
+  assert.match(sources.waitlist, /ageAssertionDetailsIncluded: false/);
 });

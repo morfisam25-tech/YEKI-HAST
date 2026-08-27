@@ -13,6 +13,15 @@ test('payout candidates include only available listener earnings not already att
   assert.match(route, /COUNT\(\*\)::text AS earning_count/);
 });
 
+test('payout candidates stay separated by listener, market, and currency', () => {
+  assert.match(route, /e\.market_id::text/);
+  assert.match(route, /GROUP BY e\.listener_user_id, e\.market_id, e\.currency_code, k\.status/);
+  assert.match(route, /marketId: row\.market_id/);
+  assert.match(page, /marketId: string/);
+  assert.match(page, /candidate\.listenerUserId}:\$\{candidate\.marketId}:\$\{candidate\.currencyCode/);
+  assert.match(page, /candidate\.marketId\.slice\(0, 8\)/);
+});
+
 test('candidate response stays operational and excludes bank details and provider references', () => {
   assert.match(route, /payoutCandidates:/);
   assert.match(route, /providerReferencesIncluded: false/);

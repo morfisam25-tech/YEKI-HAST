@@ -25,11 +25,30 @@ export function proratedMinorUnits(
   return rounding === 'caller' ? Math.ceil(raw) : Math.floor(raw);
 }
 
+export function proratedMinorUnitsBigInt(
+  ratePerMinuteMinor: bigint,
+  connectedSeconds: number,
+  billingIncrementSeconds: number,
+  rounding: BillingRounding,
+): bigint {
+  if (ratePerMinuteMinor < 0n) throw new Error('ratePerMinuteMinor must be non-negative');
+  const billableSeconds = roundBillableSeconds(connectedSeconds, billingIncrementSeconds);
+  const numerator = ratePerMinuteMinor * BigInt(billableSeconds);
+  return rounding === 'caller' ? (numerator + 59n) / 60n : numerator / 60n;
+}
+
 export interface CallSettlementPreview {
   billableSeconds: number;
   callerChargeMinor: number;
   listenerEarningMinor: number;
   platformGrossSpreadMinor: number;
+}
+
+export interface BigIntCallSettlementPreview {
+  billableSeconds: number;
+  callerChargeMinor: bigint;
+  listenerEarningMinor: bigint;
+  platformGrossSpreadMinor: bigint;
 }
 
 export function previewCallSettlement(
@@ -44,6 +63,29 @@ export function previewCallSettlement(
   const billableSeconds = roundBillableSeconds(connectedSeconds, billingIncrementSeconds);
   const callerChargeMinor = proratedMinorUnits(callerRatePerMinuteMinor, connectedSeconds, billingIncrementSeconds, 'caller');
   const listenerEarningMinor = proratedMinorUnits(listenerRatePerMinuteMinor, connectedSeconds, billingIncrementSeconds, 'listener');
+  return {
+    billableSeconds,
+    callerChargeMinor,
+    listenerEarningMinor,
+    platformGrossSpreadMinor: callerChargeMinor - listenerEarningMinor,
+  };
+}
+
+export function previewCallSettlementBigInt(
+  callerRatePerMinuteMinor: bigint,
+  listenerRatePerMinuteMinor: bigint,
+  connectedSeconds: number,
+  billingIncrementSeconds = 1,
+): BigIntCallSettlementPreview {
+  if (callerRatePerMinuteMinor < 0n || listenerRatePerMinuteMinor < 0n) {
+    throw new Error('rates must be non-negative');
+  }
+  if (listenerRatePerMinuteMinor > callerRatePerMinuteMinor) {
+    throw new Error('listener rate cannot exceed caller rate');
+  }
+  const billableSeconds = roundBillableSeconds(connectedSeconds, billingIncrementSeconds);
+  const callerChargeMinor = proratedMinorUnitsBigInt(callerRatePerMinuteMinor, connectedSeconds, billingIncrementSeconds, 'caller');
+  const listenerEarningMinor = proratedMinorUnitsBigInt(listenerRatePerMinuteMinor, connectedSeconds, billingIncrementSeconds, 'listener');
   return {
     billableSeconds,
     callerChargeMinor,

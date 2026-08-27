@@ -31,6 +31,13 @@ test('claim assigns the acting admin and moves the case in review', () => {
   assert.match(source, /admin\.userId/);
 });
 
+test('safety case mutations and audit logging are atomic', () => {
+  assert.match(source, /withTransaction/);
+  assert.match(source, /INSERT INTO app\.audit_logs/);
+  assert.match(source, /admin_safety_\$\{action\}/);
+  assert.match(source, /targetStatus/);
+});
+
 test('safety operations never decrypt private report details', () => {
   assert.doesNotMatch(source, /decryptPrivateText/);
   assert.match(source, /privateDetailsIncluded: false/);

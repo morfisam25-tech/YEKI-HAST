@@ -30,14 +30,8 @@ export type SabtAhvalInput = {
   birthDay: string;
 };
 
-export type ShahkarInput = {
-  nationalId: string;
-  mobile: string;
-};
-
-export type ShebaInput = {
-  sheba: string;
-};
+export type ShahkarInput = { nationalId: string; mobile: string };
+export type ShebaInput = { sheba: string };
 
 export class KycInquiryProviderError extends Error {
   readonly code: string;
@@ -55,7 +49,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const NATIONAL_ID_RE = /^\d{10}$/;
 const MOBILE_RE = /^09\d{9}$/;
 const SHEBA_RE = /^\d{24}$/;
-const JALALI_YEAR_RE = /^1[34]\d{2}$/;
+const FOUR_DIGIT_YEAR_RE = /^\d{4}$/;
 const MONTH_RE = /^(0[1-9]|1[0-2])$/;
 const DAY_RE = /^(0[1-9]|[12]\d|3[01])$/;
 
@@ -69,7 +63,10 @@ function requiredInquiryKey(): string {
 
 function numberField(body: Record<string, unknown>, key: string): number {
   const raw = body[key];
-  const value = typeof raw === 'number' ? raw : Number(raw);
+  if (raw === null || raw === undefined || raw === '' || (typeof raw !== 'number' && typeof raw !== 'string')) {
+    throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
+  }
+  const value = Number(raw);
   if (!Number.isFinite(value)) throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   return value;
 }
@@ -81,13 +78,9 @@ function nullableError(value: unknown): string | null {
 }
 
 function parseEnvelope(body: unknown): NextPayInquiryEnvelope<unknown> {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
-  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   const value = body as Record<string, unknown>;
-  if (!Object.prototype.hasOwnProperty.call(value, 'data')) {
-    throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
-  }
+  if (!Object.prototype.hasOwnProperty.call(value, 'data')) throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   return {
     code: numberField(value, 'code'),
     error: nullableError(value.error),
@@ -100,9 +93,7 @@ function parseEnvelope(body: unknown): NextPayInquiryEnvelope<unknown> {
 }
 
 function sabtAhvalData(value: unknown): SabtAhvalData {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
-  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   const row = value as Record<string, unknown>;
   const requiredStrings = ['inq', 'inq_desc', 'national_id', 'jalali_birth', 'first_name', 'last_name', 'father_name'] as const;
   for (const key of requiredStrings) {
@@ -125,6 +116,12 @@ function sabtAhvalData(value: unknown): SabtAhvalData {
   };
 }
 
+function validSupportedJalaliYear(value: string): boolean {
+  if (!FOUR_DIGIT_YEAR_RE.test(value)) return false;
+  const year = Number(value);
+  return year >= 1200 && year <= 1600;
+}
+
 export class NextPayKycInquiryProvider {
   readonly key = 'nextpay';
   private readonly inquiryApi: string;
@@ -140,10 +137,7 @@ export class NextPayKycInquiryProvider {
     try {
       response = await this.fetchImpl(`${BASE_URL}/${kind}`, {
         method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
-        },
+        headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
         body: new URLSearchParams({ inquiry_api: this.inquiryApi, ...values }),
         signal: AbortSignal.timeout(10_000),
       });
@@ -156,15 +150,13 @@ export class NextPayKycInquiryProvider {
     catch { throw new KycInquiryProviderError('kyc_inquiry_invalid_response'); }
 
     const envelope = parseEnvelope(body);
-    if (!response.ok || envelope.code !== 200) {
-      throw new KycInquiryProviderError('kyc_inquiry_failed', envelope.code);
-    }
+    if (!response.ok || envelope.code !== 200) throw new KycInquiryProviderError('kyc_inquiry_failed', envelope.code);
     return envelope;
   }
 
   async sabtAhval(input: SabtAhvalInput): Promise<NextPayInquiryEnvelope<SabtAhvalData>> {
     if (!NATIONAL_ID_RE.test(input.nationalId)) throw new KycInquiryProviderError('invalid_national_id');
-    if (!JALALI_YEAR_RE.test(input.birthYear) || !MONTH_RE.test(input.birthMonth) || !DAY_RE.test(input.birthDay)) {
+    if (!validSupportedJalaliYear(input.birthYear) || !MONTH_RE.test(input.birthMonth) || !DAY_RE.test(input.birthDay)) {
       throw new KycInquiryProviderError('invalid_jalali_birth_date');
     }
     const response = await this.post('sabtahval', {
@@ -179,16 +171,12 @@ export class NextPayKycInquiryProvider {
   async shahkar(input: ShahkarInput): Promise<NextPayInquiryEnvelope<unknown>> {
     if (!NATIONAL_ID_RE.test(input.nationalId)) throw new KycInquiryProviderError('invalid_national_id');
     if (!MOBILE_RE.test(input.mobile)) throw new KycInquiryProviderError('invalid_mobile');
-    // NextPay documents the request and top-level envelope, but not Shahkar's
-    // concrete data fields. Keep data unknown until an official contract is available.
     return this.post('shahkar', { national_id: input.nationalId, mobile: input.mobile });
   }
 
   async sheba(input: ShebaInput): Promise<NextPayInquiryEnvelope<unknown>> {
     const digits = input.sheba.startsWith('IR') ? input.sheba.slice(2) : input.sheba;
     if (!SHEBA_RE.test(digits)) throw new KycInquiryProviderError('invalid_sheba');
-    // NextPay requires the 24 digits without the IR prefix. Response data remains
-    // unknown because the official page does not publish its field-level schema.
     return this.post('sheba', { sheba: digits });
   }
 }

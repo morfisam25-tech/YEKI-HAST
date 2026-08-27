@@ -76,7 +76,7 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
   });
 
   if (claimed.kind === 'already_dispatched') {
-    sendJson(res, 200, { ok: true, callId: rawCallId, status: claimed.status, idempotent: true });
+    sendJson(res, 200, { ok: true, callId: rawCallId, status: claimed.status, telephonyReady: true, idempotent: true });
     return;
   }
 
@@ -114,5 +114,5 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     throw new HttpError(409, 'call_dispatch_conflict');
   }
 
-  sendJson(res, 202, { ok: true, callId: claimed.callId, status: 'calling_caller', idempotent: false });
+  sendJson(res, 202, { ok: true, callId: claimed.callId, status: 'calling_caller', telephonyReady: true, idempotent: false });
 }

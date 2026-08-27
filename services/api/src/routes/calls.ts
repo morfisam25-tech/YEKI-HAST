@@ -42,6 +42,7 @@ function snapshotCall(row: {
   currency_code: string;
   authorized_minor: string;
   max_billable_seconds: number | null;
+  provider_bridge_id: string | null;
 }) {
   return {
     callId: row.id,
@@ -50,6 +51,7 @@ function snapshotCall(row: {
     currencyCode: row.currency_code,
     authorizedMinor: row.authorized_minor,
     maxBillableSeconds: row.max_billable_seconds,
+    telephonyReady: Boolean(row.provider_bridge_id),
   };
 }
 
@@ -86,10 +88,10 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
 
     const existing = await client.query<{
       id: string; status: string; listener_user_id: string | null; currency_code: string;
-      authorized_minor: string; max_billable_seconds: number | null;
+      authorized_minor: string; max_billable_seconds: number | null; provider_bridge_id: string | null;
     }>(`
       SELECT id::text, status::text, listener_user_id::text, currency_code,
-             authorized_minor::text, max_billable_seconds
+             authorized_minor::text, max_billable_seconds, provider_bridge_id
       FROM app.call_sessions
       WHERE caller_user_id=$1 AND client_request_id=$2
       FOR UPDATE
@@ -196,7 +198,7 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
 
     const inserted = await client.query<{
       id: string; status: string; listener_user_id: string | null; currency_code: string;
-      authorized_minor: string; max_billable_seconds: number | null;
+      authorized_minor: string; max_billable_seconds: number | null; provider_bridge_id: string | null;
     }>(`
       INSERT INTO app.call_sessions(
         product_id, service_id, market_id, caller_user_id, listener_user_id,
@@ -207,7 +209,7 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
       )
       VALUES ($1,$2,$3,$4,$5,$6,'routing',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING id::text, status::text, listener_user_id::text, currency_code,
-                authorized_minor::text, max_billable_seconds
+                authorized_minor::text, max_billable_seconds, provider_bridge_id
     `, [
       ctx.product_id, ctx.service_id, ctx.market_id, userId, selectedListenerId,
       clientRequestId, listenerGender, ctx.language_id, mood, topicCode, ctx.pricing_plan_id,
@@ -241,11 +243,12 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string;
+    caller_charge_minor: string; provider_bridge_id: string | null;
   }>(`
     SELECT id::text, status::text, listener_user_id::text, currency_code,
            authorized_minor::text, max_billable_seconds, requested_at::text,
-           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text
+           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text,
+           provider_bridge_id
     FROM app.call_sessions
     WHERE caller_user_id=$1 AND status::text = ANY($2::text[])
     ORDER BY requested_at DESC
@@ -265,6 +268,7 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
       currencyCode: row.currency_code,
       authorizedMinor: row.authorized_minor,
       maxBillableSeconds: row.max_billable_seconds,
+      telephonyReady: Boolean(row.provider_bridge_id),
       requestedAt: row.requested_at,
       connectedAt: row.connected_at,
       endedAt: row.ended_at,
@@ -281,11 +285,12 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string;
+    caller_charge_minor: string; provider_bridge_id: string | null;
   }>(`
     SELECT id::text, status::text, listener_user_id::text, currency_code,
            authorized_minor::text, max_billable_seconds, requested_at::text,
-           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text
+           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text,
+           provider_bridge_id
     FROM app.call_sessions
     WHERE id=$1 AND caller_user_id=$2
   `, [callId, userId]);
@@ -298,6 +303,7 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     currencyCode: row.currency_code,
     authorizedMinor: row.authorized_minor,
     maxBillableSeconds: row.max_billable_seconds,
+    telephonyReady: Boolean(row.provider_bridge_id),
     requestedAt: row.requested_at,
     connectedAt: row.connected_at,
     endedAt: row.ended_at,

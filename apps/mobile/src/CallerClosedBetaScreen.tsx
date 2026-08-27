@@ -38,7 +38,7 @@ function messageFor(code: string): string {
     no_listener_available: 'فعلاً شنونده آماده‌ای پیدا نشد.',
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
-    telephony_dispatch_uncertain: 'نتیجه شروع تماس قطعی نشد. تماس جدید نساز؛ با «ادامه همین تماس» وضعیت همین درخواست دوباره بررسی می‌شود.',
+    telephony_dispatch_uncertain: 'نتیجه شروع تماس قطعی نشد. تماس جدید نساز و شروع را دوباره ارسال نکن؛ وضعیت همین تماس با «به‌روزرسانی وضعیت» بررسی می‌شود.',
     call_telephony_invariant: 'وضعیت مخابراتی این تماس با وضعیت سرور هم‌خوان نیست و نیاز به بررسی دارد.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_cannot_be_cancelled: 'این تماس از مرحله لغو عادی عبور کرده است.',
@@ -192,7 +192,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function retryDispatch() {
-    if (!call || (call.status !== 'routing' && call.status !== 'calling_caller')) return;
+    if (!call || call.status !== 'routing') return;
     setBusy(true);
     setError('');
     try {
@@ -248,9 +248,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const telephonyUnresolved = Boolean(
     call && telephonyIdentityStatuses.has(call.status) && call.telephonyReady === false,
   );
-  const dispatchRetryable = Boolean(
-    call && (call.status === 'routing' || (call.status === 'calling_caller' && call.telephonyReady === false)),
-  );
+  const dispatchRetryable = Boolean(call && call.status === 'routing');
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -309,7 +307,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           <Text style={styles.heading}>{selected?.nickname ?? 'تماس جاری'}</Text>
           <Text style={styles.status}>وضعیت: {call.status}</Text>
           {telephonyUnresolved && (
-            <Text style={styles.body}>شناسه تماس مخابراتی هنوز در سرور قطعی نشده است. تا رفع این وضعیت، پایان یا لغو از داخل اپ انجام نمی‌شود.</Text>
+            <Text style={styles.body}>شناسه تماس مخابراتی هنوز در سرور قطعی نشده است. برای جلوگیری از تماس تکراری، شروع دوباره ارسال نمی‌شود؛ فقط وضعیت همین تماس بررسی می‌شود.</Text>
           )}
           {dispatchRetryable && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>

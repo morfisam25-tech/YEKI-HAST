@@ -130,6 +130,26 @@ export async function settleCallByProvider(input: {
     }
     const safetyTerminated = row.status === 'safety_terminated';
     if (row.status !== 'connected' && !safetyTerminated) throw new Error('call_not_settleable');
+
+    if (safetyTerminated) {
+      const alreadySettled = await client.query(`
+        SELECT 1
+        FROM app.call_events
+        WHERE call_session_id=$1 AND status='safety_terminated' AND source='telephony'
+        LIMIT 1
+      `, [row.id]);
+      if (alreadySettled.rowCount) {
+        return {
+          callId: row.id,
+          status: 'safety_terminated' as const,
+          billableSeconds: row.billable_seconds,
+          callerChargeMinor: row.caller_charge_minor,
+          listenerEarningMinor: row.listener_earning_minor,
+          idempotent: true,
+        };
+      }
+    }
+
     if (!row.connected_at) {
       if (safetyTerminated && input.connectedSeconds === 0) {
         return {

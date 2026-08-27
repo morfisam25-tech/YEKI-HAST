@@ -249,8 +249,9 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
     FROM app.call_sessions
     WHERE caller_user_id=$1 AND status::text = ANY($2::text[])
     ORDER BY requested_at DESC
-    LIMIT 1
+    LIMIT 2
   `, [userId, activeCallStatuses]);
+  if (result.rows.length > 1) throw new HttpError(409, 'caller_active_call_conflict');
   const row = result.rows[0];
   if (!row) {
     sendJson(res, 200, { activeCall: null });

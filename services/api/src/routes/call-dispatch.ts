@@ -45,6 +45,16 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       throw new HttpError(409, 'call_not_dispatchable');
     }
 
+    // Provider configuration/adapter availability is known before any external submission.
+    // If it is unavailable, keep the call in routing so the caller can safely cancel or retry
+    // later; do not manufacture an ambiguous calling_caller state.
+    let telephony: ReturnType<typeof getTelephonyProvider>;
+    try {
+      telephony = getTelephonyProvider();
+    } catch {
+      throw new HttpError(503, 'telephony_not_configured');
+    }
+
     const contacts = await client.query<{ user_id: string; phone_e164_ciphertext: string; phone_verified_at: string | null }>(`
       SELECT user_id::text, phone_e164_ciphertext, phone_verified_at::text
       FROM private_data.user_contacts
@@ -77,6 +87,7 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       maxConnectedSeconds: row.max_billable_seconds,
       callerDestination: decryptPrivateText(caller.phone_e164_ciphertext, `user_contacts:phone:${row.caller_user_id}`),
       listenerDestination: decryptPrivateText(listener.phone_e164_ciphertext, `user_contacts:phone:${row.listener_user_id}`),
+      telephony,
     };
   });
 
@@ -87,8 +98,7 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
 
   let bridgeId: string;
   try {
-    const telephony = getTelephonyProvider();
-    const result = await telephony.createBridgeCall({
+    const result = await claimed.telephony.createBridgeCall({
       callSessionId: claimed.callId,
       callerDestination: claimed.callerDestination,
       listenerDestination: claimed.listenerDestination,
@@ -115,7 +125,7 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
   `, [claimed.callId, bridgeId]);
 
   if (!persisted.rowCount) {
-    try { await getTelephonyProvider().terminateCall(bridgeId, 'dispatch_state_conflict'); } catch {}
+    try { await claimed.telephony.terminateCall(bridgeId, 'dispatch_state_conflict'); } catch {}
     throw new HttpError(409, 'call_dispatch_conflict');
   }
 

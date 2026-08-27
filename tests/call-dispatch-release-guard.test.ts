@@ -17,8 +17,9 @@ test('ambiguous dispatch does not release authorization or claim terminal failur
   assert.doesNotMatch(ambiguousSection, /VALUES \(\$1,'failed'/);
 });
 
-test('dispatch retry remains on the same call session and never creates a new app call', () => {
-  assert.match(source, /row\.status !== 'routing' && row\.status !== 'calling_caller'/);
+test('calling_caller without bridge is reconciliation-only and never blindly resubmitted', () => {
+  assert.match(source, /if \(row\.status === 'calling_caller'\) \{[\s\S]*throw new HttpError\(503, 'telephony_dispatch_uncertain'\)/);
+  assert.match(source, /if \(row\.status !== 'routing'\)/);
   assert.match(source, /callSessionId: claimed\.callId/);
   assert.doesNotMatch(source, /INSERT INTO app\.call_sessions/);
 });

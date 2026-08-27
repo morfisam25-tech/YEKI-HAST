@@ -13,6 +13,7 @@ test('caller active-call recovery is caller-scoped and limited to active states'
   assert.match(calls, /ORDER BY requested_at DESC/);
   assert.match(calls, /LIMIT 2/);
   assert.match(calls, /if \(result\.rows\.length > 1\) throw new HttpError\(409, 'caller_active_call_conflict'\)/);
+  assert.match(screen, /caller_active_call_conflict:/);
   assert.match(calls, /activeCall: null/);
   assert.match(handler, /url\.pathname === '\/v1\/calls\/active'/);
 });

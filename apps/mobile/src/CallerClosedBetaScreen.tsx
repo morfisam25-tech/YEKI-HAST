@@ -20,9 +20,11 @@ type Props = {
 };
 
 type Stage = 'age-gate' | 'browse' | 'call';
+type CallerCallResponse = CallResponse & { telephonyReady?: boolean };
 
 const terminalStatuses = new Set(['completed', 'missed', 'failed', 'cancelled', 'safety_terminated']);
 const cancellableStatuses = new Set(['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener']);
+const telephonyIdentityStatuses = new Set(['calling_caller', 'caller_answered', 'calling_listener', 'connected']);
 const CALL_STATUS_POLL_MS = 3_000;
 
 function messageFor(code: string): string {
@@ -36,6 +38,7 @@ function messageFor(code: string): string {
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
     telephony_dispatch_uncertain: 'نتیجه شروع تماس قطعی نشد. تماس جدید نساز؛ با «ادامه همین تماس» وضعیت همین درخواست دوباره بررسی می‌شود.',
+    call_telephony_invariant: 'وضعیت مخابراتی این تماس با وضعیت سرور هم‌خوان نیست و نیاز به بررسی دارد.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_cannot_be_cancelled: 'این تماس از مرحله لغو عادی عبور کرده است.',
     telephony_termination_pending: 'درخواست پایان تماس ثبت شد اما قطع سمت سرویس تماس هنوز قطعی نشده است.',
@@ -50,7 +53,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [minimumAge, setMinimumAge] = useState<number | null>(null);
   const [listeners, setListeners] = useState<BrowseListener[]>([]);
   const [selected, setSelected] = useState<BrowseListener | null>(null);
-  const [call, setCall] = useState<CallResponse | null>(null);
+  const [call, setCall] = useState<CallerCallResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [recoveryComplete, setRecoveryComplete] = useState(false);
   const [recoveryBlocked, setRecoveryBlocked] = useState(false);
@@ -241,6 +244,13 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     }
   }
 
+  const telephonyUnresolved = Boolean(
+    call && telephonyIdentityStatuses.has(call.status) && call.telephonyReady === false,
+  );
+  const dispatchRetryable = Boolean(
+    call && (call.status === 'routing' || (call.status === 'calling_caller' && call.telephonyReady === false)),
+  );
+
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Text style={styles.title}>Caller · بتای بسته</Text>
@@ -295,13 +305,16 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         <View style={styles.card}>
           <Text style={styles.heading}>{selected?.nickname ?? 'تماس جاری'}</Text>
           <Text style={styles.status}>وضعیت: {call.status}</Text>
-          {(call.status === 'routing' || call.status === 'calling_caller') && (
+          {telephonyUnresolved && (
+            <Text style={styles.body}>شناسه تماس مخابراتی هنوز در سرور قطعی نشده است. تا رفع این وضعیت، پایان یا لغو از داخل اپ انجام نمی‌شود.</Text>
+          )}
+          {dispatchRetryable && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>
               <Text style={styles.primaryText}>{busy ? 'در حال تلاش…' : 'ادامه همین تماس'}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity disabled={busy} onPress={refreshCall}><Text style={styles.link}>به‌روزرسانی وضعیت</Text></TouchableOpacity>
-          {!terminalStatuses.has(call.status) && (
+          {!terminalStatuses.has(call.status) && !telephonyUnresolved && (
             <>
               {cancellableStatuses.has(call.status) && (
                 <TouchableOpacity disabled={busy} style={styles.secondary} onPress={cancel}>

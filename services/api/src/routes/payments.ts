@@ -94,7 +94,10 @@ function paymentProvider() {
   }
 }
 
-async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOutcome> {
+async function verifyAndFinalizeAttempt(
+  row: AttemptRow,
+  candidateProviderPaymentId?: string,
+): Promise<VerificationOutcome> {
   if (row.status === 'succeeded') {
     const wallet = await query<{ balance_minor: string }>(
       'SELECT balance_minor::text FROM app.wallets WHERE id=$1', [row.wallet_id],
@@ -105,7 +108,11 @@ async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOu
     return { status: row.status, providerCode: null, idempotent: true };
   }
   if (row.status !== 'pending') throw new HttpError(409, 'payment_state_conflict');
-  if (row.provider !== 'nextpay' || !row.provider_payment_id || !UUID_RE.test(row.provider_payment_id)) {
+  if (row.provider_payment_id && candidateProviderPaymentId && row.provider_payment_id !== candidateProviderPaymentId) {
+    throw new HttpError(409, 'payment_state_conflict');
+  }
+  const providerPaymentId = row.provider_payment_id ?? candidateProviderPaymentId ?? null;
+  if (row.provider !== 'nextpay' || !providerPaymentId || !UUID_RE.test(providerPaymentId)) {
     throw new HttpError(409, 'payment_not_ready_for_verification');
   }
   if (row.currency_code !== 'IRR') throw new HttpError(409, 'payment_currency_mismatch');
@@ -114,7 +121,7 @@ async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOu
   let verified;
   try {
     verified = await provider.verifyPayment({
-      providerPaymentId: row.provider_payment_id,
+      providerPaymentId,
       amountMinor: BigInt(row.amount_minor),
       currencyCode: 'IRR',
     });
@@ -127,6 +134,10 @@ async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOu
   }
 
   const disposition = nextPayVerificationDisposition(verified.providerCode);
+  const callbackRecovery = row.provider_payment_id === null && candidateProviderPaymentId === providerPaymentId;
+  if (callbackRecovery && disposition !== 'succeeded') {
+    return { status: 'pending', providerCode: verified.providerCode };
+  }
   if (disposition === 'pending') {
     return { status: 'pending', providerCode: verified.providerCode };
   }
@@ -167,6 +178,19 @@ async function verifyAndFinalizeAttempt(row: AttemptRow): Promise<VerificationOu
       return { balanceMinor: wallet.rows[0]?.balance_minor ?? null, idempotent: true };
     }
     if (current.status !== 'pending') throw new HttpError(409, 'payment_state_conflict');
+    if (current.provider_payment_id === null) {
+      if (!callbackRecovery || !candidateProviderPaymentId) throw new HttpError(409, 'payment_state_conflict');
+      const bound = await client.query<{ provider_payment_id: string }>(`
+        UPDATE app.payment_attempts
+        SET provider_payment_id=$2
+        WHERE id=$1 AND status='pending' AND provider_payment_id IS NULL
+        RETURNING provider_payment_id
+      `, [current.id, candidateProviderPaymentId]);
+      if (!bound.rows[0]) throw new HttpError(409, 'payment_state_conflict');
+      current.provider_payment_id = bound.rows[0].provider_payment_id;
+    } else if (current.provider_payment_id !== providerPaymentId) {
+      throw new HttpError(409, 'payment_state_conflict');
+    }
 
     const wallet = await client.query<{ balance_minor: string }>(`
       SELECT balance_minor::text
@@ -474,8 +498,14 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     WHERE id=$1 AND provider='nextpay'
   `, [orderId]);
   const row = initial.rows[0];
-  if (!row || row.provider_payment_id !== transId) throw new HttpError(400, 'invalid_payment_callback');
-  const outcome = await verifyAndFinalizeAttempt(row);
+  if (!row) throw new HttpError(400, 'invalid_payment_callback');
+  if (row.provider_payment_id && row.provider_payment_id !== transId) {
+    throw new HttpError(400, 'invalid_payment_callback');
+  }
+  if (!row.provider_payment_id && row.status !== 'pending') {
+    throw new HttpError(400, 'invalid_payment_callback');
+  }
+  const outcome = await verifyAndFinalizeAttempt(row, transId);
   sendJson(res, outcome.status === 'pending' ? 202 : 200, {
     ok: outcome.status === 'succeeded',
     attemptId: row.id,

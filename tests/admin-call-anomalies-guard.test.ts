@@ -19,10 +19,10 @@ test('call anomaly diagnostics cover deterministic lifecycle and reservation inv
 });
 
 test('call anomaly diagnostics cover terminal and money invariants without mutating balances', () => {
-  assert.match(anomalies, /caller_charge_minor > authorized_minor/);
-  assert.match(anomalies, /listener_earning_minor > caller_charge_minor/);
-  assert.match(anomalies, /status::text='connected' AND billing_started_at IS NULL/);
-  assert.match(anomalies, /status::text IN \('completed','cancelled','failed','safety_terminated'\) AND ended_at IS NULL/);
+  assert.match(anomalies, /(?:cs\.)?caller_charge_minor > (?:cs\.)?authorized_minor/);
+  assert.match(anomalies, /(?:cs\.)?listener_earning_minor > (?:cs\.)?caller_charge_minor/);
+  assert.match(anomalies, /(?:cs\.)?status::text='connected' AND (?:cs\.)?billing_started_at IS NULL/);
+  assert.match(anomalies, /(?:cs\.)?status::text IN \('completed','cancelled','failed','safety_terminated'\) AND (?:cs\.)?ended_at IS NULL/);
   assert.match(anomalies, /invariantViolations/);
   assert.doesNotMatch(anomalies, /SET\s+reserved_minor|SET\s+balance_minor/i);
 });

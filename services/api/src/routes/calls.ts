@@ -3,6 +3,7 @@ import { withTransaction, query } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { computeCallAuthorization } from '../domain/call-authorization.ts';
+import { getTelephonyProvider } from '../providers/telephony.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -257,16 +258,18 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{
-      id: string; status: string; currency_code: string; authorized_minor: string;
+      id: string; status: string; currency_code: string; authorized_minor: string; provider_bridge_id: string | null;
     }>(`
-      SELECT id::text, status::text, currency_code, authorized_minor::text
+      SELECT id::text, status::text, currency_code, authorized_minor::text, provider_bridge_id
       FROM app.call_sessions
       WHERE id=$1 AND caller_user_id=$2
       FOR UPDATE
     `, [callId, userId]);
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
-    if (row.status === 'cancelled') return { status: 'cancelled', idempotent: true };
+    if (row.status === 'cancelled') {
+      return { status: 'cancelled' as const, idempotent: true, providerBridgeId: row.provider_bridge_id };
+    }
     if (!['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'].includes(row.status)) {
       throw new HttpError(409, 'call_cannot_be_cancelled');
     }
@@ -291,8 +294,18 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
       INSERT INTO app.call_events(call_session_id, status, source)
       VALUES ($1,'cancelled','caller')
     `, [callId]);
-    return { status: 'cancelled', idempotent: false };
+    return { status: 'cancelled' as const, idempotent: false, providerBridgeId: row.provider_bridge_id };
   });
 
-  sendJson(res, 200, { ok: true, callId, ...result });
+  if (result.providerBridgeId) {
+    try {
+      await getTelephonyProvider().terminateCall(result.providerBridgeId, 'caller_cancelled');
+    } catch {
+      console.error('cancel_telephony_termination_pending', { callId });
+      throw new HttpError(502, 'telephony_termination_pending');
+    }
+  }
+
+  const { providerBridgeId: _privateBridgeId, ...publicResult } = result;
+  sendJson(res, 200, { ok: true, callId, ...publicResult });
 }

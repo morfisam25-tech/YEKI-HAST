@@ -165,7 +165,13 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
       };
     }
     if (!liveStatuses.has(call.status)) throw new HttpError(409, 'call_not_live');
-    if (call.status === 'connected' && !call.provider_bridge_id) {
+    if (call.status === 'calling_caller' && !call.provider_bridge_id) {
+      throw new HttpError(409, 'telephony_dispatch_uncertain');
+    }
+    if (
+      (call.status === 'caller_answered' || call.status === 'calling_listener' || call.status === 'connected')
+      && !call.provider_bridge_id
+    ) {
       throw new HttpError(409, 'call_telephony_invariant');
     }
 

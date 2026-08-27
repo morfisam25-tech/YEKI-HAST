@@ -13,6 +13,7 @@ test('integration readiness validates providers without exposing secrets', () =>
   assert.match(source, /validatePaymentProviderEnv/);
   assert.match(source, /validatePayoutProviderEnv/);
   assert.match(source, /validateTelephonyEnv/);
+  assert.match(source, /validateKycInquiryProviderEnv/);
   assert.match(source, /secretsIncluded: false/);
   assert.doesNotMatch(source, /sendJson[\s\S]*API_KEY/);
   assert.doesNotMatch(source, /sendJson[\s\S]*PAYOUT_AUTH/);

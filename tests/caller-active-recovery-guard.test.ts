@@ -15,6 +15,13 @@ test('caller active-call recovery is caller-scoped and limited to active states'
   assert.match(handler, /url\.pathname === '\/v1\/calls\/active'/);
 });
 
+test('new call creation serializes per caller and rejects a second active call', () => {
+  assert.match(calls, /pg_advisory_xact_lock/);
+  assert.match(calls, /yeki_hast:caller_active:/);
+  assert.match(calls, /if \(existing\.rows\[0\]\) return \{ \.\.\.snapshotCall\(existing\.rows\[0\]\), idempotent: true \}/);
+  assert.match(calls, /if \(active\.rows\[0\]\) throw new HttpError\(409, 'caller_call_already_active'\)/);
+});
+
 test('mobile reopens the server-side active call instead of creating a replacement call', () => {
   assert.match(api, /export function getActiveCall/);
   assert.match(api, /request\('\/v1\/calls\/active'/);

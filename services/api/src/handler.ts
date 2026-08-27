@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
+import { requireCallerClosedBetaEnabled } from './lib/caller-beta.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
@@ -49,9 +50,9 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && topupVerifyMatch) { ensureDatabaseReady(); const { verifyWalletTopup } = await import('./routes/payments.ts'); return await verifyWalletTopup(req, res, topupVerifyMatch[1]); }
     const topupMatch = url.pathname.match(/^\/v1\/wallet\/topups\/([^/]+)$/);
     if (method === 'GET' && topupMatch) { ensureDatabaseReady(); const { getWalletTopup } = await import('./routes/payments.ts'); return await getWalletTopup(req, res, topupMatch[1]); }
-    if (method === 'POST' && url.pathname === '/v1/caller/age-gate') { ensureDatabaseReady(); const { setAgeGate } = await import('./routes/caller.ts'); return await setAgeGate(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/caller/age-gate') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { setAgeGate } = await import('./routes/caller.ts'); return await setAgeGate(req, res); }
     if (method === 'POST' && url.pathname === '/v1/caller/waitlist') { ensureDatabaseReady(); const { joinWaitlist } = await import('./routes/caller.ts'); return await joinWaitlist(req, res); }
-    if (method === 'GET' && url.pathname === '/v1/listeners') { ensureDatabaseReady(); const { browseListeners } = await import('./routes/marketplace.ts'); return await browseListeners(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseListeners } = await import('./routes/marketplace.ts'); return await browseListeners(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/application') { ensureDatabaseReady(); const { createListenerApplication } = await import('./routes/listener.ts'); return await createListenerApplication(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/application') { ensureDatabaseReady(); const { getListenerApplication } = await import('./routes/listener.ts'); return await getListenerApplication(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/training/complete') { ensureDatabaseReady(); const { completeListenerTraining } = await import('./routes/listener.ts'); return await completeListenerTraining(req, res); }
@@ -61,7 +62,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/listener/presence') { ensureDatabaseReady(); const { getListenerPresence } = await import('./routes/marketplace.ts'); return await getListenerPresence(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/presence') { ensureDatabaseReady(); const { setListenerPresence } = await import('./routes/marketplace.ts'); return await setListenerPresence(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/presence/heartbeat') { ensureDatabaseReady(); const { heartbeatListenerPresence } = await import('./routes/marketplace.ts'); return await heartbeatListenerPresence(req, res); }
-    if (method === 'POST' && url.pathname === '/v1/calls/request') { ensureCallReady(); const { requestCall } = await import('./routes/calls.ts'); return await requestCall(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/calls/request') { requireCallerClosedBetaEnabled(); ensureCallReady(); const { requestCall } = await import('./routes/calls.ts'); return await requestCall(req, res); }
     if (method === 'POST' && url.pathname === '/v1/safety/report') { ensureSensitiveDataReady(); const { reportCall } = await import('./routes/safety.ts'); return await reportCall(req, res); }
     if (method === 'POST' && url.pathname === '/v1/safety/block') { ensureDatabaseReady(); const { blockCallCounterparty } = await import('./routes/safety.ts'); return await blockCallCounterparty(req, res); }
 
@@ -88,7 +89,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     const payoutReconcileMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/reconcile$/);
     if (method === 'POST' && payoutReconcileMatch) { ensureDatabaseReady(); const { reconcilePayout } = await import('./routes/payouts.ts'); return await reconcilePayout(req, res, payoutReconcileMatch[1]); }
     const dispatchMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/dispatch$/);
-    if (method === 'POST' && dispatchMatch) { ensureCallReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
+    if (method === 'POST' && dispatchMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) { ensureSensitiveDataReady(); const { safetyExitCall } = await import('./routes/safety.ts'); return await safetyExitCall(req, res, safetyExitMatch[1]); }
     const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);

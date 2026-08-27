@@ -9,6 +9,7 @@ type Payout = {
   currencyCode: string;
   status: string;
   provider: string | null;
+  dispatchNeedsReconciliation: boolean;
   sourceCount: number;
   kycStatus: string;
   createdAt: string;
@@ -101,7 +102,7 @@ export default function PayoutsPage() {
                   <p className="kicker">{payout.id.slice(0, 8)}</p>
                   <h3>{formatAmount(payout.amountMinor, payout.currencyCode)}</h3>
                 </div>
-                <span className="statusPill">{payout.status}</span>
+                <span className="statusPill">{payout.dispatchNeedsReconciliation ? 'RECONCILE' : payout.status}</span>
               </div>
               <div className="facts compact">
                 <p><b>KYC:</b> {payout.kycStatus}</p>
@@ -109,6 +110,9 @@ export default function PayoutsPage() {
                 <p><b>Provider:</b> {payout.provider ?? '—'}</p>
                 <p><b>Listener ref:</b> {payout.listenerUserId.slice(0, 8)}…</p>
               </div>
+              {payout.dispatchNeedsReconciliation && (
+                <p className="error">Dispatch پاسخ قطعی نداده؛ دوباره Dispatch نکن. فقط Reconcile کن.</p>
+              )}
               <p className="muted">ایجاد: {new Date(payout.createdAt).toLocaleString('fa-IR')}</p>
               <div className="actions">
                 {payout.status === 'created' && (

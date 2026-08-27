@@ -151,6 +151,9 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
   const result = await withTransaction(async (client) => {
     const call = await participantContext(client, callId, userId);
     if (call.status === 'safety_terminated') {
+      if (blockCounterparty) {
+        await upsertBlock(client, userId, call.otherUserId, 'safety_exit');
+      }
       return {
         status: 'safety_terminated' as const,
         role: call.role,

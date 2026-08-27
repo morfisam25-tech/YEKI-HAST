@@ -118,7 +118,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
              WHEN cs.status::text='connected' AND cs.billing_started_at IS NULL THEN 'connected_without_billing_start'
              WHEN cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
                   AND cs.ended_at IS NOT NULL THEN 'active_with_end_time'
-             WHEN cs.status::text IN ('completed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL THEN 'terminal_without_end_time'
+             WHEN cs.status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL THEN 'terminal_without_end_time'
              WHEN cs.status::text IN ('completed','safety_terminated')
                   AND cs.caller_charge_minor > 0
                   AND NOT EXISTS (
@@ -145,7 +145,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
          cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
          AND cs.ended_at IS NOT NULL
        )
-       OR (cs.status::text IN ('completed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL)
+       OR (cs.status::text IN ('completed','missed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL)
        OR (
          cs.status::text IN ('completed','safety_terminated')
          AND cs.caller_charge_minor > 0

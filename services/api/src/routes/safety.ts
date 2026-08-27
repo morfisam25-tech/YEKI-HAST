@@ -131,13 +131,12 @@ export async function blockCallCounterparty(req: IncomingMessage, res: ServerRes
     ? body.reasonCode.trim().slice(0, 80)
     : 'user_blocked';
 
-  const blockedUserId = await withTransaction(async (client) => {
+  await withTransaction(async (client) => {
     const call = await participantContext(client, callId, userId);
     await upsertBlock(client, userId, call.otherUserId, reasonCode);
-    return call.otherUserId;
   });
 
-  sendJson(res, 200, { ok: true, blockedUserId });
+  sendJson(res, 200, { ok: true, blocked: true });
 }
 
 export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {

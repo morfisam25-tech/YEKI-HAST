@@ -1,4 +1,7 @@
 export interface CreateBridgeCallInput {
+  // Stable idempotency key for the external bridge creation request.
+  // Every production adapter MUST return the same logical bridge when this
+  // callSessionId is retried after a timeout or otherwise ambiguous response.
   callSessionId: string;
   callerDestination: string;
   listenerDestination: string;
@@ -12,6 +15,8 @@ export interface CreateBridgeCallResult {
 }
 
 export interface TelephonyProvider {
+  // Must be idempotent by input.callSessionId. A retry must never create a
+  // second independent bridge for the same application call session.
   createBridgeCall(input: CreateBridgeCallInput): Promise<CreateBridgeCallResult>;
   terminateCall(providerBridgeId: string, reason: string): Promise<void>;
 }
@@ -27,8 +32,8 @@ export function validateTelephonyEnv(): void {
 }
 
 class DevTelephonyProvider implements TelephonyProvider {
-  async createBridgeCall(): Promise<CreateBridgeCallResult> {
-    return { providerBridgeId: `dev-${Date.now()}` };
+  async createBridgeCall(input: CreateBridgeCallInput): Promise<CreateBridgeCallResult> {
+    return { providerBridgeId: `dev-${input.callSessionId}` };
   }
 
   async terminateCall(): Promise<void> {

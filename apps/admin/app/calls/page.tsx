@@ -33,12 +33,22 @@ type CallAnomalies = {
     stalePreconnect: number;
     connectedOverrun: number;
     underReservedWallets: number;
+    invariantViolations: number;
   };
   anomalies: {
     missingBridge: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
     stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
     connectedOverrun: Array<{ callId: string; status: string; billingStartedAt: string; maxBillableSeconds: number; updatedAt: string }>;
     underReservedWallets: Array<{ userId: string; currencyCode: string; reservedMinor: string; requiredReservedMinor: string; activeCallCount: number }>;
+    invariantViolations: Array<{
+      callId: string;
+      status: string;
+      issueCode: string;
+      authorizedMinor: string;
+      callerChargeMinor: string;
+      listenerEarningMinor: string;
+      updatedAt: string;
+    }>;
   };
 };
 
@@ -69,6 +79,10 @@ export default function CallsPage() {
     anomalies?.anomalies.stalePreconnect
       .filter((item) => item.status === 'routing')
       .map((item) => item.callId) ?? [],
+  ), [anomalies]);
+
+  const invariantIssuesByCall = useMemo(() => new Map(
+    anomalies?.anomalies.invariantViolations.map((item) => [item.callId, item.issueCode]) ?? [],
   ), [anomalies]);
 
   async function load() {
@@ -123,8 +137,9 @@ export default function CallsPage() {
           <p><b>Pre-connect مانده:</b> {anomalies?.counts.stalePreconnect ?? '—'}</p>
           <p><b>Connected overrun:</b> {anomalies?.counts.connectedOverrun ?? '—'}</p>
           <p><b>Under-reserved wallet:</b> {anomalies?.counts.underReservedWallets ?? '—'}</p>
+          <p><b>Terminal/financial invariant:</b> {anomalies?.counts.invariantViolations ?? '—'}</p>
         </div>
-        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. سایر هشدارها نیاز به بررسی provider یا عملیات مالی دارند.</p>
+        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. هشدارهای مالی و terminal فقط برای بررسی هستند و هیچ اصلاح مالی خودکار از این صفحه انجام نمی‌شود.</p>
       </section>
 
       <section className="panel">
@@ -147,6 +162,7 @@ export default function CallsPage() {
         <div className="queue">
           {calls.map((call) => {
             const canRecover = call.status === 'routing' && recoverableCallIds.has(call.id);
+            const invariantIssue = invariantIssuesByCall.get(call.id);
             return (
               <article key={call.id} className="subPanel">
                 <div className="sectionHeader">
@@ -168,6 +184,7 @@ export default function CallsPage() {
                 </div>
                 <p className="muted">درخواست: {new Date(call.requestedAt).toLocaleString('fa-IR')}</p>
                 {call.endedReason && <p className="muted">پایان: {call.endedReason}</p>}
+                {invariantIssue && <p className="error">Invariant: {invariantIssue}</p>}
                 {canRecover && (
                   <div className="actions">
                     <button

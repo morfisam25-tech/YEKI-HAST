@@ -25,7 +25,18 @@ test('closed-beta caller shell exposes real request, dispatch, cancel and safety
   assert.match(caller, /await safetyExitCall\(token, call\.callId\)/);
 });
 
-test('caller beta shell remains disconnected from public app navigation', () => {
-  assert.doesNotMatch(app, /CallerClosedBetaScreen/);
-  assert.match(app, /Caller هنوز در بتای بسته است/);
+test('public app navigation is driven by the fail-closed server bootstrap flag', () => {
+  assert.match(app, /import CallerClosedBetaScreen from '\.\/src\/CallerClosedBetaScreen'/);
+  assert.match(app, /const \[callerBetaEnabled, setCallerBetaEnabled\] = useState\(false\)/);
+  assert.match(app, /setCallerBetaEnabled\(bootstrap\.features\?\.callerClosedBetaEnabled === true\)/);
+  assert.match(app, /\.catch\(\(\) => \{\s*setCallerBetaEnabled\(false\)/);
+  assert.match(app, /if \(!callerBetaEnabled\) \{\s*setScreen\('waitlist'\)/);
+});
+
+test('Caller and Listener share OTP plumbing but keep separate post-auth destinations', () => {
+  assert.match(app, /type AuthPurpose = 'listener' \| 'caller'/);
+  assert.match(app, /if \(authPurpose === 'caller'\)[\s\S]*setScreen\('caller-beta'\)/);
+  assert.match(app, /await resumeListener\(session\.token\)/);
+  assert.match(app, /screen === 'caller-beta' && token/);
+  assert.match(app, /<CallerClosedBetaScreen token=\{token\}/);
 });

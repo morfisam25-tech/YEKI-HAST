@@ -31,6 +31,7 @@ function messageFor(code: string): string {
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
+    caller_active_call_conflict: 'چند تماس فعال همزمان پیدا شد. برای جلوگیری از انتخاب اشتباه، ادامه متوقف شده و نیاز به بررسی دارد.',
     no_listener_available: 'فعلاً شنونده آماده‌ای پیدا نشد.',
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',

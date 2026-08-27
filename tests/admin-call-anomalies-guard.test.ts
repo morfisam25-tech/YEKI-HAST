@@ -29,12 +29,14 @@ test('call anomaly diagnostics flag duplicate active calls for one caller', () =
   assert.doesNotMatch(page, /repair-duplicate|force-cancel-duplicate/);
 });
 
-test('call anomaly diagnostics cover terminal and money invariants without mutating balances', () => {
+test('call anomaly diagnostics cover every terminal end-time invariant including missed calls', () => {
   assert.match(anomalies, /(?:cs\.)?caller_charge_minor > (?:cs\.)?authorized_minor/);
   assert.match(anomalies, /(?:cs\.)?listener_earning_minor > (?:cs\.)?caller_charge_minor/);
   assert.match(anomalies, /(?:cs\.)?status::text='connected' AND (?:cs\.)?billing_started_at IS NULL/);
-  assert.match(anomalies, /(?:cs\.)?status::text IN \('completed','cancelled','failed','safety_terminated'\) AND (?:cs\.)?ended_at IS NULL/);
+  assert.match(anomalies, /(?:cs\.)?status::text IN \('completed','missed','cancelled','failed','safety_terminated'\) AND (?:cs\.)?ended_at IS NULL/);
   assert.match(anomalies, /invariantViolations/);
+  assert.match(calls, /'connected', 'completed', 'missed', 'cancelled', 'failed', 'safety_terminated'/);
+  assert.match(page, /<option value="missed">missed<\/option>/);
   assert.doesNotMatch(anomalies, /SET\s+reserved_minor|SET\s+balance_minor/i);
 });
 

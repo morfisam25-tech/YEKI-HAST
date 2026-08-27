@@ -31,7 +31,8 @@ test('telephony dispatch failure releases reserved caller funds and fails the ca
 });
 
 test('dispatch endpoint is wired and mobile client exposes caller lifecycle APIs', () => {
-  assert.match(handler, /\/v1\/calls\\\/\(\[\^\/\]\+\)\\\/dispatch/);
+  assert.match(handler, /const dispatchMatch = url\.pathname\.match/);
+  assert.match(handler, /\/dispatch\$\/\);/);
   assert.match(handler, /dispatchCall/);
   assert.match(mobile, /export function requestCall/);
   assert.match(mobile, /export function dispatchCall/);

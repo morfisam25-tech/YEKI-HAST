@@ -131,6 +131,7 @@ export type CallResponse = {
   endedAt?: string | null;
   billableSeconds?: number;
   callerChargeMinor?: string;
+  telephonyReady?: boolean;
   idempotent?: boolean;
 };
 
@@ -224,6 +225,14 @@ export function verifyOtp(phoneE164: string, code: string): Promise<SessionRespo
     method: 'POST',
     body: JSON.stringify({ phone: phoneE164, code }),
   });
+}
+
+export function getCurrentSession(token: string): Promise<{ ok: true; userId: string }> {
+  return request('/v1/auth/session', {}, token);
+}
+
+export function logoutCurrentSession(token: string): Promise<{ ok: true }> {
+  return request('/v1/auth/logout', { method: 'POST' }, token);
 }
 
 export function getWallet(token: string): Promise<WalletResponse> {

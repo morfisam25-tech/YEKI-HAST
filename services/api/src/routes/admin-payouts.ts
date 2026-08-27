@@ -20,7 +20,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
   if (status && !ALLOWED_STATUSES.has(status)) throw new HttpError(400, 'invalid_payout_status');
   const limit = limitFrom(url.searchParams.get('limit'));
 
-  const [result, candidates] = await Promise.all([
+  const [result, candidates, pendingBacklog] = await Promise.all([
     query<{
       id: string;
       listener_user_id: string;
@@ -91,6 +91,23 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       ORDER BY MIN(e.created_at) ASC
       LIMIT 100
     `),
+    query<{
+      currency_code: string;
+      pending_minor: string;
+      earning_count: string;
+      listener_count: string;
+      oldest_pending_at: string | null;
+    }>(`
+      SELECT e.currency_code,
+             COALESCE(SUM(e.amount_minor),0)::text AS pending_minor,
+             COUNT(*)::text AS earning_count,
+             COUNT(DISTINCT e.listener_user_id)::text AS listener_count,
+             MIN(e.created_at)::text AS oldest_pending_at
+      FROM app.listener_earnings e
+      WHERE e.status='pending'
+      GROUP BY e.currency_code
+      ORDER BY e.currency_code
+    `),
   ]);
 
   sendJson(res, 200, {
@@ -117,6 +134,13 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       earningCount: Number(row.earning_count),
       oldestAvailableAt: row.oldest_available_at,
       kycStatus: row.kyc_status ?? 'not_started',
+    })),
+    pendingEarningBacklog: pendingBacklog.rows.map((row) => ({
+      currencyCode: row.currency_code,
+      pendingMinor: row.pending_minor,
+      earningCount: Number(row.earning_count),
+      listenerCount: Number(row.listener_count),
+      oldestPendingAt: row.oldest_pending_at,
     })),
     providerReferencesIncluded: false,
     bankDetailsIncluded: false,

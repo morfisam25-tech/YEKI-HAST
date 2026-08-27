@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const calls = await readFile(new URL('../services/api/src/routes/calls.ts', import.meta.url), 'utf8');
+const dispatch = await readFile(new URL('../services/api/src/routes/call-dispatch.ts', import.meta.url), 'utf8');
 const handler = await readFile(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const api = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.url), 'utf8');
 const screen = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
@@ -57,8 +58,23 @@ test('request race recovers the winning active call instead of leaving caller st
 test('uncertain telephony dispatch keeps the caller on the same retryable call', () => {
   assert.match(screen, /telephony_dispatch_uncertain:/);
   assert.match(screen, /call\.status !== 'routing' && call\.status !== 'calling_caller'/);
-  assert.match(screen, /call\.status === 'routing' \|\| call\.status === 'calling_caller'/);
+  assert.match(screen, /call\.status === 'calling_caller' && call\.telephonyReady === false/);
   assert.match(screen, /ادامه همین تماس/);
+});
+
+test('telephony readiness is exposed without exposing the provider bridge id', () => {
+  assert.match(calls, /telephonyReady: Boolean\(row\.provider_bridge_id\)/);
+  assert.match(dispatch, /telephonyReady: true/);
+  assert.match(screen, /type CallerCallResponse = CallResponse & \{ telephonyReady\?: boolean \}/);
+  assert.match(screen, /telephonyIdentityStatuses\.has\(call\.status\) && call\.telephonyReady === false/);
+  assert.doesNotMatch(screen, /providerBridgeId|provider_bridge_id/);
+});
+
+test('unresolved telephony identity hides cancel and safety controls until retry resolves it', () => {
+  assert.match(screen, /const telephonyUnresolved = Boolean/);
+  assert.match(screen, /const dispatchRetryable = Boolean/);
+  assert.match(screen, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved/);
+  assert.match(screen, /تا رفع این وضعیت، پایان یا لغو از داخل اپ انجام نمی‌شود/);
 });
 
 test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {
@@ -71,7 +87,7 @@ test('live caller status auto-sync polls only non-terminal calls and cleans up i
   assert.match(screen, /getErrorCode\(cause\) !== 'network_error'/);
 });
 
-test('connected calls remain non-cancellable in caller UI while safety exit stays available', () => {
+test('connected calls remain non-cancellable in caller UI while safety exit stays available once telephony is known', () => {
   assert.match(screen, /const cancellableStatuses = new Set\(\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'\]\)/);
   assert.doesNotMatch(screen, /cancellableStatuses[^\n]*connected/);
   assert.match(screen, /پایان فوری برای ایمنی/);

@@ -136,6 +136,9 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/admin/payment-attempts') {
       ensureDatabaseReady(); const { listAdminPaymentAttempts } = await import('./routes/admin-payments.ts'); return await listAdminPaymentAttempts(req, res);
     }
+    if (method === 'GET' && url.pathname === '/v1/admin/caller-waitlist') {
+      ensureDatabaseReady(); const { listAdminCallerWaitlist } = await import('./routes/admin-waitlist.ts'); return await listAdminCallerWaitlist(req, res);
+    }
     if (method === 'GET' && url.pathname === '/v1/admin/safety-cases') {
       ensureDatabaseReady(); const { listAdminSafetyCases } = await import('./routes/admin-safety.ts'); return await listAdminSafetyCases(req, res);
     }

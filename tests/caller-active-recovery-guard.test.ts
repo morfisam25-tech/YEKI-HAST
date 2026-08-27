@@ -54,6 +54,13 @@ test('request race recovers the winning active call instead of leaving caller st
   assert.match(screen, /setStage\('call'\)/);
 });
 
+test('uncertain telephony dispatch keeps the caller on the same retryable call', () => {
+  assert.match(screen, /telephony_dispatch_uncertain:/);
+  assert.match(screen, /call\.status !== 'routing' && call\.status !== 'calling_caller'/);
+  assert.match(screen, /call\.status === 'routing' \|\| call\.status === 'calling_caller'/);
+  assert.match(screen, /ادامه همین تماس/);
+});
+
 test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {
   assert.match(screen, /const CALL_STATUS_POLL_MS = 3_000/);
   assert.match(screen, /stage !== 'call' \|\| !call \|\| terminalStatuses\.has\(call\.status\)/);

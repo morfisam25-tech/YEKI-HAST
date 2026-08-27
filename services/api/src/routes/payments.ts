@@ -384,13 +384,23 @@ export async function createWalletTopup(req: IncomingMessage, res: ServerRespons
       callbackUri,
     });
   } catch (error) {
-    await query(`
-      UPDATE app.payment_attempts
-      SET status='failed', completed_at=COALESCE(completed_at, now())
-      WHERE id=$1 AND status='pending' AND provider_payment_id IS NULL
-    `, [attempt.row.id]).catch(() => undefined);
+    const definitiveTokenFailure = error instanceof PaymentProviderError
+      && error.code === 'payment_token_failed'
+      && error.providerCode !== null;
+
+    if (definitiveTokenFailure) {
+      await query(`
+        UPDATE app.payment_attempts
+        SET status='failed', completed_at=COALESCE(completed_at, now())
+        WHERE id=$1 AND status='pending' AND provider_payment_id IS NULL
+      `, [attempt.row.id]).catch(() => undefined);
+    }
+
     if (error instanceof PaymentProviderError) {
-      console.error('payment_token_failed', { attemptId: attempt.row.id, providerCode: error.providerCode });
+      console.error(definitiveTokenFailure ? 'payment_token_failed' : 'payment_token_initialization_ambiguous', {
+        attemptId: attempt.row.id,
+        providerCode: error.providerCode,
+      });
       throw new HttpError(502, 'payment_provider_unavailable');
     }
     throw error;

@@ -40,3 +40,39 @@ test('Kavenegar provider fails closed without credentials', () => {
     assert.throws(() => getSmsProvider(), /sms_provider_not_configured/);
   });
 });
+
+test('SMS.ir provider fails closed without API key', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'smsir',
+    SMSIR_API_KEY: undefined,
+    SMSIR_OTP_TEMPLATE_ID: '958161',
+    SMSIR_OTP_PARAMETER_NAME: 'CODE',
+  }, () => {
+    assert.throws(() => getSmsProvider(), /sms_provider_not_configured/);
+  });
+});
+
+test('SMS.ir provider fails closed without a valid template id', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'smsir',
+    SMSIR_API_KEY: 'test-key',
+    SMSIR_OTP_TEMPLATE_ID: 'not-a-number',
+    SMSIR_OTP_PARAMETER_NAME: 'CODE',
+  }, () => {
+    assert.throws(() => getSmsProvider(), /sms_provider_not_configured/);
+  });
+});
+
+test('SMS.ir provider accepts a valid production configuration', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'smsir',
+    SMSIR_API_KEY: 'test-key',
+    SMSIR_OTP_TEMPLATE_ID: '958161',
+    SMSIR_OTP_PARAMETER_NAME: 'CODE',
+  }, () => {
+    assert.doesNotThrow(() => getSmsProvider());
+  });
+});

@@ -18,6 +18,17 @@ test('call anomaly diagnostics cover deterministic lifecycle and reservation inv
   assert.match(anomalies, /w\.reserved_minor < a\.required_reserved_minor/);
 });
 
+test('call anomaly diagnostics flag duplicate active calls for one caller', () => {
+  assert.match(anomalies, /duplicateActiveCallers/);
+  assert.match(anomalies, /GROUP BY caller_user_id/);
+  assert.match(anomalies, /HAVING COUNT\(\*\) > 1/);
+  assert.match(anomalies, /ARRAY_AGG\(id::text ORDER BY requested_at ASC\) AS call_ids/);
+  assert.match(page, /duplicateActiveCallers/);
+  assert.match(page, /caller_has_multiple_active_calls/);
+  assert.match(page, /Call IDs:/);
+  assert.doesNotMatch(page, /repair-duplicate|force-cancel-duplicate/);
+});
+
 test('call anomaly diagnostics cover terminal and money invariants without mutating balances', () => {
   assert.match(anomalies, /(?:cs\.)?caller_charge_minor > (?:cs\.)?authorized_minor/);
   assert.match(anomalies, /(?:cs\.)?listener_earning_minor > (?:cs\.)?caller_charge_minor/);

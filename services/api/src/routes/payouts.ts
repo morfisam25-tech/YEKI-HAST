@@ -79,6 +79,16 @@ export async function dispatchPayout(req: IncomingMessage, res: ServerResponse, 
     if (Number(itemTotal.rows[0]?.count ?? 0) < 1) throw new HttpError(409, 'payout_has_no_items');
     if (BigInt(itemTotal.rows[0].total) !== BigInt(row.amount_minor)) throw new HttpError(409, 'payout_amount_mismatch');
 
+    const wrongMarket = await client.query<{ id: string }>(`
+      SELECT pi.id::text
+      FROM app.payout_items pi
+      JOIN app.listener_earnings e ON e.id=pi.earning_id
+      WHERE pi.payout_id=$1
+        AND e.market_id<>$2
+      LIMIT 1
+    `, [row.id, row.market_id]);
+    if (wrongMarket.rowCount) throw new HttpError(409, 'payout_source_market_mismatch');
+
     const unavailable = await client.query<{ id: string }>(`
       SELECT pi.id::text
       FROM app.payout_items pi
@@ -156,7 +166,7 @@ export async function dispatchPayout(req: IncomingMessage, res: ServerResponse, 
       payoutId: prepared.payoutId,
       status: 'processing',
       provider: provider.key,
-      providerReference: submitted.providerReference,
+      providerReferenceIncluded: false,
     });
   } catch (error) {
     if (error instanceof PayoutProviderError) {
@@ -204,7 +214,13 @@ export async function reconcilePayout(req: IncomingMessage, res: ServerResponse,
   if (!row) throw new HttpError(404, 'payout_not_found');
   if (row.provider !== provider.key) throw new HttpError(409, 'payout_provider_mismatch');
   if (row.status === 'paid') {
-    sendJson(res, 200, { ok: true, payoutId: row.id, status: 'paid', idempotent: true });
+    sendJson(res, 200, {
+      ok: true,
+      payoutId: row.id,
+      status: 'paid',
+      idempotent: true,
+      providerReferenceIncluded: false,
+    });
     return;
   }
   if (!['processing', 'failed'].includes(row.status)) throw new HttpError(409, 'payout_not_reconcilable');
@@ -230,7 +246,7 @@ export async function reconcilePayout(req: IncomingMessage, res: ServerResponse,
       payoutId: row.id,
       status: row.status,
       providerStatus: status.providerStatus,
-      bankTrackingNumber: status.bankTrackingNumber,
+      providerReferenceIncluded: false,
     });
     return;
   }
@@ -297,6 +313,6 @@ export async function reconcilePayout(req: IncomingMessage, res: ServerResponse,
     payoutId: row.id,
     status: 'paid',
     providerStatus: status.providerStatus,
-    bankTrackingNumber: status.bankTrackingNumber,
+    providerReferenceIncluded: false,
   });
 }

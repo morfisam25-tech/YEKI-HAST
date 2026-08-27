@@ -1,9 +1,14 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
-import { HttpError, sendJson } from '../lib/http.ts';
+import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
 const allowedStatuses = new Set(['open', 'in_review', 'resolved', 'dismissed']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESOLUTION_RE = /^[a-z0-9][a-z0-9_-]{1,63}$/;
+
+type SafetyCaseKind = 'report' | 'event';
+type SafetyCaseAction = 'claim' | 'resolve' | 'dismiss';
 
 function readLimit(url: URL): number {
   const raw = url.searchParams.get('limit') ?? '50';
@@ -17,6 +22,23 @@ function readStatus(url: URL): string | null {
   if (!raw) return null;
   if (!allowedStatuses.has(raw)) throw new HttpError(400, 'invalid_status');
   return raw;
+}
+
+function caseIdFrom(value: string): string {
+  if (!UUID_RE.test(value)) throw new HttpError(400, 'invalid_safety_case');
+  return value;
+}
+
+function actionFrom(value: unknown): SafetyCaseAction {
+  if (value === 'claim' || value === 'resolve' || value === 'dismiss') return value;
+  throw new HttpError(400, 'invalid_safety_action');
+}
+
+function resolutionCodeFrom(value: unknown, action: SafetyCaseAction): string | null {
+  if (action === 'claim') return null;
+  const code = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!RESOLUTION_RE.test(code)) throw new HttpError(400, 'invalid_resolution_code');
+  return code;
 }
 
 export async function listAdminSafetyCases(req: IncomingMessage, res: ServerResponse) {
@@ -108,5 +130,75 @@ export async function listAdminSafetyCases(req: IncomingMessage, res: ServerResp
       updatedAt: row.updated_at,
       privateDetailsIncluded: false,
     })),
+  });
+}
+
+export async function actOnAdminSafetyCase(
+  req: IncomingMessage,
+  res: ServerResponse,
+  kind: SafetyCaseKind,
+  rawId: string,
+) {
+  const admin = await requireAdmin(req);
+  const id = caseIdFrom(rawId);
+  const body = await readJson<{ action?: unknown; resolutionCode?: unknown }>(req);
+  const action = actionFrom(body.action);
+  const resolutionCode = resolutionCodeFrom(body.resolutionCode, action);
+  const targetStatus = action === 'claim' ? 'in_review' : action === 'resolve' ? 'resolved' : 'dismissed';
+
+  const sql = kind === 'report'
+    ? `
+      UPDATE app.reports
+      SET status=$2::app.case_status,
+          assigned_admin_user_id=$3,
+          resolution_code=$4,
+          resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
+          updated_at=now()
+      WHERE id=$1 AND status::text NOT IN ('resolved','dismissed')
+      RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
+    `
+    : `
+      UPDATE app.safety_events
+      SET status=$2::app.case_status,
+          assigned_admin_user_id=$3,
+          resolution_code=$4,
+          resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
+          updated_at=now()
+      WHERE id=$1 AND status::text NOT IN ('resolved','dismissed')
+      RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
+    `;
+
+  const result = await query<{
+    id: string;
+    status: string;
+    assigned_admin_user_id: string | null;
+    resolution_code: string | null;
+    resolved_at: string | null;
+    updated_at: string;
+  }>(sql, [id, targetStatus, admin.userId, resolutionCode]);
+
+  const row = result.rows[0];
+  if (!row) {
+    const exists = await query<{ status: string }>(
+      kind === 'report'
+        ? 'SELECT status::text FROM app.reports WHERE id=$1'
+        : 'SELECT status::text FROM app.safety_events WHERE id=$1',
+      [id],
+    );
+    if (!exists.rows[0]) throw new HttpError(404, 'safety_case_not_found');
+    throw new HttpError(409, 'safety_case_closed');
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    kind,
+    case: {
+      id: row.id,
+      status: row.status,
+      assignedAdminUserId: row.assigned_admin_user_id,
+      resolutionCode: row.resolution_code,
+      resolvedAt: row.resolved_at,
+      updatedAt: row.updated_at,
+    },
   });
 }

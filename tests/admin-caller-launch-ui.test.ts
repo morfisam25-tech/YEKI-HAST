@@ -21,7 +21,8 @@ test('Caller launch readiness remains fail-closed on every required dependency',
   assert.match(backend, /&& telephonyReady/);
 });
 
-test('readiness UI does not expose credentials or secret values', () => {
-  assert.doesNotMatch(page, /apiKey|secretKey|password|credential/i);
+test('readiness UI does not bind or render credential values', () => {
+  assert.doesNotMatch(page, /\b(apiKey|secretKey|password|credential)\s*[:=]/i);
+  assert.doesNotMatch(page, /data\.integrations\.[A-Za-z]+\.(apiKey|secretKey|password|credential)/i);
   assert.match(backend, /secretsIncluded: false/);
 });

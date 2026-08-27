@@ -5,6 +5,14 @@
     "version": "0.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ]
+    ],
     "android": {
       "package": "app.yekihast.mobile"
     }

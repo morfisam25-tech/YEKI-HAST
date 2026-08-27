@@ -10,7 +10,8 @@ type Attempt = {
   amountMinor: string;
   providerFeeMinor: string;
   status: string;
-  providerPaymentReference: string | null;
+  providerReferencePresent: boolean;
+  initializationAmbiguous: boolean;
   createdAt: string;
   completedAt: string | null;
 };
@@ -74,14 +75,17 @@ export default function PaymentsPage() {
             <article key={item.id} className="subPanel">
               <div className="sectionHeader">
                 <div><p className="kicker">{short(item.id)}</p><h3>{amount(item.amountMinor, item.currencyCode)}</h3></div>
-                <span className="statusPill">{item.status}</span>
+                <span className="statusPill">{item.initializationAmbiguous ? 'INITIALIZATION AMBIGUOUS' : item.status}</span>
               </div>
               <div className="facts compact">
                 <p><b>User:</b> {short(item.userId)}</p>
                 <p><b>Provider:</b> {item.provider}</p>
-                <p><b>Provider ref:</b> {short(item.providerPaymentReference)}</p>
+                <p><b>Provider ref:</b> {item.providerReferencePresent ? 'ثبت شده' : 'ثبت نشده'}</p>
                 <p><b>Fee:</b> {amount(item.providerFeeMinor, item.currencyCode)}</p>
               </div>
+              {item.initializationAmbiguous && (
+                <p className="error">توکن پرداخت قطعی ثبت نشده و وضعیت مبهم است. این attempt را دستی credit نکن و با همان idempotency key دوباره پرداخت جدید نساز.</p>
+              )}
               <p className="muted">ایجاد: {new Date(item.createdAt).toLocaleString('fa-IR')}</p>
               {item.completedAt && <p className="muted">پایان: {new Date(item.completedAt).toLocaleString('fa-IR')}</p>}
             </article>

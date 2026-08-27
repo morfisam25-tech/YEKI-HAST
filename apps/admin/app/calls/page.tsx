@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type CallRow = {
   id: string;
@@ -27,8 +27,23 @@ type CallRow = {
   updatedAt: string;
 };
 
-async function api<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+type CallAnomalies = {
+  counts: {
+    missingBridge: number;
+    stalePreconnect: number;
+    connectedOverrun: number;
+    underReservedWallets: number;
+  };
+  anomalies: {
+    missingBridge: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
+    stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
+    connectedOverrun: Array<{ callId: string; status: string; billingStartedAt: string; maxBillableSeconds: number; updatedAt: string }>;
+    underReservedWallets: Array<{ userId: string; currencyCode: string; reservedMinor: string; requiredReservedMinor: string; activeCallCount: number }>;
+  };
+};
+
+async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, init);
   const body = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'request_failed');
   return body as T;
@@ -45,14 +60,39 @@ function amount(value: string, currency: string): string {
 
 export default function CallsPage() {
   const [calls, setCalls] = useState<CallRow[]>([]);
+  const [anomalies, setAnomalies] = useState<CallAnomalies | null>(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [recoveringCallId, setRecoveringCallId] = useState<string | null>(null);
+
+  const recoverableCallIds = useMemo(() => new Set(
+    anomalies?.anomalies.stalePreconnect
+      .filter((item) => item.status === 'routing')
+      .map((item) => item.callId) ?? [],
+  ), [anomalies]);
 
   async function load() {
     setError('');
     const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
-    const value = await api<{ calls: CallRow[] }>(`/api/ops/calls${qs}`);
-    setCalls(value.calls);
+    const [callsValue, anomalyValue] = await Promise.all([
+      api<{ calls: CallRow[] }>(`/api/ops/calls${qs}`),
+      api<CallAnomalies>('/api/ops/calls?anomalies=true'),
+    ]);
+    setCalls(callsValue.calls);
+    setAnomalies(anomalyValue);
+  }
+
+  async function recoverStaleRouting(callId: string) {
+    setRecoveringCallId(callId);
+    setError('');
+    try {
+      await api(`/api/ops/calls/${encodeURIComponent(callId)}/recover-stale-routing`, { method: 'POST' });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'call_recovery_failed');
+    } finally {
+      setRecoveringCallId(null);
+    }
   }
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : 'request_failed')); }, [status]);
@@ -72,6 +112,22 @@ export default function CallsPage() {
       </header>
 
       <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <p className="kicker">CALL HEALTH</p>
+            <h2>هشدارهای قطعی</h2>
+          </div>
+        </div>
+        <div className="facts compact">
+          <p><b>Bridge گمشده:</b> {anomalies?.counts.missingBridge ?? '—'}</p>
+          <p><b>Pre-connect مانده:</b> {anomalies?.counts.stalePreconnect ?? '—'}</p>
+          <p><b>Connected overrun:</b> {anomalies?.counts.connectedOverrun ?? '—'}</p>
+          <p><b>Under-reserved wallet:</b> {anomalies?.counts.underReservedWallets ?? '—'}</p>
+        </div>
+        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. سایر هشدارها نیاز به بررسی provider یا عملیات مالی دارند.</p>
+      </section>
+
+      <section className="panel">
         <div className="reviewRow wide">
           <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Call status filter">
             <option value="">همه وضعیت‌ها</option>
@@ -89,29 +145,43 @@ export default function CallsPage() {
         </div>
         {error && <p className="error">{error}</p>}
         <div className="queue">
-          {calls.map((call) => (
-            <article key={call.id} className="subPanel">
-              <div className="sectionHeader">
-                <div>
-                  <p className="kicker">{short(call.id)}</p>
-                  <h3>{call.status}</h3>
+          {calls.map((call) => {
+            const canRecover = call.status === 'routing' && recoverableCallIds.has(call.id);
+            return (
+              <article key={call.id} className="subPanel">
+                <div className="sectionHeader">
+                  <div>
+                    <p className="kicker">{short(call.id)}</p>
+                    <h3>{call.status}</h3>
+                  </div>
+                  <span className="statusPill">{call.billableSeconds.toLocaleString('fa-IR')} ثانیه</span>
                 </div>
-                <span className="statusPill">{call.billableSeconds.toLocaleString('fa-IR')} ثانیه</span>
-              </div>
-              <div className="facts compact">
-                <p><b>Caller:</b> {short(call.callerUserId)}</p>
-                <p><b>Listener:</b> {short(call.listenerUserId)}</p>
-                <p><b>Gender request:</b> {call.requestedListenerGender}</p>
-                <p><b>Mood:</b> {call.callerMood ?? '—'}</p>
-                <p><b>Topic:</b> {call.topicCode ?? '—'}</p>
-                <p><b>Telephony:</b> {call.telephonyProvider ?? '—'}</p>
-                <p><b>Caller charge:</b> {amount(call.callerChargeMinor, call.currencyCode)}</p>
-                <p><b>Listener earning:</b> {amount(call.listenerEarningMinor, call.currencyCode)}</p>
-              </div>
-              <p className="muted">درخواست: {new Date(call.requestedAt).toLocaleString('fa-IR')}</p>
-              {call.endedReason && <p className="muted">پایان: {call.endedReason}</p>}
-            </article>
-          ))}
+                <div className="facts compact">
+                  <p><b>Caller:</b> {short(call.callerUserId)}</p>
+                  <p><b>Listener:</b> {short(call.listenerUserId)}</p>
+                  <p><b>Gender request:</b> {call.requestedListenerGender}</p>
+                  <p><b>Mood:</b> {call.callerMood ?? '—'}</p>
+                  <p><b>Topic:</b> {call.topicCode ?? '—'}</p>
+                  <p><b>Telephony:</b> {call.telephonyProvider ?? '—'}</p>
+                  <p><b>Caller charge:</b> {amount(call.callerChargeMinor, call.currencyCode)}</p>
+                  <p><b>Listener earning:</b> {amount(call.listenerEarningMinor, call.currencyCode)}</p>
+                </div>
+                <p className="muted">درخواست: {new Date(call.requestedAt).toLocaleString('fa-IR')}</p>
+                {call.endedReason && <p className="muted">پایان: {call.endedReason}</p>}
+                {canRecover && (
+                  <div className="actions">
+                    <button
+                      className="ghost"
+                      disabled={recoveringCallId === call.id}
+                      onClick={() => recoverStaleRouting(call.id)}
+                    >
+                      {recoveringCallId === call.id ? 'در حال Recovery…' : 'Recovery امن routing'}
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
           {!calls.length && <p className="muted">تماسی در این وضعیت وجود ندارد.</p>}
         </div>
       </section>

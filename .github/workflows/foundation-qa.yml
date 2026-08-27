@@ -43,6 +43,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/admin-payouts.ts
           node --experimental-strip-types --check services/api/src/routes/admin-payments.ts
           node --experimental-strip-types --check services/api/src/routes/admin-waitlist.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-readiness.ts
           node --experimental-strip-types --check services/api/src/routes/admin-safety.ts
           node --experimental-strip-types --check services/api/src/routes/admin-calls.ts
           node --experimental-strip-types --check services/api/src/routes/payouts.ts

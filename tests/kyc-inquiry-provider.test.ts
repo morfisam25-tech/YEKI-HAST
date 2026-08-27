@@ -34,6 +34,19 @@ function success(data: unknown): Response {
   }), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
+const sabtData = {
+  inq: 'SABTAHVAL',
+  inq_desc: 'identity',
+  inq_id: 11197,
+  national_id: '1234567890',
+  jalali_birth: '1371-07-19',
+  match: true,
+  first_name: 'Test',
+  last_name: 'User',
+  father_name: 'Father',
+  is_alive: 1,
+};
+
 test('SabtAhval uses only documented request fields and parses documented response data', async () => {
   await withInquiryKey(async () => {
     let capturedUrl = '';
@@ -41,32 +54,45 @@ test('SabtAhval uses only documented request fields and parses documented respon
     const provider = new NextPayKycInquiryProvider((async (input, init) => {
       capturedUrl = String(input);
       capturedBody = String(init?.body ?? '');
-      return success({
-        inq: 'SABTAHVAL',
-        inq_desc: 'identity',
-        inq_id: 11197,
-        national_id: '1234567890',
-        jalali_birth: '1371-07-19',
-        match: true,
-        first_name: 'Test',
-        last_name: 'User',
-        father_name: 'Father',
-        is_alive: 1,
-      });
+      return success(sabtData);
     }) as typeof fetch);
 
-    const result = await provider.sabtAhval({
-      nationalId: '1234567890',
-      birthYear: '1371',
-      birthMonth: '07',
-      birthDay: '19',
-    });
-
+    const result = await provider.sabtAhval({ nationalId: '1234567890', birthYear: '1371', birthMonth: '07', birthDay: '19' });
     assert.equal(capturedUrl, 'https://nextpay.org/nx/inquiry/sabtahval');
     const form = new URLSearchParams(capturedBody);
     assert.deepEqual([...form.keys()].sort(), ['birth_day', 'birth_month', 'birth_year', 'inquiry_api', 'national_id']);
     assert.equal(form.get('inquiry_api'), key);
     assert.equal(result.data.match, true);
+  });
+});
+
+test('SabtAhval accepts the same Jalali year range as the calendar domain', async () => {
+  await withInquiryKey(async () => {
+    for (const birthYear of ['1200', '1500', '1600']) {
+      const provider = new NextPayKycInquiryProvider((async () => success(sabtData)) as typeof fetch);
+      await assert.doesNotReject(() => provider.sabtAhval({ nationalId: '1234567890', birthYear, birthMonth: '01', birthDay: '01' }));
+    }
+    const provider = new NextPayKycInquiryProvider((async () => success(sabtData)) as typeof fetch);
+    await assert.rejects(() => provider.sabtAhval({ nationalId: '1234567890', birthYear: '1199', birthMonth: '01', birthDay: '01' }), /invalid_jalali_birth_date/);
+    await assert.rejects(() => provider.sabtAhval({ nationalId: '1234567890', birthYear: '1601', birthMonth: '01', birthDay: '01' }), /invalid_jalali_birth_date/);
+  });
+});
+
+test('numeric envelope fields reject null instead of coercing null to zero', async () => {
+  await withInquiryKey(async () => {
+    const provider = new NextPayKycInquiryProvider((async () => new Response(JSON.stringify({
+      code: 200,
+      error: null,
+      data: sabtData,
+      fee: null,
+      fee_irr: 1000,
+      inq_balance: 900,
+      inq_balance_irr: 9000,
+    }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch);
+    await assert.rejects(
+      () => provider.sabtAhval({ nationalId: '1234567890', birthYear: '1371', birthMonth: '07', birthDay: '19' }),
+      /kyc_inquiry_invalid_response/,
+    );
   });
 });
 
@@ -85,7 +111,6 @@ test('Sheba strips IR because official request contract requires 24 digits', asy
       capturedBody = String(init?.body ?? '');
       return success({ provider_specific: true });
     }) as typeof fetch);
-
     await provider.sheba({ sheba: 'IR123412341234123412341234' });
     const form = new URLSearchParams(capturedBody);
     assert.equal(form.get('sheba'), '123412341234123412341234');

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   browseListeners,
   cancelCall,
   confirmCallerAge,
   dispatchCall,
+  getActiveCall,
   getCall,
   getErrorCode,
   requestCall,
@@ -47,7 +48,28 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [selected, setSelected] = useState<BrowseListener | null>(null);
   const [call, setCall] = useState<CallResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recoveryComplete, setRecoveryComplete] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let disposed = false;
+    async function recoverActiveCall() {
+      try {
+        const result = await getActiveCall(token);
+        if (disposed) return;
+        if (result.activeCall) {
+          setCall(result.activeCall);
+          setStage('call');
+        }
+      } catch (cause) {
+        if (!disposed) setError(messageFor(getErrorCode(cause)));
+      } finally {
+        if (!disposed) setRecoveryComplete(true);
+      }
+    }
+    void recoverActiveCall();
+    return () => { disposed = true; };
+  }, [token]);
 
   async function acceptAgeGate() {
     setBusy(true);
@@ -170,7 +192,14 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       <Text style={styles.title}>Caller · بتای بسته</Text>
       <Text style={styles.note}>دسترسی این صفحه با وضعیت فعلی سرور کنترل می‌شود و هیچ مسیر تماس بدون age-gate باز نمی‌شود.</Text>
 
-      {stage === 'age-gate' && (
+      {!recoveryComplete && (
+        <View style={styles.card}>
+          <Text style={styles.heading}>بررسی تماس جاری</Text>
+          <Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text>
+        </View>
+      )}
+
+      {recoveryComplete && stage === 'age-gate' && (
         <View style={styles.card}>
           <Text style={styles.heading}>تأیید شرط سنی</Text>
           <Text style={styles.body}>قبل از دیدن مسیر تماس باید شرط سنی نسخه جاری سرور را تأیید کنی. مقدار سن از داخل اپ حدس زده نمی‌شود.</Text>
@@ -180,7 +209,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {stage === 'browse' && (
+      {recoveryComplete && stage === 'browse' && (
         <View style={styles.card}>
           <Text style={styles.heading}>شنونده‌های آماده</Text>
           {minimumAge !== null && <Text style={styles.meta}>سیاست جاری: حداقل {minimumAge} سال</Text>}
@@ -201,9 +230,9 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {stage === 'call' && call && (
+      {recoveryComplete && stage === 'call' && call && (
         <View style={styles.card}>
-          <Text style={styles.heading}>{selected?.nickname ?? 'تماس'}</Text>
+          <Text style={styles.heading}>{selected?.nickname ?? 'تماس جاری'}</Text>
           <Text style={styles.status}>وضعیت: {call.status}</Text>
           {call.status === 'routing' && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>

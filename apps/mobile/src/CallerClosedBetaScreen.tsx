@@ -88,10 +88,32 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         languageCode,
         mood: 'just_talk',
       });
-      const dispatched = await dispatchCall(token, requested.callId);
+
+      // Persist the server-created call in UI state before dispatch. If dispatch is
+      // uncertain or fails, the same callId can be resumed instead of reserving a second call.
       setSelected(listener);
-      setCall(dispatched);
+      setCall(requested);
       setStage('call');
+
+      try {
+        const dispatched = await dispatchCall(token, requested.callId);
+        setCall(dispatched);
+      } catch (cause) {
+        setError(messageFor(getErrorCode(cause)));
+      }
+    } catch (cause) {
+      setError(messageFor(getErrorCode(cause)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function retryDispatch() {
+    if (!call || call.status !== 'routing') return;
+    setBusy(true);
+    setError('');
+    try {
+      setCall(await dispatchCall(token, call.callId));
     } catch (cause) {
       setError(messageFor(getErrorCode(cause)));
     } finally {
@@ -180,6 +202,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         <View style={styles.card}>
           <Text style={styles.heading}>{selected?.nickname ?? 'تماس'}</Text>
           <Text style={styles.status}>وضعیت: {call.status}</Text>
+          {call.status === 'routing' && (
+            <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>
+              <Text style={styles.primaryText}>{busy ? 'در حال تلاش…' : 'ادامه همین تماس'}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity disabled={busy} onPress={refreshCall}><Text style={styles.link}>به‌روزرسانی وضعیت</Text></TouchableOpacity>
           {!terminalStatuses.has(call.status) && (
             <>

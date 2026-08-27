@@ -10,6 +10,21 @@ const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_
 export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
 
+  const dispatchUncertain = await query<{
+    id: string;
+    status: string;
+    telephony_provider: string | null;
+    requested_at: string;
+    updated_at: string;
+  }>(`
+    SELECT id::text, status::text, telephony_provider, requested_at::text, updated_at::text
+    FROM app.call_sessions
+    WHERE status::text='calling_caller'
+      AND provider_bridge_id IS NULL
+    ORDER BY requested_at ASC
+    LIMIT 100
+  `);
+
   const missingBridge = await query<{
     id: string;
     status: string;
@@ -18,7 +33,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
   }>(`
     SELECT id::text, status::text, requested_at::text, updated_at::text
     FROM app.call_sessions
-    WHERE status::text IN ('calling_caller','caller_answered','calling_listener','connected')
+    WHERE status::text IN ('caller_answered','calling_listener','connected')
       AND provider_bridge_id IS NULL
     ORDER BY requested_at ASC
     LIMIT 100
@@ -246,6 +261,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
       connectedGraceSeconds: CONNECTED_GRACE_SECONDS,
     },
     counts: {
+      dispatchUncertain: dispatchUncertain.rowCount ?? dispatchUncertain.rows.length,
       missingBridge: missingBridge.rowCount ?? missingBridge.rows.length,
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
@@ -255,6 +271,15 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
       invariantViolations: invariantViolations.rowCount ?? invariantViolations.rows.length,
     },
     anomalies: {
+      dispatchUncertain: dispatchUncertain.rows.map((row) => ({
+        callId: row.id,
+        status: row.status,
+        telephonyProvider: row.telephony_provider,
+        requestedAt: row.requested_at,
+        updatedAt: row.updated_at,
+        reconciliationRequired: true,
+        providerRedispatchAllowed: false,
+      })),
       missingBridge: missingBridge.rows.map((row) => ({
         callId: row.id,
         status: row.status,

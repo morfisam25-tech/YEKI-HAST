@@ -3,6 +3,7 @@ import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { encryptPrivateText } from '../lib/security.ts';
+import { getTelephonyProvider } from '../providers/telephony.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const reportCategories = new Set([
@@ -47,9 +48,10 @@ async function participantContext(
     status: string;
     currency_code: string;
     authorized_minor: string;
+    provider_bridge_id: string | null;
   }>(`
     SELECT caller_user_id::text, listener_user_id::text, status::text,
-           currency_code, authorized_minor::text
+           currency_code, authorized_minor::text, provider_bridge_id
     FROM app.call_sessions
     WHERE id=$1
     FOR UPDATE
@@ -144,7 +146,13 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
   const result = await withTransaction(async (client) => {
     const call = await participantContext(client, callId, userId);
     if (call.status === 'safety_terminated') {
-      return { status: 'safety_terminated', role: call.role, idempotent: true, safetyEventId: null };
+      return {
+        status: 'safety_terminated' as const,
+        role: call.role,
+        idempotent: true,
+        safetyEventId: null,
+        providerBridgeId: call.provider_bridge_id,
+      };
     }
     if (!liveStatuses.has(call.status)) throw new HttpError(409, 'call_not_live');
 
@@ -185,8 +193,24 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
       VALUES ($1,'safety_terminated',$2,jsonb_build_object('safetyEventId',$3))
     `, [callId, call.role, safetyEventId]);
 
-    return { status: 'safety_terminated', role: call.role, idempotent: false, safetyEventId };
+    return {
+      status: 'safety_terminated' as const,
+      role: call.role,
+      idempotent: false,
+      safetyEventId,
+      providerBridgeId: call.provider_bridge_id,
+    };
   });
 
-  sendJson(res, 200, { ok: true, callId, blocked: blockCounterparty, ...result });
+  if (result.providerBridgeId) {
+    try {
+      await getTelephonyProvider().terminateCall(result.providerBridgeId, `safety_exit_${result.role}`);
+    } catch {
+      console.error('safety_telephony_termination_pending', { callId });
+      throw new HttpError(502, 'telephony_termination_pending');
+    }
+  }
+
+  const { providerBridgeId: _privateBridgeId, ...publicResult } = result;
+  sendJson(res, 200, { ok: true, callId, blocked: blockCounterparty, ...publicResult });
 }

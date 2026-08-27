@@ -21,6 +21,7 @@ type Props = {
 type Stage = 'age-gate' | 'browse' | 'call';
 
 const terminalStatuses = new Set(['completed', 'missed', 'failed', 'cancelled', 'safety_terminated']);
+const cancellableStatuses = new Set(['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener']);
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
@@ -31,6 +32,9 @@ function messageFor(code: string): string {
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
     call_not_live: 'این تماس دیگر فعال نیست.',
+    call_cannot_be_cancelled: 'این تماس از مرحله لغو عادی عبور کرده است.',
+    telephony_termination_pending: 'درخواست پایان تماس ثبت شد اما قطع سمت سرویس تماس هنوز قطعی نشده است.',
+    safety_settlement_pending: 'تماس برای ایمنی متوقف شد اما تسویه هنوز در حال نهایی‌شدن است.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'عملیات انجام نشد.';
@@ -135,7 +139,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function cancel() {
-    if (!call || terminalStatuses.has(call.status)) return;
+    if (!call || !cancellableStatuses.has(call.status)) return;
     setBusy(true);
     setError('');
     try {
@@ -209,9 +213,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           <TouchableOpacity disabled={busy} onPress={refreshCall}><Text style={styles.link}>به‌روزرسانی وضعیت</Text></TouchableOpacity>
           {!terminalStatuses.has(call.status) && (
             <>
-              <TouchableOpacity disabled={busy} style={styles.secondary} onPress={cancel}>
-                <Text style={styles.secondaryText}>لغو تماس</Text>
-              </TouchableOpacity>
+              {cancellableStatuses.has(call.status) && (
+                <TouchableOpacity disabled={busy} style={styles.secondary} onPress={cancel}>
+                  <Text style={styles.secondaryText}>لغو تماس</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity disabled={busy} style={styles.safety} onPress={safetyExit}>
                 <Text style={styles.safetyText}>پایان فوری برای ایمنی</Text>
               </TouchableOpacity>

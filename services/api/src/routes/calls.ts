@@ -79,6 +79,11 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
     : null;
 
   const call = await withTransaction(async (client) => {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:caller_active:' || $1::text, 0))",
+      [userId],
+    );
+
     const existing = await client.query<{
       id: string; status: string; listener_user_id: string | null; currency_code: string;
       authorized_minor: string; max_billable_seconds: number | null;
@@ -90,6 +95,16 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
       FOR UPDATE
     `, [userId, clientRequestId]);
     if (existing.rows[0]) return { ...snapshotCall(existing.rows[0]), idempotent: true };
+
+    const active = await client.query<{ id: string }>(`
+      SELECT id::text
+      FROM app.call_sessions
+      WHERE caller_user_id=$1 AND status::text = ANY($2::text[])
+      ORDER BY requested_at DESC
+      LIMIT 1
+      FOR UPDATE
+    `, [userId, activeCallStatuses]);
+    if (active.rows[0]) throw new HttpError(409, 'caller_call_already_active');
 
     const ctxResult = await client.query<{
       product_id: string; service_id: string; market_id: string; language_id: string;

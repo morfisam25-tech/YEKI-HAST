@@ -52,6 +52,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [call, setCall] = useState<CallResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [recoveryComplete, setRecoveryComplete] = useState(false);
+  const [recoveryBlocked, setRecoveryBlocked] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -65,7 +66,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           setStage('call');
         }
       } catch (cause) {
-        if (!disposed) setError(messageFor(getErrorCode(cause)));
+        if (!disposed) {
+          const code = getErrorCode(cause);
+          if (code === 'caller_active_call_conflict') setRecoveryBlocked(true);
+          setError(messageFor(code));
+        }
       } finally {
         if (!disposed) setRecoveryComplete(true);
       }
@@ -100,6 +105,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }, [token, stage, call?.callId, call?.status]);
 
   async function acceptAgeGate() {
+    if (recoveryBlocked) return;
     setBusy(true);
     setError('');
     try {
@@ -116,6 +122,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function refreshListeners() {
+    if (recoveryBlocked) return;
     setBusy(true);
     setError('');
     try {
@@ -129,6 +136,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function startCall(listener: BrowseListener) {
+    if (recoveryBlocked) return;
     const languageCode = listener.languages[0]?.code;
     if (!languageCode) {
       setError('برای این شنونده زبان فعالی ثبت نشده.');
@@ -166,7 +174,9 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             return;
           }
         } catch (recoveryCause) {
-          setError(messageFor(getErrorCode(recoveryCause)));
+          const recoveryCode = getErrorCode(recoveryCause);
+          if (recoveryCode === 'caller_active_call_conflict') setRecoveryBlocked(true);
+          setError(messageFor(recoveryCode));
           return;
         }
       }
@@ -242,7 +252,14 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {recoveryComplete && stage === 'age-gate' && (
+      {recoveryComplete && recoveryBlocked && (
+        <View style={styles.card}>
+          <Text style={styles.heading}>نیاز به بررسی تماس</Text>
+          <Text style={styles.body}>چند تماس فعال همزمان در سرور ثبت شده است. برای انتخاب نکردن تماس اشتباه، شروع تماس جدید در این صفحه موقتاً بسته است.</Text>
+        </View>
+      )}
+
+      {recoveryComplete && !recoveryBlocked && stage === 'age-gate' && (
         <View style={styles.card}>
           <Text style={styles.heading}>تأیید شرط سنی</Text>
           <Text style={styles.body}>قبل از دیدن مسیر تماس باید شرط سنی نسخه جاری سرور را تأیید کنی. مقدار سن از داخل اپ حدس زده نمی‌شود.</Text>
@@ -252,7 +269,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {recoveryComplete && stage === 'browse' && (
+      {recoveryComplete && !recoveryBlocked && stage === 'browse' && (
         <View style={styles.card}>
           <Text style={styles.heading}>شنونده‌های آماده</Text>
           {minimumAge !== null && <Text style={styles.meta}>سیاست جاری: حداقل {minimumAge} سال</Text>}

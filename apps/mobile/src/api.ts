@@ -460,6 +460,6 @@ export function reportCallSafety(
   return request('/v1/safety/report', { method: 'POST', body: JSON.stringify(input) }, token);
 }
 
-export function blockCallCounterparty(token: string, callId: string): Promise<{ ok: true; blockedUserId: string }> {
+export function blockCallCounterparty(token: string, callId: string): Promise<{ ok: true; blocked: true }> {
   return request('/v1/safety/block', { method: 'POST', body: JSON.stringify({ callId }) }, token);
 }

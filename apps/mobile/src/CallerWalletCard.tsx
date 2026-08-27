@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
   createWalletTopup,
@@ -41,8 +41,8 @@ function messageFor(code: string): string {
   const messages: Record<string, string> = {
     invalid_amount: 'مبلغ شارژ معتبر نیست.',
     payment_not_configured: 'درگاه پرداخت هنوز برای این محیط فعال نشده است.',
-    payment_provider_unavailable: 'ارتباط با درگاه پرداخت قطعی نشد. اگر وارد صفحه پرداخت نشدی، می‌توانی دوباره تلاش کنی.',
-    payment_initializing: 'این درخواست شارژ هنوز در حال آماده‌شدن است.',
+    payment_provider_unavailable: 'نتیجه ساخت پرداخت قطعی نشد. برای جلوگیری از پرداخت تکراری، تلاش بعدی همین درخواست را ادامه می‌دهد.',
+    payment_initializing: 'همین درخواست شارژ هنوز در حال تعیین تکلیف است؛ درخواست تازه‌ای ساخته نمی‌شود.',
     payment_verification_unavailable: 'بررسی پرداخت موقتاً در دسترس نیست.',
     payment_not_ready_for_verification: 'پرداخت هنوز آماده بررسی نیست.',
     unauthorized: 'نشست ورود معتبر نیست.',
@@ -58,6 +58,7 @@ export default function CallerWalletCard({ token }: Props) {
   const [attempt, setAttempt] = useState<WalletTopupResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const topupKeyRef = useRef<{ amountMinor: string; key: string } | null>(null);
 
   const wallet = useMemo(() => wallets.find((item) => item.currencyCode === 'IRR') ?? null, [wallets]);
   const divisor = bootstrap?.pricing.displayDivisor ?? 1;
@@ -91,12 +92,24 @@ export default function CallerWalletCard({ token }: Props) {
         .then(([latestAttempt, walletValue]) => {
           setAttempt(latestAttempt);
           setWallets(walletValue.wallets);
-          if (latestAttempt.status === 'succeeded') setAmountText('');
+          if (latestAttempt.status === 'succeeded') {
+            setAmountText('');
+            topupKeyRef.current = null;
+          }
         })
         .catch((cause) => setError(messageFor(getErrorCode(cause))));
     });
     return () => subscription.remove();
   }, [token, attempt?.attemptId, attempt?.status]);
+
+  function changeAmount(value: string) {
+    const normalized = normalizeDigits(value).slice(0, 15);
+    if (normalized !== amountText) {
+      topupKeyRef.current = null;
+      setAttempt(null);
+    }
+    setAmountText(normalized);
+  }
 
   async function startTopup() {
     if (busy) return;
@@ -113,16 +126,24 @@ export default function CallerWalletCard({ token }: Props) {
       setError(messageFor('invalid_amount'));
       return;
     }
+    const amountMinorText = amountMinor.toString();
+    if (!topupKeyRef.current || topupKeyRef.current.amountMinor !== amountMinorText) {
+      topupKeyRef.current = {
+        amountMinor: amountMinorText,
+        key: `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      };
+    }
 
     setBusy(true);
     setError('');
     try {
       const created = await createWalletTopup(
         token,
-        amountMinor.toString(),
-        `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        amountMinorText,
+        topupKeyRef.current.key,
       );
       setAttempt(created);
+      if (created.status !== 'pending') topupKeyRef.current = null;
       if (created.paymentUrl) await Linking.openURL(created.paymentUrl);
     } catch (cause) {
       setError(messageFor(getErrorCode(cause)));
@@ -139,7 +160,10 @@ export default function CallerWalletCard({ token }: Props) {
       const result = await verifyWalletTopup(token, attempt.attemptId);
       setAttempt((current) => current ? { ...current, ...result } : result);
       await refreshWallet();
-      if (result.status === 'succeeded') setAmountText('');
+      if (result.status === 'succeeded') {
+        setAmountText('');
+        topupKeyRef.current = null;
+      }
     } catch (cause) {
       setError(messageFor(getErrorCode(cause)));
     } finally {
@@ -167,7 +191,7 @@ export default function CallerWalletCard({ token }: Props) {
       <TextInput
         keyboardType="number-pad"
         value={amountText}
-        onChangeText={(value) => setAmountText(normalizeDigits(value).slice(0, 15))}
+        onChangeText={changeAmount}
         placeholder="مثلاً ۱۰۰۰۰۰"
         style={styles.input}
         textAlign="right"

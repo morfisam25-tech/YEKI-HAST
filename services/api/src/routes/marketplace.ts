@@ -33,7 +33,7 @@ function isStale(status: string, lastHeartbeatAt: string | null): boolean {
 }
 
 export async function browseListeners(req: IncomingMessage, res: ServerResponse) {
-  await requireAuth(req);
+  const { userId } = await requireAuth(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
   const gender = optionalGender(url.searchParams.get('gender'));
   const language = optionalLanguage(url.searchParams.get('language'));
@@ -106,6 +106,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       ON pres.listener_user_id=lp.user_id
       AND pres.product_id=c.product_id AND pres.service_id=c.service_id AND pres.market_id=c.market_id
     WHERE lp.is_verified=true
+      AND lp.user_id<>$6::uuid
       AND ($1::text IS NULL OR lp.gender::text=$1)
       AND ($2::text IS NULL OR EXISTS (
         SELECT 1
@@ -134,7 +135,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       )
     ) DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
     LIMIT $4
-  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES]);
+  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId]);
 
   sendJson(res, 200, {
     listeners: result.rows.map((row) => ({

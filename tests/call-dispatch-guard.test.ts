@@ -7,11 +7,22 @@ const provider = await readFile(new URL('../services/api/src/providers/telephony
 const handler = await readFile(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const mobile = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.url), 'utf8');
 
-test('call dispatch requires authenticated ownership and only retries the same pre-connect claim', () => {
+test('call dispatch requires authenticated ownership and only a routing call may start provider submission', () => {
   assert.match(dispatch, /const \{ userId \} = await requireAuth\(req\)/);
   assert.match(dispatch, /WHERE id=\$1 AND caller_user_id=\$2/);
-  assert.match(dispatch, /row\.status !== 'routing' && row\.status !== 'calling_caller'/);
-  assert.match(dispatch, /if \(row\.status === 'routing'\)/);
+  assert.match(dispatch, /if \(row\.status === 'calling_caller'\) \{[\s\S]*telephony_dispatch_uncertain/);
+  assert.match(dispatch, /if \(row\.status !== 'routing'\)/);
+  assert.match(dispatch, /WHERE id=\$1 AND status='routing' AND provider_bridge_id IS NULL/);
+});
+
+test('calling_caller without a bridge fails closed before contact decryption or provider submission', () => {
+  const uncertainIndex = dispatch.indexOf("if (row.status === 'calling_caller')");
+  const contactsIndex = dispatch.indexOf('const contacts = await client.query');
+  const providerIndex = dispatch.indexOf('createBridgeCall');
+  assert.ok(uncertainIndex >= 0 && contactsIndex > uncertainIndex && providerIndex > contactsIndex);
+  const uncertainGuard = dispatch.slice(uncertainIndex, contactsIndex);
+  assert.match(uncertainGuard, /throw new HttpError\(503, 'telephony_dispatch_uncertain'\)/);
+  assert.doesNotMatch(uncertainGuard, /createBridgeCall|decryptPrivateText/);
 });
 
 test('call dispatch only uses verified encrypted contact records', () => {
@@ -21,7 +32,7 @@ test('call dispatch only uses verified encrypted contact records', () => {
   assert.doesNotMatch(dispatch, /console\.log/);
 });
 
-test('telephony adapter contract is idempotent by application call session', () => {
+test('telephony adapter remains idempotent by application call session even though ambiguous API retry is blocked', () => {
   assert.match(provider, /MUST return the same logical bridge/);
   assert.match(provider, /Must be idempotent by input\.callSessionId/);
   assert.match(provider, /`dev-\$\{input\.callSessionId\}`/);
@@ -33,7 +44,7 @@ test('call dispatch persists provider bridge id and terminates orphan bridge on 
   assert.match(dispatch, /terminateCall\(bridgeId, 'dispatch_state_conflict'\)/);
 });
 
-test('ambiguous provider result preserves reservation and non-terminal state for safe retry', () => {
+test('ambiguous provider result preserves reservation and non-terminal state for reconciliation', () => {
   assert.match(dispatch, /dispatch_result_uncertain/);
   assert.match(dispatch, /throw new HttpError\(503, 'telephony_dispatch_uncertain'\)/);
   const catchStart = dispatch.indexOf('} catch {', dispatch.indexOf('createBridgeCall'));

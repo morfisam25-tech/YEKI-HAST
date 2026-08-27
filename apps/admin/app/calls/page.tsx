@@ -170,6 +170,7 @@ export default function CallsPage() {
             <option value="calling_listener">calling_listener</option>
             <option value="connected">connected</option>
             <option value="completed">completed</option>
+            <option value="missed">missed</option>
             <option value="cancelled">cancelled</option>
             <option value="failed">failed</option>
             <option value="safety_terminated">safety_terminated</option>

@@ -61,6 +61,12 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       JOIN app.markets m ON m.code='ir' AND m.is_active=true
       WHERE p.code='yeki_hast'
       LIMIT 1
+    ), caller AS (
+      SELECT (
+        SELECT cp.declared_gender::text
+        FROM app.caller_profiles cp
+        WHERE cp.user_id=$6
+      ) AS declared_gender
     )
     SELECT
       lp.user_id::text listener_user_id,
@@ -97,6 +103,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
         WHERE ll.listener_user_id=lp.user_id AND l.is_active=true
       ), '[]'::jsonb) languages
     FROM ctx c
+    CROSS JOIN caller cp
     JOIN app.listener_profiles lp ON true
     JOIN app.listener_service_profiles sp
       ON sp.listener_user_id=lp.user_id AND sp.service_id=c.service_id AND sp.is_public=true
@@ -114,6 +121,11 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
         JOIN app.languages l2 ON l2.id=ll2.language_id
         WHERE ll2.listener_user_id=lp.user_id AND l2.code=$2 AND l2.is_active=true
       ))
+      AND (
+        cp.declared_gender IS NULL
+        OR (cp.declared_gender='male' AND pres.accepts_male=true)
+        OR (cp.declared_gender='female' AND pres.accepts_female=true)
+      )
       AND ($3::boolean=false OR (
         pres.status='online'
         AND pres.last_heartbeat_at > now() - interval '90 seconds'

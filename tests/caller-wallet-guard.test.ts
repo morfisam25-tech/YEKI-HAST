@@ -35,19 +35,29 @@ test('caller topup opens only returned payment URL', () => {
   assert.doesNotMatch(wallet, /nextpay\.org/);
 });
 
-test('caller can explicitly verify pending topup and refresh wallet balance', () => {
+test('caller can explicitly verify pending topup and refresh wallet activity', () => {
   assert.match(wallet, /verifyWalletTopup\(token, attempt\.attemptId\)/);
-  assert.match(wallet, /await refreshWallet\(\)/);
+  assert.match(wallet, /await refreshWalletState\(\)/);
   assert.match(wallet, /attempt\.status === 'pending'/);
   assert.match(wallet, /بررسی پرداخت/);
 });
 
-test('returning from payment browser refreshes attempt status without blindly re-verifying', () => {
+test('returning from payment browser refreshes attempt, wallet and recent transactions without blindly re-verifying', () => {
   assert.match(wallet, /AppState\.addEventListener\('change'/);
   assert.match(wallet, /nextState !== 'active'/);
-  assert.match(wallet, /Promise\.all\(\[getWalletTopup\(token, attemptId\), getWallet\(token\)\]\)/);
+  assert.match(wallet, /getWalletTopup\(token, attemptId\)/);
+  assert.match(wallet, /getWalletTransactions\(token, 'IRR', 5\)/);
   assert.match(wallet, /setAttempt\(latestAttempt\)/);
+  assert.match(wallet, /setTransactions\(transactionValue\.transactions\)/);
   assert.match(wallet, /subscription\.remove\(\)/);
+});
+
+test('caller sees only bounded recent wallet history without internal transaction identifiers', () => {
+  assert.match(wallet, /getWalletTransactions\(token, 'IRR', 5\)/);
+  assert.match(wallet, /آخرین تراکنش‌ها/);
+  assert.match(wallet, /transactionLabel\(transaction\.type\)/);
+  assert.match(wallet, /formatMinor\(transaction\.deltaMinor, divisor\)/);
+  assert.doesNotMatch(wallet, /transaction\.paymentAttemptId|transaction\.callId|transaction\.reasonCode/);
 });
 
 test('wallet card is hidden while a call is active or recovery conflict is unresolved', () => {
@@ -57,6 +67,7 @@ test('wallet card is hidden while a call is active or recovery conflict is unres
 
 test('mobile API retains wallet and topup lifecycle functions', () => {
   assert.match(api, /export function getWallet/);
+  assert.match(api, /export function getWalletTransactions/);
   assert.match(api, /export function createWalletTopup/);
   assert.match(api, /export function getWalletTopup/);
   assert.match(api, /export function verifyWalletTopup/);

@@ -9,8 +9,14 @@ test('safety actions require an authenticated admin', () => {
 });
 
 test('closed safety cases cannot be mutated again', () => {
-  assert.match(source, /status::text NOT IN \('resolved','dismissed'\)/);
+  assert.match(source, /status::text IN \('open','in_review'\)/);
   assert.match(source, /safety_case_closed/);
+});
+
+test('claim only takes open cases and review ownership is protected', () => {
+  assert.match(source, /\$5='claim' AND status::text='open'/);
+  assert.match(source, /assigned_admin_user_id IS NULL OR assigned_admin_user_id=\$3/);
+  assert.match(source, /safety_case_conflict/);
 });
 
 test('resolving or dismissing requires a bounded resolution code', () => {

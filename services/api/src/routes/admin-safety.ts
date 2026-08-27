@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { query } from '../../../../packages/db/src/client.ts';
+import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
@@ -146,62 +146,78 @@ export async function actOnAdminSafetyCase(
   const resolutionCode = resolutionCodeFrom(body.resolutionCode, action);
   const targetStatus = action === 'claim' ? 'in_review' : action === 'resolve' ? 'resolved' : 'dismissed';
 
-  const sql = kind === 'report'
-    ? `
-      UPDATE app.reports
-      SET status=$2::app.case_status,
-          assigned_admin_user_id=$3,
-          resolution_code=$4,
-          resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
-          updated_at=now()
-      WHERE id=$1
-        AND (
-          ($5='claim' AND status::text='open')
-          OR
-          ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
-            AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
-        )
-      RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
-    `
-    : `
-      UPDATE app.safety_events
-      SET status=$2::app.case_status,
-          assigned_admin_user_id=$3,
-          resolution_code=$4,
-          resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
-          updated_at=now()
-      WHERE id=$1
-        AND (
-          ($5='claim' AND status::text='open')
-          OR
-          ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
-            AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
-        )
-      RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
-    `;
+  const row = await withTransaction(async (client) => {
+    const sql = kind === 'report'
+      ? `
+        UPDATE app.reports
+        SET status=$2::app.case_status,
+            assigned_admin_user_id=$3,
+            resolution_code=$4,
+            resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
+            updated_at=now()
+        WHERE id=$1
+          AND (
+            ($5='claim' AND status::text='open')
+            OR
+            ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+              AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
+          )
+        RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
+      `
+      : `
+        UPDATE app.safety_events
+        SET status=$2::app.case_status,
+            assigned_admin_user_id=$3,
+            resolution_code=$4,
+            resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
+            updated_at=now()
+        WHERE id=$1
+          AND (
+            ($5='claim' AND status::text='open')
+            OR
+            ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+              AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
+          )
+        RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
+      `;
 
-  const result = await query<{
-    id: string;
-    status: string;
-    assigned_admin_user_id: string | null;
-    resolution_code: string | null;
-    resolved_at: string | null;
-    updated_at: string;
-  }>(sql, [id, targetStatus, admin.userId, resolutionCode, action]);
+    const result = await client.query<{
+      id: string;
+      status: string;
+      assigned_admin_user_id: string | null;
+      resolution_code: string | null;
+      resolved_at: string | null;
+      updated_at: string;
+    }>(sql, [id, targetStatus, admin.userId, resolutionCode, action]);
 
-  const row = result.rows[0];
-  if (!row) {
-    const exists = await query<{ status: string; assigned_admin_user_id: string | null }>(
-      kind === 'report'
-        ? 'SELECT status::text, assigned_admin_user_id::text FROM app.reports WHERE id=$1'
-        : 'SELECT status::text, assigned_admin_user_id::text FROM app.safety_events WHERE id=$1',
-      [id],
-    );
-    const existing = exists.rows[0];
-    if (!existing) throw new HttpError(404, 'safety_case_not_found');
-    if (existing.status === 'resolved' || existing.status === 'dismissed') throw new HttpError(409, 'safety_case_closed');
-    throw new HttpError(409, 'safety_case_conflict');
-  }
+    const changed = result.rows[0];
+    if (!changed) {
+      const exists = await client.query<{ status: string; assigned_admin_user_id: string | null }>(
+        kind === 'report'
+          ? 'SELECT status::text, assigned_admin_user_id::text FROM app.reports WHERE id=$1'
+          : 'SELECT status::text, assigned_admin_user_id::text FROM app.safety_events WHERE id=$1',
+        [id],
+      );
+      const existing = exists.rows[0];
+      if (!existing) throw new HttpError(404, 'safety_case_not_found');
+      if (existing.status === 'resolved' || existing.status === 'dismissed') throw new HttpError(409, 'safety_case_closed');
+      throw new HttpError(409, 'safety_case_conflict');
+    }
+
+    await client.query(`
+      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1,$2,$3,$4,jsonb_build_object('targetStatus',$5,'resolutionCode',$6))
+    `, [
+      admin.userId,
+      `admin_safety_${action}`,
+      kind === 'report' ? 'report' : 'safety_event',
+      id,
+      targetStatus,
+      resolutionCode,
+    ]);
+
+    return changed;
+  });
 
   sendJson(res, 200, {
     ok: true,

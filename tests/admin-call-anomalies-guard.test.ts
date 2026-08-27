@@ -21,8 +21,9 @@ test('call anomaly diagnostics never return provider bridge ids, phone numbers o
   assert.match(anomalies, /phoneNumbersIncluded: false/);
   assert.match(anomalies, /providerBridgeIdsIncluded: false/);
   assert.match(anomalies, /secretsIncluded: false/);
-  assert.doesNotMatch(anomalies, /providerBridgeId:/);
-  assert.doesNotMatch(anomalies, /phoneE164|phoneNumber/);
+  assert.doesNotMatch(anomalies, /providerBridgeId\s*:/);
+  assert.doesNotMatch(anomalies, /\bphoneE164\s*:|\bphoneNumber\s*:/);
+  assert.doesNotMatch(anomalies, /SELECT[\s\S]*\bphone_e164\b/i);
 });
 
 test('existing admin calls endpoint exposes anomaly mode without changing public call API', () => {

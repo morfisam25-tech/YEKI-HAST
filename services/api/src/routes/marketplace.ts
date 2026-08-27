@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
 const PRESENCE_STALE_MS = 90_000;
+const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
 
 function optionalGender(value: string | null): 'female' | 'male' | null {
   if (!value || value === 'any') return null;
@@ -73,6 +74,12 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       sp.rating_average::text,
       sp.rating_count,
       CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM app.call_sessions busy
+          WHERE busy.listener_user_id=lp.user_id
+            AND busy.status::text = ANY($5::text[])
+        ) THEN 'busy'
         WHEN pres.status IN ('online','paused')
              AND (pres.last_heartbeat_at IS NULL OR pres.last_heartbeat_at <= now() - interval '90 seconds')
           THEN 'offline'
@@ -107,13 +114,27 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
         WHERE ll2.listener_user_id=lp.user_id AND l2.code=$2 AND l2.is_active=true
       ))
       AND ($3::boolean=false OR (
-        pres.status='online' AND pres.last_heartbeat_at > now() - interval '90 seconds'
+        pres.status='online'
+        AND pres.last_heartbeat_at > now() - interval '90 seconds'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM app.call_sessions busy
+          WHERE busy.listener_user_id=lp.user_id
+            AND busy.status::text = ANY($5::text[])
+        )
       ))
     ORDER BY (
-      pres.status='online' AND pres.last_heartbeat_at > now() - interval '90 seconds'
+      pres.status='online'
+      AND pres.last_heartbeat_at > now() - interval '90 seconds'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM app.call_sessions busy
+        WHERE busy.listener_user_id=lp.user_id
+          AND busy.status::text = ANY($5::text[])
+      )
     ) DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
     LIMIT $4
-  `, [gender, language, onlineOnly, limit]);
+  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES]);
 
   sendJson(res, 200, {
     listeners: result.rows.map((row) => ({

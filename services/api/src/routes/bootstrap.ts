@@ -46,6 +46,9 @@ export async function bootstrap(res: ServerResponse) {
       displayUnit: row.currency_code === 'IRR' ? 'toman' : 'currency',
       displayDivisor: row.currency_code === 'IRR' ? 10 : 1,
     },
+    features: {
+      callerClosedBetaEnabled: process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true',
+    },
     languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
   });
 }

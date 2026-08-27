@@ -329,7 +329,7 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     if (row.status === 'cancelled') {
-      return { status: 'cancelled' as const, idempotent: true, providerBridgeId: row.provider_bridge_id };
+      return { kind: 'cancelled' as const, status: 'cancelled' as const, idempotent: true };
     }
     if (!['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'].includes(row.status)) {
       throw new HttpError(409, 'call_cannot_be_cancelled');
@@ -339,6 +339,36 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
     }
     if ((row.status === 'caller_answered' || row.status === 'calling_listener') && !row.provider_bridge_id) {
       throw new HttpError(409, 'call_telephony_invariant');
+    }
+
+    if (row.provider_bridge_id) {
+      const priorUncertain = await client.query(`
+        SELECT 1
+        FROM app.call_events
+        WHERE call_session_id=$1
+          AND metadata->>'reason'='cancel_termination_result_uncertain'
+        LIMIT 1
+      `, [callId]);
+      if (priorUncertain.rowCount) {
+        throw new HttpError(409, 'telephony_termination_reconcile_required');
+      }
+
+      let telephony: ReturnType<typeof getTelephonyProvider>;
+      try {
+        telephony = getTelephonyProvider();
+      } catch {
+        throw new HttpError(503, 'telephony_not_configured');
+      }
+
+      try {
+        await telephony.terminateCall(row.provider_bridge_id, 'caller_cancelled');
+      } catch {
+        await client.query(`
+          INSERT INTO app.call_events(call_session_id, status, source, metadata)
+          VALUES ($1,$2::app.call_status,'telephony',jsonb_build_object('reason','cancel_termination_result_uncertain'))
+        `, [callId, row.status]);
+        return { kind: 'termination_uncertain' as const, status: row.status, idempotent: false };
+      }
     }
 
     const authorized = BigInt(row.authorized_minor);
@@ -361,18 +391,13 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
       INSERT INTO app.call_events(call_session_id, status, source)
       VALUES ($1,'cancelled','caller')
     `, [callId]);
-    return { status: 'cancelled' as const, idempotent: false, providerBridgeId: row.provider_bridge_id };
+    return { kind: 'cancelled' as const, status: 'cancelled' as const, idempotent: false };
   });
 
-  if (result.providerBridgeId) {
-    try {
-      await getTelephonyProvider().terminateCall(result.providerBridgeId, 'caller_cancelled');
-    } catch {
-      console.error('cancel_telephony_termination_pending', { callId });
-      throw new HttpError(502, 'telephony_termination_pending');
-    }
+  if (result.kind === 'termination_uncertain') {
+    console.error('cancel_telephony_termination_pending', { callId });
+    throw new HttpError(502, 'telephony_termination_pending');
   }
 
-  const { providerBridgeId: _privateBridgeId, ...publicResult } = result;
-  sendJson(res, 200, { ok: true, callId, ...publicResult });
+  sendJson(res, 200, { ok: true, callId, status: result.status, idempotent: result.idempotent });
 }

@@ -72,7 +72,7 @@ test('SMS.ir provider rejects invalid template or parameter configuration', () =
 });
 
 test('SMS.ir Verify request uses documented endpoint and payload shape', async () => {
-  const envNames = ['NODE_ENV', 'SMS_PROVIDER', 'SMSIR_API_KEY', 'SMSIR_OTP_TEMPLATE_ID', 'SMSIR_OTP_PARAMETER_NAME'] as const;
+  const envNames = ['NODE_ENV', 'SMS_PROVIDER', 'SMSIR_API_KEY', 'SMSIR_OTP_TEMPLATE_ID', 'SMSIR_OTP_PARAMETER_NAME', 'SMSIR_OTP_TEMPLATE_APPROVED'] as const;
   const beforeEnv = new Map(envNames.map((name) => [name, process.env[name]]));
   const beforeFetch = globalThis.fetch;
   let capturedUrl = '';
@@ -83,6 +83,7 @@ test('SMS.ir Verify request uses documented endpoint and payload shape', async (
   process.env.SMSIR_API_KEY = 'secret-test-key';
   process.env.SMSIR_OTP_TEMPLATE_ID = '958161';
   process.env.SMSIR_OTP_PARAMETER_NAME = 'CODE';
+  process.env.SMSIR_OTP_TEMPLATE_APPROVED = 'true';
 
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     capturedUrl = String(url);

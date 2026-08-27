@@ -87,6 +87,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && payoutDispatchMatch) { ensureKycReady(); const { dispatchPayout } = await import('./routes/payouts.ts'); return await dispatchPayout(req, res, payoutDispatchMatch[1]); }
     const payoutReconcileMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/reconcile$/);
     if (method === 'POST' && payoutReconcileMatch) { ensureDatabaseReady(); const { reconcilePayout } = await import('./routes/payouts.ts'); return await reconcilePayout(req, res, payoutReconcileMatch[1]); }
+    const dispatchMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/dispatch$/);
+    if (method === 'POST' && dispatchMatch) { ensureCallReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) { ensureSensitiveDataReady(); const { safetyExitCall } = await import('./routes/safety.ts'); return await safetyExitCall(req, res, safetyExitMatch[1]); }
     const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);

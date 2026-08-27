@@ -11,6 +11,7 @@ for (const [path, label] of [
   ['/waitlist', 'صف Caller'],
   ['/payments', 'شارژها'],
   ['/payouts', 'تسویه‌ها'],
+  ['/readiness', 'آمادگی'],
 ] as const) {
   test(`admin navigation keeps ${path}`, () => {
     assert.match(layout, new RegExp(`href=\\"${path.replace('/', '\\/')}\\"`));

@@ -4,6 +4,7 @@ import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 
 const allowedStatuses = new Set(['pending', 'succeeded', 'failed', 'cancelled']);
+const INITIALIZATION_AMBIGUOUS_MINUTES = 5;
 
 function readLimit(url: URL): number {
   const raw = url.searchParams.get('limit') ?? '50';
@@ -35,15 +36,21 @@ export async function listAdminPaymentAttempts(req: IncomingMessage, res: Server
     provider_payment_id: string | null;
     created_at: string;
     completed_at: string | null;
+    initialization_ambiguous: boolean;
   }>(`
     SELECT id::text, user_id::text, provider, currency_code,
            amount_minor::text, provider_fee_minor::text, status::text,
-           provider_payment_id, created_at::text, completed_at::text
+           provider_payment_id, created_at::text, completed_at::text,
+           (
+             status::text='pending'
+             AND provider_payment_id IS NULL
+             AND created_at < now() - ($3::int * interval '1 minute')
+           ) AS initialization_ambiguous
     FROM app.payment_attempts
     WHERE ($1::text IS NULL OR status::text=$1)
     ORDER BY created_at DESC
     LIMIT $2
-  `, [status, limit]);
+  `, [status, limit, INITIALIZATION_AMBIGUOUS_MINUTES]);
 
   sendJson(res, 200, {
     ok: true,
@@ -56,12 +63,14 @@ export async function listAdminPaymentAttempts(req: IncomingMessage, res: Server
       amountMinor: row.amount_minor,
       providerFeeMinor: row.provider_fee_minor,
       status: row.status,
-      providerPaymentReference: row.provider_payment_id,
+      providerReferencePresent: Boolean(row.provider_payment_id),
+      initializationAmbiguous: row.initialization_ambiguous,
       createdAt: row.created_at,
       completedAt: row.completed_at,
       phoneNumberIncluded: false,
       walletDetailsIncluded: false,
       idempotencyKeyIncluded: false,
+      providerReferenceIncluded: false,
     })),
   });
 }

@@ -22,6 +22,15 @@ test('payout candidates stay separated by listener, market, and currency', () =>
   assert.match(page, /candidate\.marketId\.slice\(0, 8\)/);
 });
 
+test('pending earnings are visible only as a separate read-only backlog', () => {
+  assert.match(route, /WHERE e\.status='pending'/);
+  assert.match(route, /pendingEarningBacklog:/);
+  assert.match(route, /COUNT\(DISTINCT e\.listener_user_id\)::text AS listener_count/);
+  assert.match(page, /درآمدهای هنوز آزاد‌نشده/);
+  assert.match(page, /از این بخش هیچ earning آزاد، payout-ready یا پرداخت نمی‌شود/);
+  assert.match(page, /HOLD/);
+});
+
 test('candidate response stays operational and excludes bank details and provider references', () => {
   assert.match(route, /payoutCandidates:/);
   assert.match(route, /providerReferencesIncluded: false/);

@@ -121,6 +121,12 @@ class SmsIrProvider implements SmsProvider {
     this.#templateId = templateId;
     this.#parameterName = process.env.SMSIR_OTP_PARAMETER_NAME?.trim() || 'CODE';
     if (!/^[A-Za-z0-9_]{1,32}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
+
+    // SMS.ir can accept a template configuration before that template is approved for delivery.
+    // Production must require an explicit operator acknowledgement after the panel shows approval.
+    if (process.env.NODE_ENV === 'production' && process.env.SMSIR_OTP_TEMPLATE_APPROVED?.trim().toLowerCase() !== 'true') {
+      throw new Error('sms_provider_not_configured');
+    }
   }
 
   async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {

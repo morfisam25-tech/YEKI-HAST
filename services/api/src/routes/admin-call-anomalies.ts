@@ -85,6 +85,37 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     LIMIT 100
   `);
 
+  const invariantViolations = await query<{
+    id: string;
+    status: string;
+    issue_code: string;
+    authorized_minor: string;
+    caller_charge_minor: string;
+    listener_earning_minor: string;
+    updated_at: string;
+  }>(`
+    SELECT id::text,
+           status::text,
+           CASE
+             WHEN caller_charge_minor > authorized_minor THEN 'charge_exceeds_authorization'
+             WHEN listener_earning_minor > caller_charge_minor THEN 'earning_exceeds_charge'
+             WHEN status::text='connected' AND billing_started_at IS NULL THEN 'connected_without_billing_start'
+             WHEN status::text IN ('completed','cancelled','failed','safety_terminated') AND ended_at IS NULL THEN 'terminal_without_end_time'
+             ELSE 'unknown'
+           END AS issue_code,
+           authorized_minor::text,
+           caller_charge_minor::text,
+           listener_earning_minor::text,
+           updated_at::text
+    FROM app.call_sessions
+    WHERE caller_charge_minor > authorized_minor
+       OR listener_earning_minor > caller_charge_minor
+       OR (status::text='connected' AND billing_started_at IS NULL)
+       OR (status::text IN ('completed','cancelled','failed','safety_terminated') AND ended_at IS NULL)
+    ORDER BY updated_at ASC
+    LIMIT 100
+  `);
+
   sendJson(res, 200, {
     ok: true,
     generatedAt: new Date().toISOString(),
@@ -97,6 +128,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
       underReservedWallets: underReservedWallets.rowCount ?? underReservedWallets.rows.length,
+      invariantViolations: invariantViolations.rowCount ?? invariantViolations.rows.length,
     },
     anomalies: {
       missingBridge: missingBridge.rows.map((row) => ({
@@ -124,6 +156,15 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         reservedMinor: row.reserved_minor,
         requiredReservedMinor: row.required_reserved_minor,
         activeCallCount: row.active_call_count,
+      })),
+      invariantViolations: invariantViolations.rows.map((row) => ({
+        callId: row.id,
+        status: row.status,
+        issueCode: row.issue_code,
+        authorizedMinor: row.authorized_minor,
+        callerChargeMinor: row.caller_charge_minor,
+        listenerEarningMinor: row.listener_earning_minor,
+        updatedAt: row.updated_at,
       })),
     },
     phoneNumbersIncluded: false,

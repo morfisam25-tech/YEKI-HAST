@@ -25,3 +25,10 @@ test('caller age readiness uses bounded policy values', () => {
   assert.match(source, />= 13/);
   assert.match(source, /<= 99/);
 });
+
+test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
+  assert.match(source, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady/);
+  assert.match(source, /callerClosedBeta: \{ enabled: callerClosedBetaEnabled \}/);
+  assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
+});

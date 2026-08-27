@@ -55,11 +55,12 @@ test('request race recovers the winning active call instead of leaving caller st
   assert.match(screen, /setStage\('call'\)/);
 });
 
-test('uncertain telephony dispatch keeps the caller on the same retryable call', () => {
+test('uncertain telephony dispatch keeps the caller on the same call without blind provider retry', () => {
   assert.match(screen, /telephony_dispatch_uncertain:/);
-  assert.match(screen, /call\.status !== 'routing' && call\.status !== 'calling_caller'/);
-  assert.match(screen, /call\.status === 'calling_caller' && call\.telephonyReady === false/);
-  assert.match(screen, /ادامه همین تماس/);
+  assert.match(screen, /if \(!call \|\| call\.status !== 'routing'\) return/);
+  assert.match(screen, /const dispatchRetryable = Boolean\(call && call\.status === 'routing'\)/);
+  assert.match(screen, /شروع دوباره ارسال نمی‌شود/);
+  assert.match(dispatch, /if \(row\.status === 'calling_caller'\) \{[\s\S]*telephony_dispatch_uncertain/);
 });
 
 test('telephony readiness is exposed without exposing the provider bridge id', () => {
@@ -70,11 +71,11 @@ test('telephony readiness is exposed without exposing the provider bridge id', (
   assert.doesNotMatch(screen, /providerBridgeId|provider_bridge_id/);
 });
 
-test('unresolved telephony identity hides cancel and safety controls until retry resolves it', () => {
+test('unresolved telephony identity hides cancel and safety controls until provider truth is known', () => {
   assert.match(screen, /const telephonyUnresolved = Boolean/);
   assert.match(screen, /const dispatchRetryable = Boolean/);
   assert.match(screen, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved/);
-  assert.match(screen, /تا رفع این وضعیت، پایان یا لغو از داخل اپ انجام نمی‌شود/);
+  assert.match(screen, /برای جلوگیری از تماس تکراری/);
 });
 
 test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {

@@ -372,6 +372,10 @@ export function requestCall(
   return request('/v1/calls/request', { method: 'POST', body: JSON.stringify(input) }, token);
 }
 
+export function getActiveCall(token: string): Promise<{ activeCall: CallResponse | null }> {
+  return request('/v1/calls/active', {}, token);
+}
+
 export function dispatchCall(token: string, callId: string): Promise<CallResponse> {
   return request(`/v1/calls/${encodeURIComponent(callId)}/dispatch`, { method: 'POST' }, token);
 }

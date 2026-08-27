@@ -36,3 +36,21 @@ test('payment creation keeps ambiguous provider failures pending and only termin
   assert.match(payments, /if \(definitiveTokenFailure\) \{[\s\S]*SET status='failed'/);
   assert.doesNotMatch(payments, /catch \(error\) \{\s*await query\([\s\S]*SET status='failed'/);
 });
+
+test('ambiguous token recovery verifies callback before binding provider id or crediting', () => {
+  assert.match(payments, /verifyAndFinalizeAttempt\(row, transId\)/);
+  assert.match(payments, /const callbackRecovery = row\.provider_payment_id === null && candidateProviderPaymentId === providerPaymentId/);
+  assert.match(payments, /callbackRecovery && disposition !== 'succeeded'[\s\S]*return \{ status: 'pending'/);
+  assert.match(payments, /verified\.orderId !== row\.id \|\| verified\.amountMinor !== BigInt\(row\.amount_minor\)/);
+
+  const verificationIndex = payments.indexOf("verified.orderId !== row.id || verified.amountMinor !== BigInt(row.amount_minor)");
+  const bindIndex = payments.indexOf('SET provider_payment_id=$2', verificationIndex);
+  const creditIndex = payments.indexOf("VALUES ($1,$2,'payment_topup'", bindIndex);
+  assert.ok(verificationIndex >= 0, 'exact provider verification guard must exist');
+  assert.ok(bindIndex > verificationIndex, 'provider id must bind only after exact verification');
+  assert.ok(creditIndex > bindIndex, 'wallet credit must happen only after provider id is bound');
+
+  assert.match(payments, /WHERE id=\$1 AND status='pending' AND provider_payment_id IS NULL[\s\S]*RETURNING provider_payment_id/);
+  assert.match(payments, /row\.provider_payment_id && row\.provider_payment_id !== transId/);
+  assert.doesNotMatch(payments, /nextPayCallback[\s\S]*provider\.createPayment/);
+});

@@ -6,10 +6,12 @@ import {
   getErrorCode,
   getWallet,
   getWalletTopup,
+  getWalletTransactions,
   verifyWalletTopup,
   type BootstrapResponse,
   type WalletResponse,
   type WalletTopupResponse,
+  type WalletTransactionsResponse,
 } from './api';
 
 type Props = { token: string };
@@ -26,15 +28,25 @@ function normalizeDigits(value: string): string {
 function formatMinor(value: string, divisor: number): string {
   try {
     const amount = BigInt(value);
+    const sign = amount < 0n ? '-' : '';
+    const absolute = amount < 0n ? -amount : amount;
     const unit = BigInt(Math.max(1, Math.trunc(divisor)));
-    const whole = amount / unit;
-    const remainder = amount % unit;
-    if (remainder === 0n) return whole.toLocaleString('fa-IR');
+    const whole = absolute / unit;
+    const remainder = absolute % unit;
+    if (remainder === 0n) return `${sign}${whole.toLocaleString('fa-IR')}`;
     const fraction = remainder.toString().padStart(unit.toString().length - 1, '0').replace(/0+$/, '');
-    return `${whole.toLocaleString('fa-IR')}.${fraction}`;
+    return `${sign}${whole.toLocaleString('fa-IR')}.${fraction}`;
   } catch {
     return value;
   }
+}
+
+function transactionLabel(type: string): string {
+  if (type === 'payment_topup') return 'شارژ کیف پول';
+  if (type === 'call_charge') return 'هزینه تماس';
+  if (type === 'refund') return 'برگشت وجه';
+  if (type === 'adjustment') return 'اصلاح کیف پول';
+  return 'تراکنش کیف پول';
 }
 
 function messageFor(code: string): string {
@@ -53,6 +65,7 @@ function messageFor(code: string): string {
 
 export default function CallerWalletCard({ token }: Props) {
   const [wallets, setWallets] = useState<WalletResponse['wallets']>([]);
+  const [transactions, setTransactions] = useState<WalletTransactionsResponse['transactions']>([]);
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [amountText, setAmountText] = useState('');
   const [attempt, setAttempt] = useState<WalletTopupResponse | null>(null);
@@ -64,17 +77,22 @@ export default function CallerWalletCard({ token }: Props) {
   const divisor = bootstrap?.pricing.displayDivisor ?? 1;
   const displayUnit = bootstrap?.pricing.displayUnit ?? 'IRR';
 
-  async function refreshWallet() {
-    const value = await getWallet(token);
-    setWallets(value.wallets);
+  async function refreshWalletState() {
+    const [walletValue, transactionValue] = await Promise.all([
+      getWallet(token),
+      getWalletTransactions(token, 'IRR', 5),
+    ]);
+    setWallets(walletValue.wallets);
+    setTransactions(transactionValue.transactions);
   }
 
   useEffect(() => {
     let disposed = false;
-    Promise.all([getWallet(token), getBootstrap()])
-      .then(([walletValue, bootstrapValue]) => {
+    Promise.all([getWallet(token), getWalletTransactions(token, 'IRR', 5), getBootstrap()])
+      .then(([walletValue, transactionValue, bootstrapValue]) => {
         if (disposed) return;
         setWallets(walletValue.wallets);
+        setTransactions(transactionValue.transactions);
         setBootstrap(bootstrapValue);
       })
       .catch((cause) => {
@@ -88,10 +106,15 @@ export default function CallerWalletCard({ token }: Props) {
     const attemptId = attempt.attemptId;
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
-      Promise.all([getWalletTopup(token, attemptId), getWallet(token)])
-        .then(([latestAttempt, walletValue]) => {
+      Promise.all([
+        getWalletTopup(token, attemptId),
+        getWallet(token),
+        getWalletTransactions(token, 'IRR', 5),
+      ])
+        .then(([latestAttempt, walletValue, transactionValue]) => {
           setAttempt(latestAttempt);
           setWallets(walletValue.wallets);
+          setTransactions(transactionValue.transactions);
           if (latestAttempt.status === 'succeeded') {
             setAmountText('');
             topupKeyRef.current = null;
@@ -159,7 +182,7 @@ export default function CallerWalletCard({ token }: Props) {
     try {
       const result = await verifyWalletTopup(token, attempt.attemptId);
       setAttempt((current) => current ? { ...current, ...result } : result);
-      await refreshWallet();
+      await refreshWalletState();
       if (result.status === 'succeeded') {
         setAmountText('');
         topupKeyRef.current = null;
@@ -178,7 +201,7 @@ export default function CallerWalletCard({ token }: Props) {
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>کیف پول</Text>
-        <TouchableOpacity disabled={busy} onPress={() => refreshWallet().catch((cause) => setError(messageFor(getErrorCode(cause))))}>
+        <TouchableOpacity disabled={busy} onPress={() => refreshWalletState().catch((cause) => setError(messageFor(getErrorCode(cause))))}>
           <Text style={styles.link}>به‌روزرسانی</Text>
         </TouchableOpacity>
       </View>
@@ -211,6 +234,21 @@ export default function CallerWalletCard({ token }: Props) {
           {attempt.status === 'succeeded' && <Text style={styles.success}>شارژ با موفقیت به کیف پول اضافه شد.</Text>}
         </View>
       )}
+
+      <View style={styles.history}>
+        <Text style={styles.label}>آخرین تراکنش‌ها</Text>
+        {transactions.map((transaction) => (
+          <View key={transaction.id} style={styles.transactionRow}>
+            <View style={styles.transactionText}>
+              <Text style={styles.transactionLabel}>{transactionLabel(transaction.type)}</Text>
+              <Text style={styles.helper}>{new Date(transaction.createdAt).toLocaleString('fa-IR')}</Text>
+            </View>
+            <Text style={styles.transactionAmount}>{formatMinor(transaction.deltaMinor, divisor)} {displayUnit}</Text>
+          </View>
+        ))}
+        {!transactions.length && <Text style={styles.helper}>هنوز تراکنشی ثبت نشده است.</Text>}
+      </View>
+
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -229,6 +267,11 @@ const styles = StyleSheet.create({
   link: { textDecorationLine: 'underline', paddingVertical: 5, fontWeight: '600' },
   attemptBox: { backgroundColor: '#F7F5F0', borderRadius: 12, padding: 11, gap: 5 },
   success: { color: '#315C38', textAlign: 'right', fontWeight: '700' },
+  history: { borderTopWidth: 1, borderTopColor: '#EEE9E2', paddingTop: 12, gap: 9 },
+  transactionRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  transactionText: { flex: 1 },
+  transactionLabel: { textAlign: 'right', fontWeight: '700', fontSize: 13 },
+  transactionAmount: { fontWeight: '800', fontSize: 13 },
   error: { color: '#9E2525', textAlign: 'right', lineHeight: 20 },
   disabled: { opacity: 0.35 },
 });

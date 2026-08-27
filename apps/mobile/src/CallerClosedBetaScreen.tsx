@@ -35,6 +35,7 @@ function messageFor(code: string): string {
     no_listener_available: 'فعلاً شنونده آماده‌ای پیدا نشد.',
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
+    telephony_dispatch_uncertain: 'نتیجه شروع تماس قطعی نشد. تماس جدید نساز؛ با «ادامه همین تماس» وضعیت همین درخواست دوباره بررسی می‌شود.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_cannot_be_cancelled: 'این تماس از مرحله لغو عادی عبور کرده است.',
     telephony_termination_pending: 'درخواست پایان تماس ثبت شد اما قطع سمت سرویس تماس هنوز قطعی نشده است.',
@@ -187,7 +188,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function retryDispatch() {
-    if (!call || call.status !== 'routing') return;
+    if (!call || (call.status !== 'routing' && call.status !== 'calling_caller')) return;
     setBusy(true);
     setError('');
     try {
@@ -294,7 +295,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         <View style={styles.card}>
           <Text style={styles.heading}>{selected?.nickname ?? 'تماس جاری'}</Text>
           <Text style={styles.status}>وضعیت: {call.status}</Text>
-          {call.status === 'routing' && (
+          {(call.status === 'routing' || call.status === 'calling_caller') && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>
               <Text style={styles.primaryText}>{busy ? 'در حال تلاش…' : 'ادامه همین تماس'}</Text>
             </TouchableOpacity>

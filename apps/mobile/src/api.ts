@@ -96,6 +96,25 @@ export type ListenerEarningsResponse = {
   }>;
 };
 
+export type ListenerActiveCall = {
+  callId: string;
+  status: 'requested' | 'routing' | 'calling_caller' | 'caller_answered' | 'calling_listener' | 'connected';
+  currencyCode: string;
+  maxBillableSeconds: number | null;
+  telephonyReady: boolean;
+  requestedAt: string;
+  connectedAt: string | null;
+  endedAt: string | null;
+  billableSeconds: number;
+  listenerEarningMinor: string;
+};
+
+export type ListenerActiveCallResponse = {
+  activeCall: ListenerActiveCall | null;
+  providerBridgeIncluded?: false;
+  callerIdentityIncluded?: false;
+};
+
 export type WalletResponse = {
   wallets: Array<{
     currencyCode: string;
@@ -347,6 +366,10 @@ export function getListenerPresence(token: string): Promise<ListenerPresenceResp
 
 export function getListenerEarnings(token: string): Promise<ListenerEarningsResponse> {
   return request('/v1/listener/earnings', {}, token);
+}
+
+export function getListenerActiveCall(token: string): Promise<ListenerActiveCallResponse> {
+  return request('/v1/listener/calls/active', {}, token);
 }
 
 export function setListenerPresence(

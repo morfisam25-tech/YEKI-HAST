@@ -33,6 +33,7 @@ type CallAnomalies = {
     stalePreconnect: number;
     connectedOverrun: number;
     duplicateActiveCallers: number;
+    duplicateActiveListeners: number;
     underReservedWallets: number;
     invariantViolations: number;
   };
@@ -41,6 +42,7 @@ type CallAnomalies = {
     stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
     connectedOverrun: Array<{ callId: string; status: string; billingStartedAt: string; maxBillableSeconds: number; updatedAt: string }>;
     duplicateActiveCallers: Array<{ callerUserId: string; activeCallCount: number; callIds: string[] }>;
+    duplicateActiveListeners: Array<{ listenerUserId: string; activeCallCount: number; callIds: string[] }>;
     underReservedWallets: Array<{ userId: string; currencyCode: string; reservedMinor: string; requiredReservedMinor: string; activeCallCount: number }>;
     invariantViolations: Array<{
       callId: string;
@@ -49,6 +51,12 @@ type CallAnomalies = {
       authorizedMinor: string;
       callerChargeMinor: string;
       listenerEarningMinor: string;
+      chargeTransactionCount: number;
+      chargeDeltaTotal: string;
+      chargeSourceMismatchCount: number;
+      earningRowCount: number;
+      earningTotal: string;
+      earningSourceMismatchCount: number;
       updatedAt: string;
     }>;
   };
@@ -87,8 +95,12 @@ export default function CallsPage() {
     anomalies?.anomalies.invariantViolations.map((item) => [item.callId, item.issueCode]) ?? [],
   ), [anomalies]);
 
-  const duplicateActiveCallIds = useMemo(() => new Set(
+  const duplicateActiveCallerCallIds = useMemo(() => new Set(
     anomalies?.anomalies.duplicateActiveCallers.flatMap((item) => item.callIds) ?? [],
+  ), [anomalies]);
+
+  const duplicateActiveListenerCallIds = useMemo(() => new Set(
+    anomalies?.anomalies.duplicateActiveListeners.flatMap((item) => item.callIds) ?? [],
   ), [anomalies]);
 
   async function load() {
@@ -143,6 +155,7 @@ export default function CallsPage() {
           <p><b>Pre-connect مانده:</b> {anomalies?.counts.stalePreconnect ?? '—'}</p>
           <p><b>Connected overrun:</b> {anomalies?.counts.connectedOverrun ?? '—'}</p>
           <p><b>Caller با چند تماس فعال:</b> {anomalies?.counts.duplicateActiveCallers ?? '—'}</p>
+          <p><b>Listener با چند تماس فعال:</b> {anomalies?.counts.duplicateActiveListeners ?? '—'}</p>
           <p><b>Under-reserved wallet:</b> {anomalies?.counts.underReservedWallets ?? '—'}</p>
           <p><b>Terminal/financial invariant:</b> {anomalies?.counts.invariantViolations ?? '—'}</p>
         </div>
@@ -151,6 +164,16 @@ export default function CallsPage() {
             {anomalies.anomalies.duplicateActiveCallers.map((item) => (
               <div className="subPanel" key={item.callerUserId}>
                 <p className="error">Caller {short(item.callerUserId)} همزمان {item.activeCallCount.toLocaleString('fa-IR')} تماس فعال دارد.</p>
+                <p className="muted">Call IDs: {item.callIds.map((id) => short(id)).join(' · ')}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {!!anomalies?.anomalies.duplicateActiveListeners.length && (
+          <div className="queue">
+            {anomalies.anomalies.duplicateActiveListeners.map((item) => (
+              <div className="subPanel" key={item.listenerUserId}>
+                <p className="error">Listener {short(item.listenerUserId)} همزمان {item.activeCallCount.toLocaleString('fa-IR')} تماس فعال دارد.</p>
                 <p className="muted">Call IDs: {item.callIds.map((id) => short(id)).join(' · ')}</p>
               </div>
             ))}
@@ -181,7 +204,8 @@ export default function CallsPage() {
           {calls.map((call) => {
             const canRecover = call.status === 'routing' && recoverableCallIds.has(call.id);
             const invariantIssue = invariantIssuesByCall.get(call.id);
-            const duplicateActive = duplicateActiveCallIds.has(call.id);
+            const duplicateActiveCaller = duplicateActiveCallerCallIds.has(call.id);
+            const duplicateActiveListener = duplicateActiveListenerCallIds.has(call.id);
             return (
               <article key={call.id} className="subPanel">
                 <div className="sectionHeader">
@@ -203,7 +227,8 @@ export default function CallsPage() {
                 </div>
                 <p className="muted">درخواست: {new Date(call.requestedAt).toLocaleString('fa-IR')}</p>
                 {call.endedReason && <p className="muted">پایان: {call.endedReason}</p>}
-                {duplicateActive && <p className="error">Invariant: caller_has_multiple_active_calls</p>}
+                {duplicateActiveCaller && <p className="error">Invariant: caller_has_multiple_active_calls</p>}
+                {duplicateActiveListener && <p className="error">Invariant: listener_has_multiple_active_calls</p>}
                 {invariantIssue && <p className="error">Invariant: {invariantIssue}</p>}
                 {canRecover && (
                   <div className="actions">

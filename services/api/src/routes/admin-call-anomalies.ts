@@ -184,6 +184,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     SELECT id::text,
            status::text,
            CASE
+             WHEN listener_user_id IS NOT NULL AND caller_user_id=listener_user_id THEN 'caller_listener_same_user'
              WHEN caller_charge_minor > authorized_minor THEN 'charge_exceeds_authorization'
              WHEN listener_earning_minor > caller_charge_minor THEN 'earning_exceeds_charge'
              WHEN status::text='connected' AND billing_started_at IS NULL THEN 'connected_without_billing_start'
@@ -225,7 +226,8 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
            earning_source_mismatch_count,
            updated_at::text
     FROM financial
-    WHERE caller_charge_minor > authorized_minor
+    WHERE (listener_user_id IS NOT NULL AND caller_user_id=listener_user_id)
+       OR caller_charge_minor > authorized_minor
        OR listener_earning_minor > caller_charge_minor
        OR (status::text='connected' AND billing_started_at IS NULL)
        OR (status::text = ANY($1::text[]) AND ended_at IS NOT NULL)

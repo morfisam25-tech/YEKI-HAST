@@ -64,6 +64,46 @@ class KavenegarSmsProvider implements SmsProvider {
   }
 }
 
+class IPPanelSmsProvider implements SmsProvider {
+  readonly #apiKey: string;
+  readonly #patternCode: string;
+  readonly #fromNumber: string;
+
+  constructor() {
+    this.#apiKey = required('IPPANEL_API_KEY');
+    this.#patternCode = required('IPPANEL_PATTERN_CODE');
+    this.#fromNumber = required('IPPANEL_FROM_NUMBER');
+  }
+
+  async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch('https://edge.ippanel.com/v1/api/send', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          authorization: this.#apiKey,
+        },
+        body: JSON.stringify({
+          sending_type: 'pattern',
+          from_number: this.#fromNumber,
+          code: this.#patternCode,
+          recipients: [input.phoneE164],
+          params: { code: input.code },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      throw new Error('sms_delivery_failed');
+    }
+
+    if (!response.ok) throw new Error('sms_delivery_failed');
+    try { await response.json(); }
+    catch { throw new Error('sms_delivery_failed'); }
+  }
+}
+
 export function getSmsProvider(): SmsProvider {
   const provider = process.env.SMS_PROVIDER?.trim() || (process.env.NODE_ENV === 'development' ? 'dev' : '');
   if (provider === 'dev') {
@@ -71,5 +111,6 @@ export function getSmsProvider(): SmsProvider {
     return new DevSmsProvider();
   }
   if (provider === 'kavenegar') return new KavenegarSmsProvider();
+  if (provider === 'ippanel') return new IPPanelSmsProvider();
   throw new Error('sms_provider_not_configured');
 }

@@ -19,6 +19,7 @@ import {
   verifyOtp,
   type BootstrapLanguage,
 } from './src/api';
+import CallerClosedBetaScreen from './src/CallerClosedBetaScreen';
 import ListenerKycScreen from './src/ListenerKycScreen';
 import ListenerTrainingScreen from './src/ListenerTrainingScreen';
 import ListenerWorkScreen from './src/ListenerWorkScreen';
@@ -29,11 +30,13 @@ type Screen =
   | 'listener-intro'
   | 'auth-phone'
   | 'auth-code'
+  | 'caller-beta'
   | 'listener-profile'
   | 'listener-training'
   | 'listener-kyc'
   | 'listener-work';
 
+type AuthPurpose = 'listener' | 'caller';
 type ChoiceProps = { label: string; selected?: boolean; onPress: () => void };
 
 const fallbackLanguages: BootstrapLanguage[] = [
@@ -59,6 +62,7 @@ function errorMessage(code: string): string {
     otp_request_rate_limited: 'تعداد درخواست کد زیاد شده. کمی بعد دوباره امتحان کن.',
     auth_not_configured: 'ورود نسخه آزمایشی هنوز فعال نشده.',
     sms_delivery_unavailable: 'ارسال پیامک موقتاً در دسترس نیست.',
+    caller_closed_beta_disabled: 'بتای Caller برای این محیط فعال نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
     listener_application_not_found: 'درخواست شنونده هنوز ساخته نشده.',
@@ -77,6 +81,8 @@ function screenForApplicationStatus(status: string): Screen {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
+  const [authPurpose, setAuthPurpose] = useState<AuthPurpose>('listener');
+  const [callerBetaEnabled, setCallerBetaEnabled] = useState(false);
   const [languageOptions, setLanguageOptions] = useState<BootstrapLanguage[]>(fallbackLanguages);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['fa']);
   const [phone, setPhone] = useState('');
@@ -92,6 +98,8 @@ export default function App() {
   useEffect(() => {
     getBootstrap()
       .then((value) => {
+        const bootstrap = value as typeof value & { features?: { callerClosedBetaEnabled?: boolean } };
+        setCallerBetaEnabled(bootstrap.features?.callerClosedBetaEnabled === true);
         if (value.languages.length) {
           setLanguageOptions(value.languages);
           if (!value.languages.some((x) => x.code === 'fa')) {
@@ -99,7 +107,9 @@ export default function App() {
           }
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        setCallerBetaEnabled(false);
+      });
   }, []);
 
   const canContinueProfile = useMemo(
@@ -131,6 +141,24 @@ export default function App() {
     }
   }
 
+  function beginListenerAuth() {
+    setAuthPurpose('listener');
+    setError('');
+    setOtp('');
+    setScreen('auth-phone');
+  }
+
+  function beginCallerAuth() {
+    if (!callerBetaEnabled) {
+      setScreen('waitlist');
+      return;
+    }
+    setAuthPurpose('caller');
+    setError('');
+    setOtp('');
+    setScreen('auth-phone');
+  }
+
   async function sendCode() {
     setError('');
     setBusy(true);
@@ -152,6 +180,14 @@ export default function App() {
     try {
       const session = await verifyOtp(phoneE164, otp.trim());
       setToken(session.token);
+      if (authPurpose === 'caller') {
+        if (!callerBetaEnabled) {
+          setScreen('waitlist');
+          return;
+        }
+        setScreen('caller-beta');
+        return;
+      }
       await resumeListener(session.token);
     } catch (cause) {
       setError(errorMessage(getErrorCode(cause)));
@@ -179,6 +215,15 @@ export default function App() {
     }
   }
 
+  if (screen === 'caller-beta' && token) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -190,9 +235,13 @@ export default function App() {
             <View style={styles.hero}>
               <Text style={styles.eyebrow}>برای وقتی که فقط یک آدم واقعی می‌خواهی</Text>
               <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
-              <Text style={styles.heroBody}>بخش مکالمه برای Caller هنوز در بتای بسته است.</Text>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setScreen('waitlist')}>
-                <Text style={styles.secondaryButtonText}>اطلاعات شروع Caller</Text>
+              <Text style={styles.heroBody}>
+                {callerBetaEnabled
+                  ? 'بتای بسته Caller برای این محیط فعال است. ورود فقط بعد از تأیید شماره و شرط سنی انجام می‌شود.'
+                  : 'بخش مکالمه برای Caller هنوز در بتای بسته است.'}
+              </Text>
+              <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>
+                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود به بتای Caller' : 'اطلاعات شروع Caller'}</Text>
               </TouchableOpacity>
             </View>
 
@@ -228,7 +277,7 @@ export default function App() {
             <View style={styles.rule}><Text style={styles.ruleText}>✓ ساعات حضورت را خودت تعیین می‌کنی.</Text></View>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ شماره واقعی دو طرف نمایش داده نمی‌شود.</Text></View>
-            <TouchableOpacity style={styles.primaryButton} onPress={() => { setError(''); setScreen('auth-phone'); }}>
+            <TouchableOpacity style={styles.primaryButton} onPress={beginListenerAuth}>
               <Text style={styles.primaryButtonText}>ادامه با شماره موبایل</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setScreen('home')}><Text style={styles.link}>فعلاً نه</Text></TouchableOpacity>
@@ -237,7 +286,7 @@ export default function App() {
 
         {screen === 'auth-phone' && (
           <View style={styles.card}>
-            <Text style={styles.titleSmall}>ورود با شماره موبایل</Text>
+            <Text style={styles.titleSmall}>{authPurpose === 'caller' ? 'ورود Caller' : 'ورود با شماره موبایل'}</Text>
             <Text style={styles.helper}>شماره فقط نزد پلتفرم می‌ماند و در پروفایل عمومی نمایش داده نمی‌شود.</Text>
             <TextInput
               keyboardType="phone-pad"
@@ -251,7 +300,9 @@ export default function App() {
             <TouchableOpacity disabled={busy} style={[styles.primaryButton, busy && styles.disabled]} onPress={sendCode}>
               <Text style={styles.primaryButtonText}>{busy ? 'در حال ارسال…' : 'ارسال کد'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setScreen('listener-intro')}><Text style={styles.link}>برگشت</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setScreen(authPurpose === 'caller' ? 'home' : 'listener-intro')}>
+              <Text style={styles.link}>برگشت</Text>
+            </TouchableOpacity>
           </View>
         )}
 

@@ -12,9 +12,16 @@ type Payout = {
   dispatchNeedsReconciliation: boolean;
   sourceCount: number;
   kycStatus: string;
+  consistencyIssues: string[];
   createdAt: string;
   updatedAt: string;
   paidAt: string | null;
+};
+
+type ListedConsistency = {
+  payoutCount: number;
+  payoutsWithIssues: number;
+  issueCount: number;
 };
 
 type PayoutCandidate = {
@@ -57,8 +64,21 @@ function formatAmount(amountMinor: string, currencyCode: string): string {
   }
 }
 
+function consistencyLabel(code: string): string {
+  const labels: Record<string, string> = {
+    no_sources: 'payout بدون منبع',
+    source_total_mismatch: 'جمع منابع با مبلغ payout برابر نیست',
+    earning_market_mismatch: 'earning از market دیگری متصل شده',
+    source_state_mismatch: 'وضعیت منبع با وضعیت payout سازگار نیست',
+    provider_state_mismatch: 'وضعیت provider با payout سازگار نیست',
+    paid_at_mismatch: 'paid_at با وضعیت payout سازگار نیست',
+  };
+  return labels[code] ?? code;
+}
+
 export default function PayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [listedConsistency, setListedConsistency] = useState<ListedConsistency>({ payoutCount: 0, payoutsWithIssues: 0, issueCount: 0 });
   const [candidates, setCandidates] = useState<PayoutCandidate[]>([]);
   const [pendingBacklog, setPendingBacklog] = useState<PendingEarningBacklog[]>([]);
   const [status, setStatus] = useState('');
@@ -68,8 +88,14 @@ export default function PayoutsPage() {
   async function load() {
     setError('');
     const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
-    const value = await api<{ payouts: Payout[]; payoutCandidates: PayoutCandidate[]; pendingEarningBacklog: PendingEarningBacklog[] }>(`/api/ops/payouts${qs}`);
+    const value = await api<{
+      payouts: Payout[];
+      listedConsistency: ListedConsistency;
+      payoutCandidates: PayoutCandidate[];
+      pendingEarningBacklog: PendingEarningBacklog[];
+    }>(`/api/ops/payouts${qs}`);
     setPayouts(value.payouts);
+    setListedConsistency(value.listedConsistency ?? { payoutCount: value.payouts.length, payoutsWithIssues: 0, issueCount: 0 });
     setCandidates(value.payoutCandidates ?? []);
     setPendingBacklog(value.pendingEarningBacklog ?? []);
   }
@@ -202,6 +228,19 @@ export default function PayoutsPage() {
       </section>
 
       <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <p className="kicker">PAYOUT CONSISTENCY</p>
+            <h2>کنترل سازگاری payout و منابع</h2>
+          </div>
+          <span className="statusPill">{listedConsistency.payoutsWithIssues ? `${listedConsistency.payoutsWithIssues} WARN` : 'CLEAN'}</span>
+        </div>
+        <p className="muted">این کنترل فقط وضعیت‌های قطعی داخل دیتابیس را مقایسه می‌کند و هیچ repair یا تغییر مالی خودکار انجام نمی‌دهد.</p>
+        <div className="facts compact">
+          <p><b>Payoutهای بررسی‌شده:</b> {listedConsistency.payoutCount.toLocaleString('fa-IR')}</p>
+          <p><b>Payout دارای هشدار:</b> {listedConsistency.payoutsWithIssues.toLocaleString('fa-IR')}</p>
+          <p><b>کل هشدارها:</b> {listedConsistency.issueCount.toLocaleString('fa-IR')}</p>
+        </div>
         <div className="reviewRow wide">
           <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Payout status filter">
             <option value="">همه وضعیت‌ها</option>
@@ -220,7 +259,7 @@ export default function PayoutsPage() {
                   <p className="kicker">{payout.id.slice(0, 8)}</p>
                   <h3>{formatAmount(payout.amountMinor, payout.currencyCode)}</h3>
                 </div>
-                <span className="statusPill">{payout.dispatchNeedsReconciliation ? 'RECONCILE' : payout.status}</span>
+                <span className="statusPill">{payout.dispatchNeedsReconciliation ? 'RECONCILE' : payout.consistencyIssues.length ? 'CHECK' : payout.status}</span>
               </div>
               <div className="facts compact">
                 <p><b>KYC:</b> {payout.kycStatus}</p>
@@ -228,14 +267,17 @@ export default function PayoutsPage() {
                 <p><b>Provider:</b> {payout.provider ?? '—'}</p>
                 <p><b>Listener ref:</b> {payout.listenerUserId.slice(0, 8)}…</p>
               </div>
+              {payout.consistencyIssues.length > 0 && (
+                <p className="error">Consistency: {payout.consistencyIssues.map(consistencyLabel).join(' · ')}</p>
+              )}
               {payout.dispatchNeedsReconciliation && (
                 <p className="error">Dispatch پاسخ قطعی نداده؛ دوباره Dispatch نکن. فقط Reconcile کن.</p>
               )}
               <p className="muted">ایجاد: {new Date(payout.createdAt).toLocaleString('fa-IR')}</p>
               <div className="actions">
                 {payout.status === 'created' && (
-                  <button disabled={busyId === payout.id || payout.kycStatus !== 'verified'} onClick={() => act(payout, 'dispatch')}>
-                    {payout.kycStatus === 'verified' ? 'Dispatch' : 'KYC لازم است'}
+                  <button disabled={busyId === payout.id || payout.kycStatus !== 'verified' || payout.consistencyIssues.length > 0} onClick={() => act(payout, 'dispatch')}>
+                    {payout.consistencyIssues.length > 0 ? 'Consistency لازم است' : payout.kycStatus === 'verified' ? 'Dispatch' : 'KYC لازم است'}
                   </button>
                 )}
                 {(payout.status === 'processing' || payout.status === 'failed') && (

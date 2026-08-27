@@ -18,6 +18,9 @@ export type BootstrapResponse = {
     displayUnit: string;
     displayDivisor: number;
   };
+  features?: {
+    callerClosedBetaEnabled?: boolean;
+  };
   languages: BootstrapLanguage[];
 };
 

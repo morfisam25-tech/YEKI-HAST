@@ -78,6 +78,24 @@ export type ListenerPresenceResponse = {
   lastHeartbeatAt: string | null;
 };
 
+export type ListenerEarningStatus = 'pending' | 'available' | 'paid';
+
+export type ListenerEarningsResponse = {
+  summary: Array<{
+    currencyCode: string;
+    status: ListenerEarningStatus;
+    amountMinor: string;
+    earningCount: number;
+  }>;
+  recent: Array<{
+    currencyCode: string;
+    amountMinor: string;
+    status: ListenerEarningStatus;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
 export type WalletResponse = {
   wallets: Array<{
     currencyCode: string;
@@ -325,6 +343,10 @@ export function submitListenerKyc(
 
 export function getListenerPresence(token: string): Promise<ListenerPresenceResponse> {
   return request('/v1/listener/presence', {}, token);
+}
+
+export function getListenerEarnings(token: string): Promise<ListenerEarningsResponse> {
+  return request('/v1/listener/earnings', {}, token);
 }
 
 export function setListenerPresence(

@@ -224,6 +224,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await listAdminPayouts(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/admin/safety-cases') {
+      ensureDatabaseReady();
+      const { listAdminSafetyCases } = await import('./routes/admin-safety.ts');
+      return await listAdminSafetyCases(req, res);
+    }
+
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) {
       ensureDatabaseReady();

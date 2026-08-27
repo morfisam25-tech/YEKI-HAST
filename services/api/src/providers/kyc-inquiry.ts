@@ -23,20 +23,13 @@ export type SabtAhvalData = {
   is_alive: number;
 };
 
-export type SabtAhvalInput = {
-  nationalId: string;
-  birthYear: string;
-  birthMonth: string;
-  birthDay: string;
-};
-
+export type SabtAhvalInput = { nationalId: string; birthYear: string; birthMonth: string; birthDay: string };
 export type ShahkarInput = { nationalId: string; mobile: string };
 export type ShebaInput = { sheba: string };
 
 export class KycInquiryProviderError extends Error {
   readonly code: string;
   readonly providerCode: number | null;
-
   constructor(code: string, providerCode: number | null = null) {
     super(code);
     this.code = code;
@@ -61,14 +54,17 @@ function requiredInquiryKey(): string {
   return value;
 }
 
-function numberField(body: Record<string, unknown>, key: string): number {
-  const raw = body[key];
+function strictNumber(raw: unknown): number {
   if (raw === null || raw === undefined || raw === '' || (typeof raw !== 'number' && typeof raw !== 'string')) {
     throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   }
   const value = Number(raw);
   if (!Number.isFinite(value)) throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   return value;
+}
+
+function numberField(body: Record<string, unknown>, key: string): number {
+  return strictNumber(body[key]);
 }
 
 function nullableError(value: unknown): string | null {
@@ -99,20 +95,20 @@ function sabtAhvalData(value: unknown): SabtAhvalData {
   for (const key of requiredStrings) {
     if (typeof row[key] !== 'string') throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
   }
-  if (!Number.isFinite(Number(row.inq_id)) || typeof row.match !== 'boolean' || !Number.isFinite(Number(row.is_alive))) {
-    throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
-  }
+  if (typeof row.match !== 'boolean') throw new KycInquiryProviderError('kyc_inquiry_invalid_response');
+  const inqId = strictNumber(row.inq_id);
+  const isAlive = strictNumber(row.is_alive);
   return {
     inq: row.inq as string,
     inq_desc: row.inq_desc as string,
-    inq_id: Number(row.inq_id),
+    inq_id: inqId,
     national_id: row.national_id as string,
     jalali_birth: row.jalali_birth as string,
     match: row.match,
     first_name: row.first_name as string,
     last_name: row.last_name as string,
     father_name: row.father_name as string,
-    is_alive: Number(row.is_alive),
+    is_alive: isAlive,
   };
 }
 
@@ -144,11 +140,9 @@ export class NextPayKycInquiryProvider {
     } catch {
       throw new KycInquiryProviderError('kyc_inquiry_unavailable');
     }
-
     let body: unknown;
     try { body = await response.json(); }
     catch { throw new KycInquiryProviderError('kyc_inquiry_invalid_response'); }
-
     const envelope = parseEnvelope(body);
     if (!response.ok || envelope.code !== 200) throw new KycInquiryProviderError('kyc_inquiry_failed', envelope.code);
     return envelope;

@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { encryptPrivateText } from '../lib/security.ts';
 import { getTelephonyProvider } from '../providers/telephony.ts';
+import { settleCallByProvider } from '../services/call-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const reportCategories = new Set([
@@ -49,9 +50,12 @@ async function participantContext(
     currency_code: string;
     authorized_minor: string;
     provider_bridge_id: string | null;
+    connected_at: string | null;
+    ended_at: string | null;
   }>(`
     SELECT caller_user_id::text, listener_user_id::text, status::text,
-           currency_code, authorized_minor::text, provider_bridge_id
+           currency_code, authorized_minor::text, provider_bridge_id,
+           connected_at::text, ended_at::text
     FROM app.call_sessions
     WHERE id=$1
     FOR UPDATE
@@ -142,6 +146,7 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
   const body = await readJson<{ details?: unknown; blockCounterparty?: unknown }>(req);
   const details = detailsFrom(body.details);
   const blockCounterparty = body.blockCounterparty === true;
+  const stoppedAt = new Date();
 
   const result = await withTransaction(async (client) => {
     const call = await participantContext(client, callId, userId);
@@ -152,9 +157,14 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
         idempotent: true,
         safetyEventId: null,
         providerBridgeId: call.provider_bridge_id,
+        connectedAt: call.connected_at,
+        stoppedAt: call.ended_at ? new Date(call.ended_at) : stoppedAt,
       };
     }
     if (!liveStatuses.has(call.status)) throw new HttpError(409, 'call_not_live');
+    if (call.status === 'connected' && !call.provider_bridge_id) {
+      throw new HttpError(409, 'call_telephony_invariant');
+    }
 
     const event = await client.query<{ id: string }>(`
       INSERT INTO app.safety_events(call_session_id, triggered_by, trigger_user_id, severity, action_code)
@@ -175,7 +185,7 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
       if (authorized > 0n) {
         const released = await client.query(`
           UPDATE app.wallets
-          SET reserved_minor=reserved_minor-$3::bigint, version=version+1
+          SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
           WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
           RETURNING id
         `, [call.caller_user_id, call.currency_code, authorized.toString()]);
@@ -185,13 +195,13 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
 
     await client.query(`
       UPDATE app.call_sessions
-      SET status='safety_terminated', ended_at=COALESCE(ended_at, now()), ended_reason=$2
+      SET status='safety_terminated', ended_at=COALESCE(ended_at,$2), ended_reason=$3, updated_at=now()
       WHERE id=$1
-    `, [callId, `safety_exit_${call.role}`]);
+    `, [callId, stoppedAt.toISOString(), `safety_exit_${call.role}`]);
     await client.query(`
       INSERT INTO app.call_events(call_session_id, status, source, metadata)
-      VALUES ($1,'safety_terminated',$2,jsonb_build_object('safetyEventId',$3))
-    `, [callId, call.role, safetyEventId]);
+      VALUES ($1,'safety_terminated',$2,jsonb_build_object('safetyEventId',$3,'occurredAt',$4::text))
+    `, [callId, call.role, safetyEventId, stoppedAt.toISOString()]);
 
     return {
       status: 'safety_terminated' as const,
@@ -199,18 +209,52 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
       idempotent: false,
       safetyEventId,
       providerBridgeId: call.provider_bridge_id,
+      connectedAt: call.connected_at,
+      stoppedAt,
     };
   });
 
+  let terminationPending = false;
   if (result.providerBridgeId) {
     try {
       await getTelephonyProvider().terminateCall(result.providerBridgeId, `safety_exit_${result.role}`);
     } catch {
+      terminationPending = true;
       console.error('safety_telephony_termination_pending', { callId });
-      throw new HttpError(502, 'telephony_termination_pending');
     }
   }
 
-  const { providerBridgeId: _privateBridgeId, ...publicResult } = result;
-  sendJson(res, 200, { ok: true, callId, blocked: blockCounterparty, ...publicResult });
+  let settlement: Awaited<ReturnType<typeof settleCallByProvider>> | null = null;
+  if (result.connectedAt) {
+    if (!result.providerBridgeId) throw new HttpError(409, 'call_telephony_invariant');
+    const connectedAtMs = new Date(result.connectedAt).getTime();
+    const connectedSeconds = Math.max(0, Math.floor((result.stoppedAt.getTime() - connectedAtMs) / 1000));
+    try {
+      settlement = await settleCallByProvider({
+        callId,
+        providerBridgeId: result.providerBridgeId,
+        connectedSeconds,
+        endedReason: `safety_exit_${result.role}`,
+      });
+    } catch (error) {
+      console.error('safety_settlement_pending', { callId, error: error instanceof Error ? error.message : 'unknown' });
+      throw new HttpError(503, 'safety_settlement_pending');
+    }
+  }
+
+  if (terminationPending) throw new HttpError(502, 'telephony_termination_pending');
+
+  const { providerBridgeId: _privateBridgeId, connectedAt: _connectedAt, stoppedAt: _stoppedAt, ...publicResult } = result;
+  sendJson(res, 200, {
+    ok: true,
+    callId,
+    blocked: blockCounterparty,
+    ...publicResult,
+    settlement: settlement ? {
+      billableSeconds: settlement.billableSeconds,
+      callerChargeMinor: settlement.callerChargeMinor,
+      listenerEarningMinor: settlement.listenerEarningMinor,
+      idempotent: settlement.idempotent,
+    } : null,
+  });
 }

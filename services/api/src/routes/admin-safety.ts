@@ -154,7 +154,13 @@ export async function actOnAdminSafetyCase(
           resolution_code=$4,
           resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
           updated_at=now()
-      WHERE id=$1 AND status::text NOT IN ('resolved','dismissed')
+      WHERE id=$1
+        AND (
+          ($5='claim' AND status::text='open')
+          OR
+          ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+            AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
+        )
       RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
     `
     : `
@@ -164,7 +170,13 @@ export async function actOnAdminSafetyCase(
           resolution_code=$4,
           resolved_at=CASE WHEN $2 IN ('resolved','dismissed') THEN now() ELSE NULL END,
           updated_at=now()
-      WHERE id=$1 AND status::text NOT IN ('resolved','dismissed')
+      WHERE id=$1
+        AND (
+          ($5='claim' AND status::text='open')
+          OR
+          ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+            AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
+        )
       RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
     `;
 
@@ -175,18 +187,20 @@ export async function actOnAdminSafetyCase(
     resolution_code: string | null;
     resolved_at: string | null;
     updated_at: string;
-  }>(sql, [id, targetStatus, admin.userId, resolutionCode]);
+  }>(sql, [id, targetStatus, admin.userId, resolutionCode, action]);
 
   const row = result.rows[0];
   if (!row) {
-    const exists = await query<{ status: string }>(
+    const exists = await query<{ status: string; assigned_admin_user_id: string | null }>(
       kind === 'report'
-        ? 'SELECT status::text FROM app.reports WHERE id=$1'
-        : 'SELECT status::text FROM app.safety_events WHERE id=$1',
+        ? 'SELECT status::text, assigned_admin_user_id::text FROM app.reports WHERE id=$1'
+        : 'SELECT status::text, assigned_admin_user_id::text FROM app.safety_events WHERE id=$1',
       [id],
     );
-    if (!exists.rows[0]) throw new HttpError(404, 'safety_case_not_found');
-    throw new HttpError(409, 'safety_case_closed');
+    const existing = exists.rows[0];
+    if (!existing) throw new HttpError(404, 'safety_case_not_found');
+    if (existing.status === 'resolved' || existing.status === 'dismissed') throw new HttpError(409, 'safety_case_closed');
+    throw new HttpError(409, 'safety_case_conflict');
   }
 
   sendJson(res, 200, {

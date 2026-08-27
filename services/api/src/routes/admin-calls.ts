@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
+import { getAdminCallAnomalies } from './admin-call-anomalies.ts';
 
 const allowedStatuses = new Set([
   'requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener',
@@ -22,8 +23,12 @@ function readStatus(url: URL): string | null {
 }
 
 export async function listAdminCalls(req: IncomingMessage, res: ServerResponse) {
-  await requireAdmin(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
+  if (url.searchParams.get('anomalies') === 'true') {
+    return await getAdminCallAnomalies(req, res);
+  }
+
+  await requireAdmin(req);
   const limit = readLimit(url);
   const status = readStatus(url);
 

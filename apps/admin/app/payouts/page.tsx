@@ -17,6 +17,15 @@ type Payout = {
   paidAt: string | null;
 };
 
+type PayoutCandidate = {
+  listenerUserId: string;
+  currencyCode: string;
+  availableMinor: string;
+  earningCount: number;
+  oldestAvailableAt: string;
+  kycStatus: string;
+};
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -40,6 +49,7 @@ function formatAmount(amountMinor: string, currencyCode: string): string {
 
 export default function PayoutsPage() {
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [candidates, setCandidates] = useState<PayoutCandidate[]>([]);
   const [status, setStatus] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -47,8 +57,9 @@ export default function PayoutsPage() {
   async function load() {
     setError('');
     const qs = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
-    const value = await api<{ payouts: Payout[] }>(`/api/ops/payouts${qs}`);
+    const value = await api<{ payouts: Payout[]; payoutCandidates: PayoutCandidate[] }>(`/api/ops/payouts${qs}`);
     setPayouts(value.payouts);
+    setCandidates(value.payoutCandidates ?? []);
   }
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : 'request_failed')); }, [status]);
@@ -82,6 +93,36 @@ export default function PayoutsPage() {
           <button className="ghost" onClick={() => load()} disabled={Boolean(busyId)}>به‌روزرسانی</button>
         </div>
       </header>
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <p className="kicker">PAYOUT READY</p>
+            <h2>درآمدهای available خارج از payout</h2>
+          </div>
+          <span className="statusPill">{candidates.length.toLocaleString('fa-IR')}</span>
+        </div>
+        <p className="muted">این بخش فقط read-only است. `pending` را available نمی‌کند و هیچ payout یا انتقال بانکی خودکار نمی‌سازد.</p>
+        <div className="queue">
+          {candidates.map((candidate) => (
+            <article key={`${candidate.listenerUserId}:${candidate.currencyCode}`} className="subPanel">
+              <div className="sectionHeader">
+                <div>
+                  <p className="kicker">Listener {candidate.listenerUserId.slice(0, 8)}…</p>
+                  <h3>{formatAmount(candidate.availableMinor, candidate.currencyCode)}</h3>
+                </div>
+                <span className="statusPill">{candidate.kycStatus === 'verified' ? 'READY' : 'KYC'}</span>
+              </div>
+              <div className="facts compact">
+                <p><b>Earnings:</b> {candidate.earningCount.toLocaleString('fa-IR')}</p>
+                <p><b>KYC:</b> {candidate.kycStatus}</p>
+                <p><b>قدیمی‌ترین available:</b> {new Date(candidate.oldestAvailableAt).toLocaleString('fa-IR')}</p>
+              </div>
+            </article>
+          ))}
+          {!candidates.length && <p className="muted">earning آماده و خارج از payout وجود ندارد.</p>}
+        </div>
+      </section>
 
       <section className="panel">
         <div className="reviewRow wide">

@@ -27,8 +27,12 @@ test('ambiguous initialization UI forbids manual credit and blind recreation', (
   assert.doesNotMatch(page, /manual credit|creditWallet|forceSuccess/i);
 });
 
-test('payment creation ambiguity remains visible as a known core hardening target', () => {
+test('payment creation keeps ambiguous provider failures pending and only terminals explicit token rejection', () => {
   assert.match(payments, /provider\.createPayment/);
   assert.match(payments, /payment_initializing/);
-  assert.match(payments, /provider_payment_id IS NULL/);
+  assert.match(payments, /payment_token_initialization_ambiguous/);
+  assert.match(payments, /error\.code === 'payment_token_failed'/);
+  assert.match(payments, /error\.providerCode !== null/);
+  assert.match(payments, /if \(definitiveTokenFailure\) \{[\s\S]*SET status='failed'/);
+  assert.doesNotMatch(payments, /catch \(error\) \{\s*await query\([\s\S]*SET status='failed'/);
 });

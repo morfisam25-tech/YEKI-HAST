@@ -4,6 +4,7 @@ import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 
 const ALLOWED_STATUSES = new Set(['created', 'processing', 'failed', 'paid']);
+const AMBIGUOUS_DISPATCH_MINUTES = 5;
 
 function limitFrom(value: string | null): number {
   if (!value) return 50;
@@ -26,6 +27,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
     currency_code: string;
     status: string;
     provider: string | null;
+    dispatch_needs_reconciliation: boolean;
     created_at: string;
     updated_at: string;
     paid_at: string | null;
@@ -38,6 +40,12 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
            p.currency_code,
            p.status::text,
            p.provider,
+           (
+             p.status::text='processing'
+             AND p.provider IS NOT NULL
+             AND p.provider_reference IS NULL
+             AND p.updated_at < now() - ($3::int * interval '1 minute')
+           ) AS dispatch_needs_reconciliation,
            p.created_at::text,
            p.updated_at::text,
            p.paid_at::text,
@@ -57,9 +65,10 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       END,
       p.created_at ASC
     LIMIT $2
-  `, [status, limit]);
+  `, [status, limit, AMBIGUOUS_DISPATCH_MINUTES]);
 
   sendJson(res, 200, {
+    thresholds: { ambiguousDispatchMinutes: AMBIGUOUS_DISPATCH_MINUTES },
     payouts: result.rows.map((row) => ({
       id: row.id,
       listenerUserId: row.listener_user_id,
@@ -67,11 +76,14 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       currencyCode: row.currency_code,
       status: row.status,
       provider: row.provider,
+      dispatchNeedsReconciliation: row.dispatch_needs_reconciliation,
       sourceCount: Number(row.source_count),
       kycStatus: row.kyc_status ?? 'not_started',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       paidAt: row.paid_at,
     })),
+    providerReferencesIncluded: false,
+    bankDetailsIncluded: false,
   });
 }

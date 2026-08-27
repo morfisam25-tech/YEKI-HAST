@@ -33,6 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a style={linkStyle} href="/">داشبورد</a>
           <a style={linkStyle} href="/calls">تماس‌ها</a>
           <a style={linkStyle} href="/safety">ایمنی</a>
+          <a style={linkStyle} href="/waitlist">صف Caller</a>
           <a style={linkStyle} href="/payments">شارژها</a>
           <a style={linkStyle} href="/payouts">تسویه‌ها</a>
         </nav>

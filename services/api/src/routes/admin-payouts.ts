@@ -1,16 +1,58 @@
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { query } from '../../../../packages/db/src/client.ts';
+import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
-import { HttpError, sendJson } from '../lib/http.ts';
+import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 
 const ALLOWED_STATUSES = new Set(['created', 'processing', 'failed', 'paid']);
 const AMBIGUOUS_DISPATCH_MINUTES = 5;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CANDIDATE_VERSION_RE = /^[0-9a-f]{64}$/i;
 
 function limitFrom(value: string | null): number {
   if (!value) return 50;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) throw new HttpError(400, 'invalid_limit');
   return parsed;
+}
+
+function uuidFrom(value: unknown, field: string): string {
+  const id = requireString(value, field, 36, 36);
+  if (!UUID_RE.test(id)) throw new HttpError(400, `invalid_${field}`);
+  return id;
+}
+
+function currencyFrom(value: unknown): string {
+  const currency = requireString(value, 'currencyCode', 3, 3).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new HttpError(400, 'invalid_currency');
+  return currency;
+}
+
+function positiveMinorFrom(value: unknown): bigint {
+  const raw = requireString(value, 'expectedAvailableMinor', 1, 30);
+  if (!/^\d+$/.test(raw)) throw new HttpError(400, 'invalid_expected_amount');
+  const amount = BigInt(raw);
+  if (amount <= 0n) throw new HttpError(400, 'invalid_expected_amount');
+  return amount;
+}
+
+function positiveCountFrom(value: unknown): number {
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 1 || count > 100_000) {
+    throw new HttpError(400, 'invalid_expected_earning_count');
+  }
+  return count;
+}
+
+function candidateVersionFor(
+  listenerUserId: string,
+  marketId: string,
+  currencyCode: string,
+  sources: string[],
+): string {
+  return createHash('sha256')
+    .update([listenerUserId, marketId, currencyCode, ...sources].join('\n'))
+    .digest('hex');
 }
 
 export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse) {
@@ -75,6 +117,7 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       earning_count: string;
       oldest_available_at: string;
       kyc_status: string | null;
+      earning_sources: string[];
     }>(`
       SELECT e.listener_user_id::text,
              e.market_id::text,
@@ -82,7 +125,8 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
              COALESCE(SUM(e.amount_minor),0)::text AS available_minor,
              COUNT(*)::text AS earning_count,
              MIN(e.created_at)::text AS oldest_available_at,
-             k.status::text AS kyc_status
+             k.status::text AS kyc_status,
+             ARRAY_AGG(e.id::text || ':' || e.amount_minor::text ORDER BY e.id::text) AS earning_sources
       FROM app.listener_earnings e
       LEFT JOIN app.payout_items pi ON pi.earning_id=e.id
       LEFT JOIN private_data.listener_kyc k ON k.user_id=e.listener_user_id
@@ -134,6 +178,12 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       earningCount: Number(row.earning_count),
       oldestAvailableAt: row.oldest_available_at,
       kycStatus: row.kyc_status ?? 'not_started',
+      candidateVersion: candidateVersionFor(
+        row.listener_user_id,
+        row.market_id,
+        row.currency_code,
+        row.earning_sources,
+      ),
     })),
     pendingEarningBacklog: pendingBacklog.rows.map((row) => ({
       currencyCode: row.currency_code,
@@ -143,6 +193,166 @@ export async function listAdminPayouts(req: IncomingMessage, res: ServerResponse
       oldestPendingAt: row.oldest_pending_at,
     })),
     providerReferencesIncluded: false,
+    bankDetailsIncluded: false,
+  });
+}
+
+export async function prepareAdminPayout(req: IncomingMessage, res: ServerResponse) {
+  const admin = await requireAdmin(req);
+  const body = await readJson<{
+    listenerUserId?: unknown;
+    marketId?: unknown;
+    currencyCode?: unknown;
+    expectedAvailableMinor?: unknown;
+    expectedEarningCount?: unknown;
+    candidateVersion?: unknown;
+  }>(req);
+
+  const listenerUserId = uuidFrom(body.listenerUserId, 'listener');
+  const marketId = uuidFrom(body.marketId, 'market');
+  const currencyCode = currencyFrom(body.currencyCode);
+  const expectedAvailableMinor = positiveMinorFrom(body.expectedAvailableMinor);
+  const expectedEarningCount = positiveCountFrom(body.expectedEarningCount);
+  const candidateVersion = requireString(body.candidateVersion, 'candidateVersion', 64, 64).toLowerCase();
+  if (!CANDIDATE_VERSION_RE.test(candidateVersion)) throw new HttpError(400, 'invalid_candidate_version');
+
+  const prepared = await withTransaction(async (client) => {
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+      [`yeki_hast:payout_prepare:${listenerUserId}:${marketId}:${currencyCode}`],
+    );
+
+    const prior = await client.query<{
+      id: string;
+      status: string;
+      amount_minor: string;
+      total_source_count: string;
+      earning_source_count: string;
+      earning_sources: string[] | null;
+    }>(`
+      SELECT p.id::text,
+             p.status::text,
+             p.amount_minor::text,
+             COUNT(pi.id)::text AS total_source_count,
+             COUNT(pi.earning_id)::text AS earning_source_count,
+             ARRAY_AGG(pi.earning_id::text || ':' || pi.amount_minor::text ORDER BY pi.earning_id::text)
+               FILTER (WHERE pi.earning_id IS NOT NULL) AS earning_sources
+      FROM app.payouts p
+      JOIN app.payout_items pi ON pi.payout_id=p.id
+      WHERE p.listener_user_id=$1
+        AND p.market_id=$2
+        AND p.currency_code=$3
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+      LIMIT 100
+    `, [listenerUserId, marketId, currencyCode]);
+
+    for (const row of prior.rows) {
+      const sources = row.earning_sources ?? [];
+      if (Number(row.total_source_count) !== Number(row.earning_source_count)) continue;
+      if (Number(row.earning_source_count) !== expectedEarningCount) continue;
+      if (BigInt(row.amount_minor) !== expectedAvailableMinor) continue;
+      if (candidateVersionFor(listenerUserId, marketId, currencyCode, sources) !== candidateVersion) continue;
+      return {
+        payoutId: row.id,
+        status: row.status,
+        amountMinor: row.amount_minor,
+        currencyCode,
+        sourceCount: Number(row.earning_source_count),
+        idempotent: true,
+      };
+    }
+
+    const earnings = await client.query<{
+      id: string;
+      amount_minor: string;
+    }>(`
+      SELECT e.id::text, e.amount_minor::text
+      FROM app.listener_earnings e
+      LEFT JOIN app.payout_items pi ON pi.earning_id=e.id
+      WHERE e.listener_user_id=$1
+        AND e.market_id=$2
+        AND e.currency_code=$3
+        AND e.status='available'
+        AND pi.id IS NULL
+      ORDER BY e.created_at ASC, e.id ASC
+      FOR UPDATE OF e
+    `, [listenerUserId, marketId, currencyCode]);
+
+    if (!earnings.rowCount) throw new HttpError(409, 'payout_candidate_not_found');
+
+    const sourceStrings = earnings.rows
+      .map((row) => `${row.id}:${row.amount_minor}`)
+      .sort();
+    const actualVersion = candidateVersionFor(listenerUserId, marketId, currencyCode, sourceStrings);
+    const actualAmountMinor = earnings.rows.reduce((sum, row) => sum + BigInt(row.amount_minor), 0n);
+
+    if (
+      actualVersion !== candidateVersion
+      || earnings.rows.length !== expectedEarningCount
+      || actualAmountMinor !== expectedAvailableMinor
+    ) {
+      throw new HttpError(409, 'payout_candidate_changed');
+    }
+
+    const payoutId = randomUUID();
+    await client.query(`
+      INSERT INTO app.payouts(id, listener_user_id, market_id, currency_code, amount_minor, status)
+      VALUES ($1,$2,$3,$4,$5,'created')
+    `, [payoutId, listenerUserId, marketId, currencyCode, actualAmountMinor.toString()]);
+
+    const itemIds = earnings.rows.map(() => randomUUID());
+    const earningIds = earnings.rows.map((row) => row.id);
+    const attached = await client.query(`
+      INSERT INTO app.payout_items(id, payout_id, listener_user_id, currency_code, earning_id, amount_minor)
+      SELECT source.item_id,
+             $1,
+             e.listener_user_id,
+             e.currency_code,
+             e.id,
+             e.amount_minor
+      FROM UNNEST($2::uuid[], $3::uuid[]) AS source(item_id, earning_id)
+      JOIN app.listener_earnings e ON e.id=source.earning_id
+    `, [payoutId, itemIds, earningIds]);
+    if (attached.rowCount !== earnings.rows.length) throw new HttpError(409, 'payout_source_attach_conflict');
+
+    await client.query(`
+      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1,'payout_prepared','payout',$2,
+              jsonb_build_object(
+                'listenerUserId',$3,
+                'marketId',$4,
+                'currencyCode',$5,
+                'amountMinor',$6,
+                'sourceCount',$7,
+                'candidateVersion',$8
+              ))
+    `, [
+      admin.userId,
+      payoutId,
+      listenerUserId,
+      marketId,
+      currencyCode,
+      actualAmountMinor.toString(),
+      earnings.rows.length,
+      candidateVersion,
+    ]);
+
+    return {
+      payoutId,
+      status: 'created',
+      amountMinor: actualAmountMinor.toString(),
+      currencyCode,
+      sourceCount: earnings.rows.length,
+      idempotent: false,
+    };
+  });
+
+  sendJson(res, prepared.idempotent ? 200 : 201, {
+    ok: true,
+    ...prepared,
+    providerCallIncluded: false,
+    pendingEarningsTouched: false,
     bankDetailsIncluded: false,
   });
 }

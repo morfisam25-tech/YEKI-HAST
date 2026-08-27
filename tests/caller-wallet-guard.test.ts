@@ -34,6 +34,14 @@ test('caller can explicitly verify pending topup and refresh wallet balance', ()
   assert.match(wallet, /بررسی پرداخت/);
 });
 
+test('returning from payment browser refreshes attempt status without blindly re-verifying', () => {
+  assert.match(wallet, /AppState\.addEventListener\('change'/);
+  assert.match(wallet, /nextState !== 'active'/);
+  assert.match(wallet, /Promise\.all\(\[getWalletTopup\(token, attemptId\), getWallet\(token\)\]\)/);
+  assert.match(wallet, /setAttempt\(latestAttempt\)/);
+  assert.match(wallet, /subscription\.remove\(\)/);
+});
+
 test('wallet card is hidden while a call is active or recovery conflict is unresolved', () => {
   assert.match(caller, /import CallerWalletCard from '\.\/CallerWalletCard'/);
   assert.match(caller, /recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token=\{token\} \/>/);

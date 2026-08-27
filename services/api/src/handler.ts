@@ -42,6 +42,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/payments/nextpay/callback') { ensureDatabaseReady(); const { nextPayCallback } = await import('./routes/payments.ts'); return await nextPayCallback(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') { ensureOtpReady(); const { requestOtp } = await import('./routes/auth.ts'); return await requestOtp(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/otp/verify') { ensureOtpReady(); const { verifyOtp } = await import('./routes/auth.ts'); return await verifyOtp(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/auth/session') { ensureDatabaseReady(); const { getCurrentSession } = await import('./routes/auth.ts'); return await getCurrentSession(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/auth/logout') { ensureDatabaseReady(); const { logoutCurrentSession } = await import('./routes/auth.ts'); return await logoutCurrentSession(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet') { ensureDatabaseReady(); const { getWallet } = await import('./routes/payments.ts'); return await getWallet(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet/transactions') { ensureDatabaseReady(); const { getWalletTransactions } = await import('./routes/payments.ts'); return await getWalletTransactions(req, res); }
     if (method === 'POST' && url.pathname === '/v1/wallet/topups') { ensureDatabaseReady(); const { createWalletTopup } = await import('./routes/payments.ts'); return await createWalletTopup(req, res); }

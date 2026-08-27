@@ -75,6 +75,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/admin/safety-cases') { ensureDatabaseReady(); const { listAdminSafetyCases } = await import('./routes/admin-safety.ts'); return await listAdminSafetyCases(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/calls') { ensureDatabaseReady(); const { listAdminCalls } = await import('./routes/admin-calls.ts'); return await listAdminCalls(req, res); }
 
+    const adminCallRecoveryMatch = url.pathname.match(/^\/v1\/admin\/calls\/([^/]+)\/recover-stale-routing$/);
+    if (method === 'POST' && adminCallRecoveryMatch) { ensureDatabaseReady(); const { recoverStaleRoutingCall } = await import('./routes/admin-call-recovery.ts'); return await recoverStaleRoutingCall(req, res, adminCallRecoveryMatch[1]); }
     const adminSafetyActionMatch = url.pathname.match(/^\/v1\/admin\/safety-cases\/(reports|events)\/([^/]+)$/);
     if (method === 'POST' && adminSafetyActionMatch) { ensureDatabaseReady(); const { actOnAdminSafetyCase } = await import('./routes/admin-safety.ts'); return await actOnAdminSafetyCase(req, res, adminSafetyActionMatch[1] === 'reports' ? 'report' : 'event', adminSafetyActionMatch[2]); }
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);

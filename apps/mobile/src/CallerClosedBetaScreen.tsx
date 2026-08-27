@@ -29,6 +29,7 @@ function messageFor(code: string): string {
     caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
+    caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
     no_listener_available: 'فعلاً شنونده آماده‌ای پیدا نشد.',
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
@@ -127,7 +128,22 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         setError(messageFor(getErrorCode(cause)));
       }
     } catch (cause) {
-      setError(messageFor(getErrorCode(cause)));
+      const code = getErrorCode(cause);
+      if (code === 'caller_call_already_active') {
+        try {
+          const recovered = await getActiveCall(token);
+          if (recovered.activeCall) {
+            setSelected(null);
+            setCall(recovered.activeCall);
+            setStage('call');
+            return;
+          }
+        } catch (recoveryCause) {
+          setError(messageFor(getErrorCode(recoveryCause)));
+          return;
+        }
+      }
+      setError(messageFor(code));
     } finally {
       setBusy(false);
     }

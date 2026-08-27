@@ -94,25 +94,59 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     listener_earning_minor: string;
     updated_at: string;
   }>(`
-    SELECT id::text,
-           status::text,
+    SELECT cs.id::text,
+           cs.status::text,
            CASE
-             WHEN caller_charge_minor > authorized_minor THEN 'charge_exceeds_authorization'
-             WHEN listener_earning_minor > caller_charge_minor THEN 'earning_exceeds_charge'
-             WHEN status::text='connected' AND billing_started_at IS NULL THEN 'connected_without_billing_start'
-             WHEN status::text IN ('completed','cancelled','failed','safety_terminated') AND ended_at IS NULL THEN 'terminal_without_end_time'
+             WHEN cs.caller_charge_minor > cs.authorized_minor THEN 'charge_exceeds_authorization'
+             WHEN cs.listener_earning_minor > cs.caller_charge_minor THEN 'earning_exceeds_charge'
+             WHEN cs.status::text='connected' AND cs.billing_started_at IS NULL THEN 'connected_without_billing_start'
+             WHEN cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+                  AND cs.ended_at IS NOT NULL THEN 'active_with_end_time'
+             WHEN cs.status::text IN ('completed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL THEN 'terminal_without_end_time'
+             WHEN cs.status::text IN ('completed','safety_terminated')
+                  AND cs.caller_charge_minor > 0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM app.wallet_transactions wt
+                    WHERE wt.call_session_id=cs.id AND wt.type='call_charge'
+                  ) THEN 'charge_without_wallet_transaction'
+             WHEN cs.status::text IN ('completed','safety_terminated')
+                  AND cs.listener_earning_minor > 0
+                  AND NOT EXISTS (
+                    SELECT 1 FROM app.listener_earnings le
+                    WHERE le.call_session_id=cs.id
+                  ) THEN 'earning_without_listener_earning'
              ELSE 'unknown'
            END AS issue_code,
-           authorized_minor::text,
-           caller_charge_minor::text,
-           listener_earning_minor::text,
-           updated_at::text
-    FROM app.call_sessions
-    WHERE caller_charge_minor > authorized_minor
-       OR listener_earning_minor > caller_charge_minor
-       OR (status::text='connected' AND billing_started_at IS NULL)
-       OR (status::text IN ('completed','cancelled','failed','safety_terminated') AND ended_at IS NULL)
-    ORDER BY updated_at ASC
+           cs.authorized_minor::text,
+           cs.caller_charge_minor::text,
+           cs.listener_earning_minor::text,
+           cs.updated_at::text
+    FROM app.call_sessions cs
+    WHERE cs.caller_charge_minor > cs.authorized_minor
+       OR cs.listener_earning_minor > cs.caller_charge_minor
+       OR (cs.status::text='connected' AND cs.billing_started_at IS NULL)
+       OR (
+         cs.status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+         AND cs.ended_at IS NOT NULL
+       )
+       OR (cs.status::text IN ('completed','cancelled','failed','safety_terminated') AND cs.ended_at IS NULL)
+       OR (
+         cs.status::text IN ('completed','safety_terminated')
+         AND cs.caller_charge_minor > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM app.wallet_transactions wt
+           WHERE wt.call_session_id=cs.id AND wt.type='call_charge'
+         )
+       )
+       OR (
+         cs.status::text IN ('completed','safety_terminated')
+         AND cs.listener_earning_minor > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM app.listener_earnings le
+           WHERE le.call_session_id=cs.id
+         )
+       )
+    ORDER BY cs.updated_at ASC
     LIMIT 100
   `);
 

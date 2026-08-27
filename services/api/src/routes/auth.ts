@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
+import { requireAuth, revokeCurrentSession } from '../lib/auth.ts';
 import {
   encryptPrivateText,
   generateOtp,
@@ -187,4 +188,14 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
 
   if (outcome.kind !== 'ok') throw new HttpError(400, 'invalid_otp');
   sendJson(res, 200, { ok: true, userId: outcome.userId, token: rawSessionToken, expiresInHours: ttlHours });
+}
+
+export async function getCurrentSession(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  sendJson(res, 200, { ok: true, userId });
+}
+
+export async function logoutCurrentSession(req: IncomingMessage, res: ServerResponse) {
+  await revokeCurrentSession(req);
+  sendJson(res, 200, { ok: true });
 }

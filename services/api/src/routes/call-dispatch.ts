@@ -31,7 +31,9 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     if (row.provider_bridge_id) return { kind: 'already_dispatched' as const, status: row.status };
-    if (row.status !== 'routing') throw new HttpError(409, 'call_cannot_be_dispatched');
+    if (row.status !== 'routing' && row.status !== 'calling_caller') {
+      throw new HttpError(409, 'call_cannot_be_dispatched');
+    }
     if (!row.listener_user_id || !row.max_billable_seconds || row.max_billable_seconds < 1) {
       throw new HttpError(409, 'call_not_dispatchable');
     }
@@ -48,17 +50,19 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       throw new HttpError(409, 'verified_phone_required');
     }
 
-    const updated = await client.query(`
-      UPDATE app.call_sessions
-      SET status='calling_caller', telephony_provider=$2, updated_at=now()
-      WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
-      RETURNING id
-    `, [row.id, process.env.TELEPHONY_PROVIDER?.trim() || null]);
-    if (!updated.rowCount) throw new HttpError(409, 'call_dispatch_conflict');
-    await client.query(`
-      INSERT INTO app.call_events(call_session_id, status, source)
-      VALUES ($1,'calling_caller','api')
-    `, [row.id]);
+    if (row.status === 'routing') {
+      const updated = await client.query(`
+        UPDATE app.call_sessions
+        SET status='calling_caller', telephony_provider=$2, updated_at=now()
+        WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
+        RETURNING id
+      `, [row.id, process.env.TELEPHONY_PROVIDER?.trim() || null]);
+      if (!updated.rowCount) throw new HttpError(409, 'call_dispatch_conflict');
+      await client.query(`
+        INSERT INTO app.call_events(call_session_id, status, source)
+        VALUES ($1,'calling_caller','api')
+      `, [row.id]);
+    }
 
     return {
       kind: 'claimed' as const,
@@ -87,31 +91,15 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     });
     bridgeId = result.providerBridgeId;
   } catch {
-    await withTransaction(async (client) => {
-      const failed = await client.query(`
-        UPDATE app.call_sessions
-        SET status='failed', ended_at=COALESCE(ended_at, now()), ended_reason='telephony_dispatch_failed', updated_at=now()
-        WHERE id=$1 AND status='calling_caller' AND provider_bridge_id IS NULL
-        RETURNING caller_user_id::text, currency_code, authorized_minor::text
-      `, [claimed.callId]);
-      const row = failed.rows[0] as { caller_user_id?: string; currency_code?: string; authorized_minor?: string } | undefined;
-      if (!row?.caller_user_id || !row.currency_code || row.authorized_minor === undefined) return;
-      const authorized = BigInt(row.authorized_minor);
-      if (authorized > 0n) {
-        const released = await client.query(`
-          UPDATE app.wallets
-          SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
-          WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
-          RETURNING id
-        `, [row.caller_user_id, row.currency_code, authorized.toString()]);
-        if (!released.rowCount) throw new Error('wallet_release_conflict');
-      }
-      await client.query(`
+    try {
+      await query(`
         INSERT INTO app.call_events(call_session_id, status, source, metadata)
-        VALUES ($1,'failed','telephony',jsonb_build_object('reason','dispatch_failed'))
+        VALUES ($1,'calling_caller','telephony',jsonb_build_object('reason','dispatch_result_uncertain'))
       `, [claimed.callId]);
-    });
-    throw new HttpError(503, 'telephony_dispatch_failed');
+    } catch {
+      console.error('telephony_dispatch_uncertain_event_failed', { callId: claimed.callId });
+    }
+    throw new HttpError(503, 'telephony_dispatch_uncertain');
   }
 
   const persisted = await query(`

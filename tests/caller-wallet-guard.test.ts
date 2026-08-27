@@ -20,9 +20,17 @@ test('caller wallet reads available and reserved funds from server wallet state'
   assert.match(wallet, /wallet\?\.reservedMinor/);
 });
 
-test('caller topup uses backend idempotency and opens only returned payment URL', () => {
+test('caller topup reuses one idempotency key for retries of the same amount', () => {
+  assert.match(wallet, /const topupKeyRef = useRef<\{ amountMinor: string; key: string \} \| null>\(null\)/);
+  assert.match(wallet, /topupKeyRef\.current\.amountMinor !== amountMinorText/);
+  assert.match(wallet, /key: `mobile-\$\{Date\.now\(\)\}-\$\{Math\.random\(\)/);
+  assert.match(wallet, /topupKeyRef\.current\.key/);
+  assert.match(wallet, /function changeAmount/);
+  assert.match(wallet, /topupKeyRef\.current = null/);
+});
+
+test('caller topup opens only returned payment URL', () => {
   assert.match(wallet, /createWalletTopup\(/);
-  assert.match(wallet, /`mobile-\$\{Date\.now\(\)\}-\$\{Math\.random\(\)/);
   assert.match(wallet, /if \(created\.paymentUrl\) await Linking\.openURL\(created\.paymentUrl\)/);
   assert.doesNotMatch(wallet, /nextpay\.org/);
 });

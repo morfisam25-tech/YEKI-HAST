@@ -56,6 +56,22 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     LIMIT 100
   `, [CONNECTED_GRACE_SECONDS]);
 
+  const duplicateActiveCallers = await query<{
+    caller_user_id: string;
+    active_call_count: number;
+    call_ids: string[];
+  }>(`
+    SELECT caller_user_id::text,
+           COUNT(*)::int AS active_call_count,
+           ARRAY_AGG(id::text ORDER BY requested_at ASC) AS call_ids
+    FROM app.call_sessions
+    WHERE status::text IN ('requested','routing','calling_caller','caller_answered','calling_listener','connected')
+    GROUP BY caller_user_id
+    HAVING COUNT(*) > 1
+    ORDER BY COUNT(*) DESC, caller_user_id
+    LIMIT 100
+  `);
+
   const underReservedWallets = await query<{
     user_id: string;
     currency_code: string;
@@ -161,6 +177,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
       missingBridge: missingBridge.rowCount ?? missingBridge.rows.length,
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
+      duplicateActiveCallers: duplicateActiveCallers.rowCount ?? duplicateActiveCallers.rows.length,
       underReservedWallets: underReservedWallets.rowCount ?? underReservedWallets.rows.length,
       invariantViolations: invariantViolations.rowCount ?? invariantViolations.rows.length,
     },
@@ -183,6 +200,11 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         billingStartedAt: row.billing_started_at,
         maxBillableSeconds: row.max_billable_seconds,
         updatedAt: row.updated_at,
+      })),
+      duplicateActiveCallers: duplicateActiveCallers.rows.map((row) => ({
+        callerUserId: row.caller_user_id,
+        activeCallCount: row.active_call_count,
+        callIds: row.call_ids,
       })),
       underReservedWallets: underReservedWallets.rows.map((row) => ({
         userId: row.user_id,

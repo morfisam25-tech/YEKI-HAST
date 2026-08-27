@@ -8,7 +8,7 @@ test('caller cancellation keeps provider bridge private', () => {
   assert.match(source, /provider_bridge_id/);
   const cancelSection = source.slice(source.indexOf('export async function cancelCall'));
   assert.doesNotMatch(cancelSection, /providerBridgeId\s*:/);
-  assert.doesNotMatch(cancelSection, /provider_bridge_id\s*[,}]/);
+  assert.match(cancelSection, /sendJson\(res, 200, \{ ok: true, callId, status: result\.status, idempotent: result\.idempotent \}\)/);
 });
 
 test('confirmed provider termination happens before reservation release and terminal mutation', () => {

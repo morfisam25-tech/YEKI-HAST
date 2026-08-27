@@ -42,6 +42,9 @@ async function transitionByProvider(input: {
     if (row.status === input.toStatus) {
       return { callId: input.callId, status: input.toStatus, idempotent: true };
     }
+    if (input.toStatus === 'caller_answered' && row.status === 'calling_listener') {
+      return { callId: input.callId, status: row.status, idempotent: true };
+    }
     if (['connected', 'completed', 'missed', 'failed', 'cancelled', 'safety_terminated'].includes(row.status)) {
       return { callId: input.callId, status: row.status, idempotent: true };
     }

@@ -131,6 +131,21 @@ export type CallResponse = {
   idempotent?: boolean;
 };
 
+export type SafetyExitResponse = {
+  ok: true;
+  callId: string;
+  status: string;
+  blocked: boolean;
+  idempotent: boolean;
+  safetyEventId: string | null;
+  settlement: null | {
+    billableSeconds: number;
+    callerChargeMinor: string;
+    listenerEarningMinor: string;
+    idempotent: boolean;
+  };
+};
+
 export type BrowseListener = {
   userId: string;
   nickname: string;
@@ -363,10 +378,14 @@ export function cancelCall(token: string, callId: string): Promise<CallResponse>
   return request(`/v1/calls/${encodeURIComponent(callId)}/cancel`, { method: 'POST' }, token);
 }
 
-export function safetyExitCall(token: string, callId: string, reasonCode = 'user_requested_exit'): Promise<{ ok: true; callId: string; status: string }> {
+export function safetyExitCall(
+  token: string,
+  callId: string,
+  input: { details?: string; blockCounterparty?: boolean } = {},
+): Promise<SafetyExitResponse> {
   return request(`/v1/calls/${encodeURIComponent(callId)}/safety-exit`, {
     method: 'POST',
-    body: JSON.stringify({ reasonCode }),
+    body: JSON.stringify(input),
   }, token);
 }
 

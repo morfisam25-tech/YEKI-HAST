@@ -25,6 +25,7 @@ type PayoutCandidate = {
   earningCount: number;
   oldestAvailableAt: string;
   kycStatus: string;
+  candidateVersion: string;
 };
 
 type PendingEarningBacklog = {
@@ -74,6 +75,32 @@ export default function PayoutsPage() {
   }
 
   useEffect(() => { load().catch((cause) => setError(cause instanceof Error ? cause.message : 'request_failed')); }, [status]);
+
+  async function prepare(candidate: PayoutCandidate) {
+    if (busyId) return;
+    const key = `${candidate.listenerUserId}:${candidate.marketId}:${candidate.currencyCode}`;
+    if (!window.confirm('از همین earningهای available یک payout محلی ساخته شود؟ این کار هیچ انتقال بانکی یا provider call انجام نمی‌دهد.')) return;
+    setBusyId(key);
+    setError('');
+    try {
+      await api('/api/ops/payouts/prepare', {
+        method: 'POST',
+        body: JSON.stringify({
+          listenerUserId: candidate.listenerUserId,
+          marketId: candidate.marketId,
+          currencyCode: candidate.currencyCode,
+          expectedAvailableMinor: candidate.availableMinor,
+          expectedEarningCount: candidate.earningCount,
+          candidateVersion: candidate.candidateVersion,
+        }),
+      });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'request_failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function act(payout: Payout, action: 'dispatch' | 'reconcile') {
     if (busyId) return;
@@ -143,25 +170,33 @@ export default function PayoutsPage() {
           </div>
           <span className="statusPill">{candidates.length.toLocaleString('fa-IR')}</span>
         </div>
-        <p className="muted">این بخش فقط read-only است. `pending` را available نمی‌کند و هیچ payout یا انتقال بانکی خودکار نمی‌سازد.</p>
+        <p className="muted">Prepare فقط earningهای همین snapshot را به payout با وضعیت `created` وصل می‌کند. `pending` دست نمی‌خورد و هیچ provider call یا انتقال بانکی انجام نمی‌شود.</p>
         <div className="queue">
-          {candidates.map((candidate) => (
-            <article key={`${candidate.listenerUserId}:${candidate.marketId}:${candidate.currencyCode}`} className="subPanel">
-              <div className="sectionHeader">
-                <div>
-                  <p className="kicker">Listener {candidate.listenerUserId.slice(0, 8)}…</p>
-                  <h3>{formatAmount(candidate.availableMinor, candidate.currencyCode)}</h3>
+          {candidates.map((candidate) => {
+            const candidateKey = `${candidate.listenerUserId}:${candidate.marketId}:${candidate.currencyCode}`;
+            return (
+              <article key={candidateKey} className="subPanel">
+                <div className="sectionHeader">
+                  <div>
+                    <p className="kicker">Listener {candidate.listenerUserId.slice(0, 8)}…</p>
+                    <h3>{formatAmount(candidate.availableMinor, candidate.currencyCode)}</h3>
+                  </div>
+                  <span className="statusPill">{candidate.kycStatus === 'verified' ? 'READY' : 'KYC'}</span>
                 </div>
-                <span className="statusPill">{candidate.kycStatus === 'verified' ? 'READY' : 'KYC'}</span>
-              </div>
-              <div className="facts compact">
-                <p><b>Market:</b> {candidate.marketId.slice(0, 8)}…</p>
-                <p><b>Earnings:</b> {candidate.earningCount.toLocaleString('fa-IR')}</p>
-                <p><b>KYC:</b> {candidate.kycStatus}</p>
-                <p><b>قدیمی‌ترین available:</b> {new Date(candidate.oldestAvailableAt).toLocaleString('fa-IR')}</p>
-              </div>
-            </article>
-          ))}
+                <div className="facts compact">
+                  <p><b>Market:</b> {candidate.marketId.slice(0, 8)}…</p>
+                  <p><b>Earnings:</b> {candidate.earningCount.toLocaleString('fa-IR')}</p>
+                  <p><b>KYC:</b> {candidate.kycStatus}</p>
+                  <p><b>قدیمی‌ترین available:</b> {new Date(candidate.oldestAvailableAt).toLocaleString('fa-IR')}</p>
+                </div>
+                <div className="actions">
+                  <button disabled={Boolean(busyId)} onClick={() => prepare(candidate)}>
+                    {busyId === candidateKey ? 'در حال آماده‌سازی…' : 'Prepare payout'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
           {!candidates.length && <p className="muted">earning آماده و خارج از payout وجود ندارد.</p>}
         </div>
       </section>

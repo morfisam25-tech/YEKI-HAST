@@ -40,6 +40,9 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/safety.ts
           node --experimental-strip-types --check services/api/src/routes/admin.ts
           node --experimental-strip-types --check services/api/src/routes/admin-kyc.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-payouts.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-safety.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-calls.ts
           node --experimental-strip-types --check services/api/src/routes/payouts.ts
           node --experimental-strip-types --check services/api/src/lib/admin.ts
           node --experimental-strip-types --check services/api/src/lib/security.ts

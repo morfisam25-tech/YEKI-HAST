@@ -12,6 +12,8 @@ test('admin operations routes stay wired in the API handler', () => {
   assert.match(handler, /listAdminPayouts/);
   assert.match(handler, /listAdminSafetyCases/);
   assert.match(handler, /listAdminCalls/);
+  assert.match(handler, /adminSafetyActionMatch/);
+  assert.match(handler, /actOnAdminSafetyCase/);
 });
 
 test('admin proxy remains restricted to admin namespace', () => {

@@ -10,6 +10,17 @@ test('payout dispatch requires every source item to remain available before prov
   assert.match(payouts, /g\.status<>'eligible'/);
 });
 
+test('payout dispatch refuses an earning attached from a different market', () => {
+  const dispatchStart = payouts.indexOf('export async function dispatchPayout');
+  const reconcileStart = payouts.indexOf('export async function reconcilePayout');
+  const dispatch = payouts.slice(dispatchStart, reconcileStart);
+  assert.match(dispatch, /JOIN app\.listener_earnings e ON e\.id=pi\.earning_id/);
+  assert.match(dispatch, /e\.market_id<>\$2/);
+  assert.match(dispatch, /\[row\.id, row\.market_id\]/);
+  assert.match(dispatch, /payout_source_market_mismatch/);
+  assert.ok(dispatch.indexOf('payout_source_market_mismatch') < dispatch.indexOf('provider.submit'));
+});
+
 test('payout item total must equal payout amount before dispatch and before paid reconciliation', () => {
   const matches = payouts.match(/payout_amount_mismatch/g) ?? [];
   assert.ok(matches.length >= 2);
@@ -32,4 +43,11 @@ test('ambiguous payout submit is never blindly retried or failed without a provi
   assert.match(payouts, /error\.providerCode !== null/);
   assert.match(payouts, /payout_dispatch_ambiguous/);
   assert.match(payouts, /Never retry or mark failed blindly/);
+});
+
+test('payout write responses never expose provider references or bank tracking numbers', () => {
+  const sendBodies = [...payouts.matchAll(/sendJson\(res,[\s\S]*?\n\s*\}\);/g)].map((match) => match[0]).join('\n');
+  assert.match(sendBodies, /providerReferenceIncluded: false/);
+  assert.doesNotMatch(sendBodies, /providerReference:\s*submitted\.providerReference/);
+  assert.doesNotMatch(sendBodies, /bankTrackingNumber:\s*status\.bankTrackingNumber/);
 });

@@ -4,16 +4,21 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../services/api/src/routes/call-dispatch.ts', import.meta.url), 'utf8');
 
-test('dispatch failure releases the full reservation inside the same transaction', () => {
-  assert.match(source, /withTransaction\(async \(client\) =>/);
-  assert.match(source, /reserved_minor=reserved_minor-\$3::bigint/);
-  assert.match(source, /RETURNING id/);
-  assert.match(source, /if \(!released\.rowCount\) throw new Error\('wallet_release_conflict'\)/);
+test('ambiguous dispatch does not release authorization or claim terminal failure', () => {
+  const createIndex = source.indexOf('createBridgeCall');
+  const catchIndex = source.indexOf('} catch {', createIndex);
+  const persistIndex = source.indexOf('const persisted = await query', catchIndex);
+  assert.ok(createIndex >= 0 && catchIndex > createIndex && persistIndex > catchIndex);
+  const ambiguousSection = source.slice(catchIndex, persistIndex);
+  assert.match(ambiguousSection, /dispatch_result_uncertain/);
+  assert.match(ambiguousSection, /telephony_dispatch_uncertain/);
+  assert.doesNotMatch(ambiguousSection, /reserved_minor=reserved_minor-/);
+  assert.doesNotMatch(ambiguousSection, /SET status='failed'/);
+  assert.doesNotMatch(ambiguousSection, /VALUES \(\$1,'failed'/);
 });
 
-test('dispatch failure cannot report a terminal failure after silently missing wallet release', () => {
-  const failedIndex = source.indexOf("SET status='failed'");
-  const releaseGuardIndex = source.indexOf("if (!released.rowCount) throw new Error('wallet_release_conflict')");
-  const eventIndex = source.indexOf("VALUES ($1,'failed','telephony'");
-  assert.ok(failedIndex >= 0 && releaseGuardIndex > failedIndex && eventIndex > releaseGuardIndex);
+test('dispatch retry remains on the same call session and never creates a new app call', () => {
+  assert.match(source, /row\.status !== 'routing' && row\.status !== 'calling_caller'/);
+  assert.match(source, /callSessionId: claimed\.callId/);
+  assert.doesNotMatch(source, /INSERT INTO app\.call_sessions/);
 });

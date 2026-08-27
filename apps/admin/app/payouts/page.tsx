@@ -19,6 +19,7 @@ type Payout = {
 
 type PayoutCandidate = {
   listenerUserId: string;
+  marketId: string;
   currencyCode: string;
   availableMinor: string;
   earningCount: number;
@@ -105,7 +106,7 @@ export default function PayoutsPage() {
         <p className="muted">این بخش فقط read-only است. `pending` را available نمی‌کند و هیچ payout یا انتقال بانکی خودکار نمی‌سازد.</p>
         <div className="queue">
           {candidates.map((candidate) => (
-            <article key={`${candidate.listenerUserId}:${candidate.currencyCode}`} className="subPanel">
+            <article key={`${candidate.listenerUserId}:${candidate.marketId}:${candidate.currencyCode}`} className="subPanel">
               <div className="sectionHeader">
                 <div>
                   <p className="kicker">Listener {candidate.listenerUserId.slice(0, 8)}…</p>
@@ -114,6 +115,7 @@ export default function PayoutsPage() {
                 <span className="statusPill">{candidate.kycStatus === 'verified' ? 'READY' : 'KYC'}</span>
               </div>
               <div className="facts compact">
+                <p><b>Market:</b> {candidate.marketId.slice(0, 8)}…</p>
                 <p><b>Earnings:</b> {candidate.earningCount.toLocaleString('fa-IR')}</p>
                 <p><b>KYC:</b> {candidate.kycStatus}</p>
                 <p><b>قدیمی‌ترین available:</b> {new Date(candidate.oldestAvailableAt).toLocaleString('fa-IR')}</p>

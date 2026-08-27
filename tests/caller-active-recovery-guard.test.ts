@@ -39,6 +39,16 @@ test('request race recovers the winning active call instead of leaving caller st
   assert.match(screen, /setStage\('call'\)/);
 });
 
+test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {
+  assert.match(screen, /const CALL_STATUS_POLL_MS = 3_000/);
+  assert.match(screen, /stage !== 'call' \|\| !call \|\| terminalStatuses\.has\(call\.status\)/);
+  assert.match(screen, /const next = await getCall\(token, callId\)/);
+  assert.match(screen, /current\?\.callId === callId \? next : current/);
+  assert.match(screen, /setInterval\(\(\) => \{ void syncLiveCall\(\); \}, CALL_STATUS_POLL_MS\)/);
+  assert.match(screen, /clearInterval\(timer\)/);
+  assert.match(screen, /getErrorCode\(cause\) !== 'network_error'/);
+});
+
 test('connected calls remain non-cancellable in caller UI while safety exit stays available', () => {
   assert.match(screen, /const cancellableStatuses = new Set\(\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'\]\)/);
   assert.doesNotMatch(screen, /cancellableStatuses[^\n]*connected/);

@@ -3,6 +3,11 @@ import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 
+const allowedStatuses = new Set([
+  'requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener',
+  'connected', 'completed', 'cancelled', 'failed', 'safety_terminated',
+]);
+
 function readLimit(url: URL): number {
   const raw = url.searchParams.get('limit') ?? '50';
   const value = Number(raw);
@@ -10,11 +15,17 @@ function readLimit(url: URL): number {
   return value;
 }
 
+function readStatus(url: URL): string | null {
+  const raw = url.searchParams.get('status')?.trim() || null;
+  if (raw !== null && !allowedStatuses.has(raw)) throw new HttpError(400, 'invalid_status');
+  return raw;
+}
+
 export async function listAdminCalls(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
   const limit = readLimit(url);
-  const status = url.searchParams.get('status')?.trim() || null;
+  const status = readStatus(url);
 
   const calls = await query<{
     id: string;

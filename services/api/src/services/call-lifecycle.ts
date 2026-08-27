@@ -1,6 +1,8 @@
 import { withTransaction } from '../../../../packages/db/src/client.ts';
+import { previewCallSettlementBigInt } from '../../../../packages/domain/src/billing.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PRE_CONNECTED_STATUSES = ['calling_caller', 'caller_answered', 'calling_listener'] as const;
 
 function assertCallId(callId: string): void {
   if (!UUID_RE.test(callId)) throw new Error('invalid_call');
@@ -10,19 +12,80 @@ function assertBridgeId(providerBridgeId: string): void {
   if (!providerBridgeId.trim() || providerBridgeId.length > 255) throw new Error('invalid_provider_bridge_id');
 }
 
-function roundUpSeconds(seconds: number, increment: number): number {
-  if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error('invalid_connected_seconds');
-  if (!Number.isSafeInteger(increment) || increment < 1 || increment > 60) throw new Error('invalid_billing_increment');
-  if (seconds === 0) return 0;
-  return Math.ceil(seconds / increment) * increment;
+function eventDate(value: Date | undefined, code: string): Date {
+  const date = value ?? new Date();
+  if (!Number.isFinite(date.getTime())) throw new Error(code);
+  return date;
 }
 
-function callerCharge(ratePerMinuteMinor: bigint, billableSeconds: number): bigint {
-  return (ratePerMinuteMinor * BigInt(billableSeconds) + 59n) / 60n;
+async function transitionByProvider(input: {
+  callId: string;
+  providerBridgeId: string;
+  fromStatus: 'calling_caller' | 'caller_answered';
+  toStatus: 'caller_answered' | 'calling_listener';
+  occurredAt?: Date;
+}) {
+  assertCallId(input.callId);
+  assertBridgeId(input.providerBridgeId);
+  const occurredAt = eventDate(input.occurredAt, 'invalid_transition_at');
+
+  return withTransaction(async (client) => {
+    const call = await client.query<{ status: string; provider_bridge_id: string | null }>(`
+      SELECT status::text, provider_bridge_id
+      FROM app.call_sessions
+      WHERE id=$1
+      FOR UPDATE
+    `, [input.callId]);
+    const row = call.rows[0];
+    if (!row) throw new Error('call_not_found');
+    if (row.provider_bridge_id !== input.providerBridgeId) throw new Error('provider_bridge_mismatch');
+    if (row.status === input.toStatus) {
+      return { callId: input.callId, status: input.toStatus, idempotent: true };
+    }
+    if (['connected', 'completed', 'missed', 'failed', 'cancelled', 'safety_terminated'].includes(row.status)) {
+      return { callId: input.callId, status: row.status, idempotent: true };
+    }
+    if (row.status !== input.fromStatus) throw new Error('invalid_call_transition');
+
+    await client.query(`
+      UPDATE app.call_sessions
+      SET status=$2::app.call_status, updated_at=now()
+      WHERE id=$1
+    `, [input.callId, input.toStatus]);
+    await client.query(`
+      INSERT INTO app.call_events(call_session_id, status, source, metadata)
+      VALUES ($1,$2::app.call_status,'telephony',jsonb_build_object('occurredAt',$3::text))
+    `, [input.callId, input.toStatus, occurredAt.toISOString()]);
+    return { callId: input.callId, status: input.toStatus, idempotent: false };
+  });
 }
 
-function listenerEarning(ratePerMinuteMinor: bigint, billableSeconds: number): bigint {
-  return (ratePerMinuteMinor * BigInt(billableSeconds)) / 60n;
+export function markCallerAnsweredByProvider(input: {
+  callId: string;
+  providerBridgeId: string;
+  answeredAt?: Date;
+}) {
+  return transitionByProvider({
+    callId: input.callId,
+    providerBridgeId: input.providerBridgeId,
+    fromStatus: 'calling_caller',
+    toStatus: 'caller_answered',
+    occurredAt: input.answeredAt,
+  });
+}
+
+export function markCallingListenerByProvider(input: {
+  callId: string;
+  providerBridgeId: string;
+  startedAt?: Date;
+}) {
+  return transitionByProvider({
+    callId: input.callId,
+    providerBridgeId: input.providerBridgeId,
+    fromStatus: 'caller_answered',
+    toStatus: 'calling_listener',
+    occurredAt: input.startedAt,
+  });
 }
 
 export async function markCallConnectedByProvider(input: {
@@ -32,12 +95,11 @@ export async function markCallConnectedByProvider(input: {
 }): Promise<{ callId: string; status: 'connected'; idempotent: boolean }> {
   assertCallId(input.callId);
   assertBridgeId(input.providerBridgeId);
-  const connectedAt = input.connectedAt ?? new Date();
-  if (!Number.isFinite(connectedAt.getTime())) throw new Error('invalid_connected_at');
+  const connectedAt = eventDate(input.connectedAt, 'invalid_connected_at');
 
   return withTransaction(async (client) => {
-    const call = await client.query<{ status: string; provider_bridge_id: string | null; connected_at: string | null }>(`
-      SELECT status::text, provider_bridge_id, connected_at::text
+    const call = await client.query<{ status: string; provider_bridge_id: string | null }>(`
+      SELECT status::text, provider_bridge_id
       FROM app.call_sessions
       WHERE id=$1
       FOR UPDATE
@@ -48,9 +110,7 @@ export async function markCallConnectedByProvider(input: {
     if (row.status === 'connected') {
       return { callId: input.callId, status: 'connected' as const, idempotent: true };
     }
-    if (!['calling_caller', 'caller_answered', 'calling_listener'].includes(row.status)) {
-      throw new Error('call_cannot_connect');
-    }
+    if (row.status !== 'calling_listener') throw new Error('call_cannot_connect');
 
     await client.query(`
       UPDATE app.call_sessions
@@ -59,10 +119,67 @@ export async function markCallConnectedByProvider(input: {
       WHERE id=$1
     `, [input.callId, connectedAt.toISOString()]);
     await client.query(`
-      INSERT INTO app.call_events(call_session_id, status, source)
-      VALUES ($1,'connected','telephony')
-    `, [input.callId]);
+      INSERT INTO app.call_events(call_session_id, status, source, metadata)
+      VALUES ($1,'connected','telephony',jsonb_build_object('occurredAt',$2::text))
+    `, [input.callId, connectedAt.toISOString()]);
     return { callId: input.callId, status: 'connected' as const, idempotent: false };
+  });
+}
+
+export async function endUnconnectedCallByProvider(input: {
+  callId: string;
+  providerBridgeId: string;
+  status: 'missed' | 'failed';
+  endedReason?: string;
+  endedAt?: Date;
+}): Promise<{ callId: string; status: 'missed' | 'failed'; idempotent: boolean }> {
+  assertCallId(input.callId);
+  assertBridgeId(input.providerBridgeId);
+  const endedAt = eventDate(input.endedAt, 'invalid_ended_at');
+  const endedReason = (input.endedReason?.trim() || `provider_${input.status}`).slice(0, 120);
+
+  return withTransaction(async (client) => {
+    const call = await client.query<{
+      status: string;
+      caller_user_id: string;
+      currency_code: string;
+      authorized_minor: string;
+      provider_bridge_id: string | null;
+    }>(`
+      SELECT status::text, caller_user_id::text, currency_code, authorized_minor::text, provider_bridge_id
+      FROM app.call_sessions
+      WHERE id=$1
+      FOR UPDATE
+    `, [input.callId]);
+    const row = call.rows[0];
+    if (!row) throw new Error('call_not_found');
+    if (row.provider_bridge_id !== input.providerBridgeId) throw new Error('provider_bridge_mismatch');
+    if (row.status === input.status) return { callId: input.callId, status: input.status, idempotent: true };
+    if (!PRE_CONNECTED_STATUSES.includes(row.status as (typeof PRE_CONNECTED_STATUSES)[number])) {
+      throw new Error('call_not_unconnected_terminal');
+    }
+
+    const authorized = BigInt(row.authorized_minor);
+    if (authorized > 0n) {
+      const released = await client.query(`
+        UPDATE app.wallets
+        SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
+        WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
+        RETURNING id
+      `, [row.caller_user_id, row.currency_code, authorized.toString()]);
+      if (!released.rowCount) throw new Error('wallet_release_conflict');
+    }
+
+    await client.query(`
+      UPDATE app.call_sessions
+      SET status=$2::app.call_status, ended_at=COALESCE(ended_at,$3), ended_reason=$4, updated_at=now()
+      WHERE id=$1
+    `, [input.callId, input.status, endedAt.toISOString(), endedReason]);
+    await client.query(`
+      INSERT INTO app.call_events(call_session_id, status, source, metadata)
+      VALUES ($1,$2::app.call_status,'telephony',jsonb_build_object('reason',$3::text,'occurredAt',$4::text))
+    `, [input.callId, input.status, endedReason, endedAt.toISOString()]);
+    return { callId: input.callId, status: input.status, idempotent: false };
   });
 }
 
@@ -174,14 +291,17 @@ export async function settleCallByProvider(input: {
     if (!increment) throw new Error('pricing_plan_unavailable');
 
     const boundedConnectedSeconds = Math.min(input.connectedSeconds, row.max_billable_seconds);
-    const billableSeconds = roundUpSeconds(boundedConnectedSeconds, increment);
-    if (billableSeconds > row.max_billable_seconds) throw new Error('settlement_exceeds_authorized_seconds');
+    const settlement = previewCallSettlementBigInt(
+      BigInt(row.caller_rate),
+      BigInt(row.listener_rate),
+      boundedConnectedSeconds,
+      increment,
+    );
+    if (settlement.billableSeconds > row.max_billable_seconds) throw new Error('settlement_exceeds_authorized_seconds');
 
-    const callerRate = BigInt(row.caller_rate);
-    const listenerRate = BigInt(row.listener_rate);
     const authorized = BigInt(row.authorized_minor);
-    const charge = callerCharge(callerRate, billableSeconds);
-    const earning = listenerEarning(listenerRate, billableSeconds);
+    const charge = settlement.callerChargeMinor;
+    const earning = settlement.listenerEarningMinor;
     if (charge > authorized) throw new Error('settlement_exceeds_authorization');
     if (earning > charge) throw new Error('negative_platform_spread');
 
@@ -200,7 +320,8 @@ export async function settleCallByProvider(input: {
       UPDATE app.wallets
       SET balance_minor=balance_minor-$2::bigint,
           reserved_minor=reserved_minor-$3::bigint,
-          version=version+1
+          version=version+1,
+          updated_at=now()
       WHERE id=$1 AND balance_minor >= $2::bigint AND reserved_minor >= $3::bigint
       RETURNING id::text, balance_minor::text
     `, [walletRow.id, charge.toString(), authorized.toString()]);
@@ -245,16 +366,16 @@ export async function settleCallByProvider(input: {
           platform_contribution_minor=$5::bigint-$6::bigint-telephony_cost_minor-payment_cost_minor-other_variable_cost_minor,
           updated_at=now()
       WHERE id=$1
-    `, [row.id, finalStatus, endedReason, billableSeconds, charge.toString(), earning.toString()]);
+    `, [row.id, finalStatus, endedReason, settlement.billableSeconds, charge.toString(), earning.toString()]);
     await client.query(`
       INSERT INTO app.call_events(call_session_id, status, source, metadata)
-      VALUES ($1,$2,'telephony',jsonb_build_object('billableSeconds',$3))
-    `, [row.id, finalStatus, billableSeconds]);
+      VALUES ($1,$2,'telephony',jsonb_build_object('billableSeconds',$3,'callerChargeMinor',$4::text,'listenerEarningMinor',$5::text))
+    `, [row.id, finalStatus, settlement.billableSeconds, charge.toString(), earning.toString()]);
 
     return {
       callId: row.id,
       status: finalStatus as 'completed' | 'safety_terminated',
-      billableSeconds,
+      billableSeconds: settlement.billableSeconds,
       callerChargeMinor: charge.toString(),
       listenerEarningMinor: earning.toString(),
       idempotent: false,

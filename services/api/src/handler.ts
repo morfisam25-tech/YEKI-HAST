@@ -218,6 +218,12 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       return await listListenerApplications(req, res);
     }
 
+    if (method === 'GET' && url.pathname === '/v1/admin/payouts') {
+      ensureDatabaseReady();
+      const { listAdminPayouts } = await import('./routes/admin-payouts.ts');
+      return await listAdminPayouts(req, res);
+    }
+
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) {
       ensureDatabaseReady();

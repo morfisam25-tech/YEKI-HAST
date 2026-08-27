@@ -20,8 +20,8 @@ test('dispatch ambiguity is explicitly reconciliation-only and never advertises 
   assert.match(anomalies, /reconciliationRequired: true/);
   assert.match(anomalies, /providerRedispatchAllowed: false/);
   assert.match(page, /RECONCILE/);
-  assert.match(page, /provider redispatch ممنوع/i);
-  assert.match(page, /نه Recovery و نه Redispatch خودکار ندارد/);
+  assert.match(page, /Redispatch به provider ممنوع است/);
+  assert.match(page, /dispatch یا termination مبهم هیچ retry خودکار provider ندارند/);
 });
 
 test('admin recovery remains restricted to stale routing only', () => {

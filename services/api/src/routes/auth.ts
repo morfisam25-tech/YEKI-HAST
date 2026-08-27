@@ -27,6 +27,44 @@ function requestIp(req: IncomingMessage): string {
   return first?.trim() || req.socket.remoteAddress || 'unknown';
 }
 
+async function maybeBootstrapFirstAdmin(
+  client: Parameters<Parameters<typeof withTransaction>[0]>[0],
+  userId: string,
+  verifiedPhoneE164: string,
+): Promise<void> {
+  if (process.env.BOOTSTRAP_ADMIN_ENABLED?.trim() !== 'true') return;
+  const configuredRaw = process.env.BOOTSTRAP_ADMIN_PHONE_E164?.trim();
+  if (!configuredRaw) return;
+
+  let configuredPhone: string;
+  try { configuredPhone = normalizeE164(configuredRaw); }
+  catch { return; }
+  if (configuredPhone !== verifiedPhoneE164) return;
+
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:bootstrap_admin', 0))");
+
+  const alreadyBootstrapped = await client.query(`
+    SELECT 1
+    FROM app.audit_logs
+    WHERE action='admin_bootstrap_completed'
+    LIMIT 1
+  `);
+  if (alreadyBootstrapped.rowCount) return;
+
+  const anyAdmin = await client.query('SELECT 1 FROM app.admin_users LIMIT 1');
+  if (anyAdmin.rowCount) return;
+
+  await client.query(`
+    INSERT INTO app.admin_users(user_id, admin_role, is_active)
+    VALUES ($1,'owner',true)
+    ON CONFLICT (user_id) DO NOTHING
+  `, [userId]);
+  await client.query(`
+    INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+    VALUES ($1,'admin_bootstrap_completed','admin_user',$1,jsonb_build_object('method','verified_otp'))
+  `, [userId]);
+}
+
 export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   const body = await readJson<{ phone?: unknown }>(req);
   let phoneE164: string;
@@ -48,7 +86,6 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
 
   const challengeId = await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:otp_request_rate_limit', 0))");
-
     const counts = await client.query<{ phone_count: string; ip_count: string; global_count: string }>(`
       SELECT
         count(*) FILTER (WHERE phone_hash=$1 AND purpose=$2)::text AS phone_count,
@@ -79,10 +116,7 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
     await smsProvider.sendOtp({ phoneE164, code, ttlSeconds });
   } catch {
     try {
-      await query(
-        'UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL',
-        [challengeId],
-      );
+      await query('UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL', [challengeId]);
     } catch {
       console.error('otp_cleanup_after_sms_failure_failed');
     }
@@ -93,9 +127,7 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });
 }
 
-type VerifyOutcome =
-  | { kind: 'invalid' }
-  | { kind: 'ok'; userId: string };
+type VerifyOutcome = { kind: 'invalid' } | { kind: 'ok'; userId: string };
 
 export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
   const body = await readJson<{ phone?: unknown; code?: unknown }>(req);
@@ -122,22 +154,14 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
 
     const expected = otpHash(phoneE164, purpose, code);
     if (!safeEqualHex(expected, row.code_hash)) {
-      await client.query(`
-        UPDATE private_data.otp_challenges
-        SET attempt_count=attempt_count+1
-        WHERE id=$1
-      `, [row.id]);
+      await client.query('UPDATE private_data.otp_challenges SET attempt_count=attempt_count+1 WHERE id=$1', [row.id]);
       return { kind: 'invalid' };
     }
 
-    const consumed = await client.query(
-      'UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL RETURNING id', [row.id],
-    );
+    const consumed = await client.query('UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL RETURNING id', [row.id]);
     if (!consumed.rowCount) return { kind: 'invalid' };
 
-    const existing = await client.query<{ user_id: string }>(
-      'SELECT user_id::text FROM private_data.user_contacts WHERE phone_hash=$1', [hash],
-    );
+    const existing = await client.query<{ user_id: string }>('SELECT user_id::text FROM private_data.user_contacts WHERE phone_hash=$1', [hash]);
     let userId = existing.rows[0]?.user_id;
     if (!userId) {
       const user = await client.query<{ id: string }>('INSERT INTO app.users DEFAULT VALUES RETURNING id::text');
@@ -151,6 +175,9 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
       if (!activeUser.rowCount) return { kind: 'invalid' };
       await client.query('UPDATE private_data.user_contacts SET phone_verified_at=COALESCE(phone_verified_at, now()) WHERE user_id=$1', [userId]);
     }
+
+    await maybeBootstrapFirstAdmin(client, userId, phoneE164);
+
     await client.query(`
       INSERT INTO private_data.auth_sessions(user_id, token_hash, expires_at)
       VALUES ($1,$2,now() + ($3::text || ' hours')::interval)

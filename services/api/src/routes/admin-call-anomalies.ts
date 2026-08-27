@@ -25,6 +25,27 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     LIMIT 100
   `);
 
+  const cancelTerminationUncertain = await query<{
+    id: string;
+    status: string;
+    telephony_provider: string | null;
+    event_at: string;
+    updated_at: string;
+  }>(`
+    SELECT DISTINCT ON (cs.id)
+           cs.id::text,
+           cs.status::text,
+           cs.telephony_provider,
+           ce.created_at::text AS event_at,
+           cs.updated_at::text
+    FROM app.call_sessions cs
+    JOIN app.call_events ce ON ce.call_session_id=cs.id
+    WHERE cs.status::text = ANY($1::text[])
+      AND ce.metadata->>'reason'='cancel_termination_result_uncertain'
+    ORDER BY cs.id, ce.created_at DESC
+    LIMIT 100
+  `, [ACTIVE_CALL_STATUSES]);
+
   const missingBridge = await query<{
     id: string;
     status: string;
@@ -264,6 +285,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     },
     counts: {
       dispatchUncertain: dispatchUncertain.rowCount ?? dispatchUncertain.rows.length,
+      cancelTerminationUncertain: cancelTerminationUncertain.rowCount ?? cancelTerminationUncertain.rows.length,
       missingBridge: missingBridge.rowCount ?? missingBridge.rows.length,
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
@@ -281,6 +303,15 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         updatedAt: row.updated_at,
         reconciliationRequired: true,
         providerRedispatchAllowed: false,
+      })),
+      cancelTerminationUncertain: cancelTerminationUncertain.rows.map((row) => ({
+        callId: row.id,
+        status: row.status,
+        telephonyProvider: row.telephony_provider,
+        eventAt: row.event_at,
+        updatedAt: row.updated_at,
+        reconciliationRequired: true,
+        providerTerminationRetryAllowed: false,
       })),
       missingBridge: missingBridge.rows.map((row) => ({
         callId: row.id,

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AppState, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
   createWalletTopup,
   getBootstrap,
   getErrorCode,
   getWallet,
+  getWalletTopup,
   verifyWalletTopup,
   type BootstrapResponse,
   type WalletResponse,
@@ -40,7 +41,7 @@ function messageFor(code: string): string {
   const messages: Record<string, string> = {
     invalid_amount: 'مبلغ شارژ معتبر نیست.',
     payment_not_configured: 'درگاه پرداخت هنوز برای این محیط فعال نشده است.',
-    payment_provider_unavailable: 'ارتباط با درگاه پرداخت قطعی نشد. دوباره همین پرداخت را نساز؛ کمی بعد وضعیت را بررسی کن.',
+    payment_provider_unavailable: 'ارتباط با درگاه پرداخت قطعی نشد. اگر وارد صفحه پرداخت نشدی، می‌توانی دوباره تلاش کنی.',
     payment_initializing: 'این درخواست شارژ هنوز در حال آماده‌شدن است.',
     payment_verification_unavailable: 'بررسی پرداخت موقتاً در دسترس نیست.',
     payment_not_ready_for_verification: 'پرداخت هنوز آماده بررسی نیست.',
@@ -80,6 +81,22 @@ export default function CallerWalletCard({ token }: Props) {
       });
     return () => { disposed = true; };
   }, [token]);
+
+  useEffect(() => {
+    if (!attempt?.attemptId || attempt.status !== 'pending') return;
+    const attemptId = attempt.attemptId;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      Promise.all([getWalletTopup(token, attemptId), getWallet(token)])
+        .then(([latestAttempt, walletValue]) => {
+          setAttempt(latestAttempt);
+          setWallets(walletValue.wallets);
+          if (latestAttempt.status === 'succeeded') setAmountText('');
+        })
+        .catch((cause) => setError(messageFor(getErrorCode(cause))));
+    });
+    return () => subscription.remove();
+  }, [token, attempt?.attemptId, attempt?.status]);
 
   async function startTopup() {
     if (busy) return;

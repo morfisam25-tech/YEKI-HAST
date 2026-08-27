@@ -33,13 +33,17 @@ test('pending earnings are visible only as a separate read-only backlog', () => 
 
 test('candidate response stays operational and excludes bank details and provider references', () => {
   assert.match(route, /payoutCandidates:/);
+  assert.match(route, /candidateVersion:/);
   assert.match(route, /providerReferencesIncluded: false/);
   assert.match(route, /bankDetailsIncluded: false/);
 });
 
-test('admin payout candidate UI is read-only and does not invent payout preparation policy', () => {
-  assert.match(page, /درآمدهای available خارج از payout/);
-  assert.match(page, /فقط read-only است/);
-  assert.match(page, /`pending` را available نمی‌کند/);
-  assert.doesNotMatch(page, /preparePayout|releaseEarning|markAvailable/);
+test('admin candidate UI can prepare available earnings without inventing release policy', () => {
+  assert.match(page, /Prepare payout/);
+  assert.match(page, /`pending` دست نمی‌خورد/);
+  assert.match(page, /هیچ provider call یا انتقال بانکی انجام نمی‌شود/);
+  assert.match(page, /expectedAvailableMinor: candidate\.availableMinor/);
+  assert.match(page, /expectedEarningCount: candidate\.earningCount/);
+  assert.match(page, /candidateVersion: candidate\.candidateVersion/);
+  assert.doesNotMatch(page, /releaseEarning|markAvailable/);
 });

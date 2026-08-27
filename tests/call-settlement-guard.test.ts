@@ -12,7 +12,7 @@ test('provider lifecycle binds callbacks to the persisted bridge id', () => {
 test('connected transition starts billing once and records telephony event', () => {
   assert.match(source, /status='connected'/);
   assert.match(source, /billing_started_at=COALESCE\(billing_started_at,\$2\)/);
-  assert.match(source, /VALUES \(\$1,'connected','telephony'\)/);
+  assert.match(source, /VALUES \(\$1,'connected','telephony',jsonb_build_object\('occurredAt',\$2::text\)\)/);
 });
 
 test('settlement caps provider duration to wallet-authorized duration', () => {

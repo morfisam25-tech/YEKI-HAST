@@ -115,6 +115,34 @@ export type WalletTopupResponse = {
   idempotent?: boolean;
 };
 
+export type CallResponse = {
+  ok?: boolean;
+  callId: string;
+  status: string;
+  listenerId?: string | null;
+  currencyCode?: string;
+  authorizedMinor?: string;
+  maxBillableSeconds?: number | null;
+  requestedAt?: string;
+  connectedAt?: string | null;
+  endedAt?: string | null;
+  billableSeconds?: number;
+  callerChargeMinor?: string;
+  idempotent?: boolean;
+};
+
+export type BrowseListener = {
+  userId: string;
+  nickname: string;
+  gender: 'female' | 'male';
+  shortIntro: string | null;
+  listeningStyle: string | null;
+  ratingAverage: string | null;
+  ratingCount: number;
+  reliabilityScore: string;
+  languages: Array<{ code: string; nameFa: string; nameEn: string | null; proficiency: string }>;
+};
+
 class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -283,4 +311,72 @@ export function setListenerPresence(
 
 export function heartbeatListenerPresence(token: string): Promise<{ ok: true; status: 'online' | 'paused' }> {
   return request('/v1/listener/presence/heartbeat', { method: 'POST' }, token);
+}
+
+export function confirmCallerAge(token: string): Promise<{ ok: true; minimumAge: number; policyVersion: string }> {
+  return request('/v1/caller/age-gate', { method: 'POST', body: JSON.stringify({ confirmed: true }) }, token);
+}
+
+export function joinCallerWaitlist(
+  token: string,
+  input: { source?: string; gender?: 'female' | 'male'; preferredLanguageCode?: string },
+): Promise<{ ok: true; waitlistEntryId: string }> {
+  return request('/v1/caller/waitlist', { method: 'POST', body: JSON.stringify(input) }, token);
+}
+
+export function browseListeners(
+  token: string,
+  input: { languageCode?: string; gender?: 'female' | 'male' | 'any'; limit?: number } = {},
+): Promise<{ listeners: BrowseListener[] }> {
+  const params = new URLSearchParams();
+  if (input.languageCode) params.set('language', input.languageCode);
+  if (input.gender && input.gender !== 'any') params.set('gender', input.gender);
+  if (input.limit) params.set('limit', String(input.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return request(`/v1/listeners${suffix}`, {}, token);
+}
+
+export function requestCall(
+  token: string,
+  input: {
+    clientRequestId: string;
+    listenerId?: string;
+    listenerGender?: 'female' | 'male' | 'any';
+    languageCode: string;
+    mood?: 'sad' | 'angry' | 'overwhelmed' | 'lonely' | 'just_talk' | 'other';
+    topicCode?: string;
+    maxSeconds?: number;
+  },
+): Promise<CallResponse> {
+  return request('/v1/calls/request', { method: 'POST', body: JSON.stringify(input) }, token);
+}
+
+export function dispatchCall(token: string, callId: string): Promise<CallResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/dispatch`, { method: 'POST' }, token);
+}
+
+export function getCall(token: string, callId: string): Promise<CallResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}`, {}, token);
+}
+
+export function cancelCall(token: string, callId: string): Promise<CallResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/cancel`, { method: 'POST' }, token);
+}
+
+export function safetyExitCall(token: string, callId: string, reasonCode = 'user_requested_exit'): Promise<{ ok: true; callId: string; status: string }> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/safety-exit`, {
+    method: 'POST',
+    body: JSON.stringify({ reasonCode }),
+  }, token);
+}
+
+export function reportCallSafety(
+  token: string,
+  input: { callId: string; category: string; details?: string },
+): Promise<{ ok: true; reportId: string }> {
+  return request('/v1/safety/report', { method: 'POST', body: JSON.stringify(input) }, token);
+}
+
+export function blockCallCounterparty(token: string, callId: string): Promise<{ ok: true; blockedUserId: string }> {
+  return request('/v1/safety/block', { method: 'POST', body: JSON.stringify({ callId }) }, token);
 }

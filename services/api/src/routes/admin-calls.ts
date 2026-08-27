@@ -6,7 +6,7 @@ import { getAdminCallAnomalies } from './admin-call-anomalies.ts';
 
 const allowedStatuses = new Set([
   'requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener',
-  'connected', 'completed', 'cancelled', 'failed', 'safety_terminated',
+  'connected', 'completed', 'missed', 'cancelled', 'failed', 'safety_terminated',
 ]);
 
 function readLimit(url: URL): number {

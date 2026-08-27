@@ -98,11 +98,13 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       if (!row?.caller_user_id || !row.currency_code || row.authorized_minor === undefined) return;
       const authorized = BigInt(row.authorized_minor);
       if (authorized > 0n) {
-        await client.query(`
+        const released = await client.query(`
           UPDATE app.wallets
-          SET reserved_minor=reserved_minor-$3::bigint, version=version+1
+          SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
           WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
+          RETURNING id
         `, [row.caller_user_id, row.currency_code, authorized.toString()]);
+        if (!released.rowCount) throw new Error('wallet_release_conflict');
       }
       await client.query(`
         INSERT INTO app.call_events(call_session_id, status, source, metadata)

@@ -30,6 +30,7 @@ type CallRow = {
 type CallAnomalies = {
   counts: {
     dispatchUncertain: number;
+    cancelTerminationUncertain: number;
     missingBridge: number;
     stalePreconnect: number;
     connectedOverrun: number;
@@ -47,6 +48,15 @@ type CallAnomalies = {
       updatedAt: string;
       reconciliationRequired: true;
       providerRedispatchAllowed: false;
+    }>;
+    cancelTerminationUncertain: Array<{
+      callId: string;
+      status: string;
+      telephonyProvider: string | null;
+      eventAt: string;
+      updatedAt: string;
+      reconciliationRequired: true;
+      providerTerminationRetryAllowed: false;
     }>;
     missingBridge: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
     stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
@@ -103,6 +113,10 @@ export default function CallsPage() {
 
   const dispatchUncertainCallIds = useMemo(() => new Set(
     anomalies?.anomalies.dispatchUncertain.map((item) => item.callId) ?? [],
+  ), [anomalies]);
+
+  const cancelTerminationUncertainCallIds = useMemo(() => new Set(
+    anomalies?.anomalies.cancelTerminationUncertain.map((item) => item.callId) ?? [],
   ), [anomalies]);
 
   const invariantIssuesByCall = useMemo(() => new Map(
@@ -166,6 +180,7 @@ export default function CallsPage() {
         </div>
         <div className="facts compact">
           <p><b>Dispatch نیازمند Reconcile:</b> {anomalies?.counts.dispatchUncertain ?? '—'}</p>
+          <p><b>Termination نیازمند Reconcile:</b> {anomalies?.counts.cancelTerminationUncertain ?? '—'}</p>
           <p><b>Bridge invariant:</b> {anomalies?.counts.missingBridge ?? '—'}</p>
           <p><b>Pre-connect مانده:</b> {anomalies?.counts.stalePreconnect ?? '—'}</p>
           <p><b>Connected overrun:</b> {anomalies?.counts.connectedOverrun ?? '—'}</p>
@@ -180,6 +195,16 @@ export default function CallsPage() {
               <div className="subPanel" key={item.callId}>
                 <p className="error">RECONCILE · Call {short(item.callId)} در calling_caller بدون bridge قطعی مانده است.</p>
                 <p className="muted">Provider: {item.telephonyProvider ?? '—'} · Redispatch به provider ممنوع است. این وضعیت فقط باید با شواهد provider واقعی reconcile شود.</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {!!anomalies?.anomalies.cancelTerminationUncertain.length && (
+          <div className="queue">
+            {anomalies.anomalies.cancelTerminationUncertain.map((item) => (
+              <div className="subPanel" key={item.callId}>
+                <p className="error">RECONCILE · نتیجه قطع Call {short(item.callId)} از provider قطعی نیست.</p>
+                <p className="muted">Provider: {item.telephonyProvider ?? '—'} · Retry قطع به provider ممنوع است. رزرو و وضعیت terminal تا اثبات نتیجه خارجی دست‌نخورده می‌ماند.</p>
               </div>
             ))}
           </div>
@@ -204,7 +229,7 @@ export default function CallsPage() {
             ))}
           </div>
         )}
-        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. calling_caller بدون bridge یک نتیجه مخابراتی مبهم است و نه Recovery و نه Redispatch خودکار ندارد. duplicate active call، هشدارهای مالی و terminal فقط برای بررسی هستند و هیچ اصلاح خودکار از این صفحه انجام نمی‌شود.</p>
+        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. dispatch یا termination مبهم نه Recovery و نه retry خودکار provider دارند. duplicate active call، هشدارهای مالی و terminal فقط برای بررسی هستند و هیچ اصلاح خودکار از این صفحه انجام نمی‌شود.</p>
       </section>
 
       <section className="panel">
@@ -229,6 +254,7 @@ export default function CallsPage() {
           {calls.map((call) => {
             const canRecover = call.status === 'routing' && recoverableCallIds.has(call.id);
             const dispatchUncertain = dispatchUncertainCallIds.has(call.id);
+            const cancelTerminationUncertain = cancelTerminationUncertainCallIds.has(call.id);
             const invariantIssue = invariantIssuesByCall.get(call.id);
             const duplicateActiveCaller = duplicateActiveCallerCallIds.has(call.id);
             const duplicateActiveListener = duplicateActiveListenerCallIds.has(call.id);
@@ -254,6 +280,7 @@ export default function CallsPage() {
                 <p className="muted">درخواست: {new Date(call.requestedAt).toLocaleString('fa-IR')}</p>
                 {call.endedReason && <p className="muted">پایان: {call.endedReason}</p>}
                 {dispatchUncertain && <p className="error">RECONCILE: telephony_dispatch_uncertain · provider redispatch ممنوع</p>}
+                {cancelTerminationUncertain && <p className="error">RECONCILE: cancel_termination_result_uncertain · provider termination retry ممنوع</p>}
                 {duplicateActiveCaller && <p className="error">Invariant: caller_has_multiple_active_calls</p>}
                 {duplicateActiveListener && <p className="error">Invariant: listener_has_multiple_active_calls</p>}
                 {invariantIssue && <p className="error">Invariant: {invariantIssue}</p>}

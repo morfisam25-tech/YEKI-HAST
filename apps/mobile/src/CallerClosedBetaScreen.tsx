@@ -23,6 +23,7 @@ type Stage = 'age-gate' | 'browse' | 'call';
 
 const terminalStatuses = new Set(['completed', 'missed', 'failed', 'cancelled', 'safety_terminated']);
 const cancellableStatuses = new Set(['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener']);
+const CALL_STATUS_POLL_MS = 3_000;
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
@@ -71,6 +72,31 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     void recoverActiveCall();
     return () => { disposed = true; };
   }, [token]);
+
+  useEffect(() => {
+    if (stage !== 'call' || !call || terminalStatuses.has(call.status)) return;
+    let disposed = false;
+    const callId = call.callId;
+
+    async function syncLiveCall() {
+      try {
+        const next = await getCall(token, callId);
+        if (!disposed) {
+          setCall((current) => current?.callId === callId ? next : current);
+        }
+      } catch (cause) {
+        if (!disposed && getErrorCode(cause) !== 'network_error') {
+          setError(messageFor(getErrorCode(cause)));
+        }
+      }
+    }
+
+    const timer = setInterval(() => { void syncLiveCall(); }, CALL_STATUS_POLL_MS);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, [token, stage, call?.callId, call?.status]);
 
   async function acceptAgeGate() {
     setBusy(true);

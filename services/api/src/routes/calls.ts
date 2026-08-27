@@ -220,6 +220,44 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
   sendJson(res, 201, { ok: true, ...call });
 }
 
+export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  const result = await query<{
+    id: string; status: string; listener_user_id: string | null; currency_code: string;
+    authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
+    connected_at: string | null; ended_at: string | null; billable_seconds: number;
+    caller_charge_minor: string;
+  }>(`
+    SELECT id::text, status::text, listener_user_id::text, currency_code,
+           authorized_minor::text, max_billable_seconds, requested_at::text,
+           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text
+    FROM app.call_sessions
+    WHERE caller_user_id=$1 AND status::text = ANY($2::text[])
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `, [userId, activeCallStatuses]);
+  const row = result.rows[0];
+  if (!row) {
+    sendJson(res, 200, { activeCall: null });
+    return;
+  }
+  sendJson(res, 200, {
+    activeCall: {
+      callId: row.id,
+      status: row.status,
+      listenerId: row.listener_user_id,
+      currencyCode: row.currency_code,
+      authorizedMinor: row.authorized_minor,
+      maxBillableSeconds: row.max_billable_seconds,
+      requestedAt: row.requested_at,
+      connectedAt: row.connected_at,
+      endedAt: row.ended_at,
+      billableSeconds: row.billable_seconds,
+      callerChargeMinor: row.caller_charge_minor,
+    },
+  });
+}
+
 export async function getCall(req: IncomingMessage, res: ServerResponse, callId: string) {
   const { userId } = await requireAuth(req);
   if (!UUID_RE.test(callId)) throw new HttpError(400, 'invalid_call');

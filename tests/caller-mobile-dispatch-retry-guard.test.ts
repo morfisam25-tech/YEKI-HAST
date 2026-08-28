@@ -25,3 +25,17 @@ test('calling_caller with unresolved telephony identity never exposes dispatch r
   assert.doesNotMatch(source, /call\.status === 'calling_caller' && call\.telephonyReady === false\)\),?\s*\n?\s*\);/);
   assert.match(source, /به‌روزرسانی وضعیت/);
 });
+
+test('caller removes and refreshes a listener that becomes unavailable after browse', () => {
+  const start = source.indexOf("if (code === 'no_listener_available')");
+  assert.ok(start >= 0);
+  const section = source.slice(start, source.indexOf('setError(messageFor(code));', start) + 40);
+  assert.match(section, /setListeners\(\(current\) => current\.filter\(\(item\) => item\.id !== listener\.id\)\)/);
+  assert.match(section, /browseListeners\(token, \{ limit: 20 \}\)/);
+  assert.match(section, /setListeners\(browse\.listeners\)/);
+});
+
+test('caller termination reconciliation messaging forbids blind retry', () => {
+  assert.match(source, /telephony_termination_reconcile_required/);
+  assert.match(source, /پایان تماس را دوباره ارسال نکن/);
+});

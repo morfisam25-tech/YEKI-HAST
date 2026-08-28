@@ -8,15 +8,20 @@ test('integration readiness requires admin authentication', () => {
   assert.match(source, /await requireAdmin\(req\)/);
 });
 
-test('integration readiness validates providers without exposing secrets', () => {
+test('integration readiness validates providers and sensitive-data security without exposing secrets', () => {
   assert.match(source, /getSmsProvider/);
   assert.match(source, /validatePaymentProviderEnv/);
   assert.match(source, /validatePayoutProviderEnv/);
   assert.match(source, /validateTelephonyEnv/);
   assert.match(source, /validateKycInquiryProviderEnv/);
+  assert.match(source, /validateSecurityEnv/);
+  assert.match(source, /const sensitiveDataReady = ready\(\(\) => validateSecurityEnv\(\)\)/);
+  assert.match(source, /sensitiveData: \{ ready: sensitiveDataReady \}/);
   assert.match(source, /secretsIncluded: false/);
   assert.doesNotMatch(source, /sendJson[\s\S]*API_KEY/);
   assert.doesNotMatch(source, /sendJson[\s\S]*PAYOUT_AUTH/);
+  assert.doesNotMatch(source, /sendJson[\s\S]*DATA_ENCRYPTION_KEYS/);
+  assert.doesNotMatch(source, /sendJson[\s\S]*HASH_PEPPER/);
 });
 
 test('caller age readiness uses bounded policy values', () => {
@@ -28,7 +33,7 @@ test('caller age readiness uses bounded policy values', () => {
 
 test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
   assert.match(source, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady/);
   assert.match(source, /callerClosedBeta: \{ enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
 });

@@ -102,6 +102,7 @@ export type ListenerActiveCall = {
   currencyCode: string;
   maxBillableSeconds: number | null;
   telephonyReady: boolean;
+  terminationInProgress: boolean;
   requestedAt: string;
   connectedAt: string | null;
   endedAt: string | null;
@@ -187,6 +188,7 @@ export type CallResponse = {
   billableSeconds?: number;
   callerChargeMinor?: string;
   telephonyReady?: boolean;
+  terminationInProgress?: boolean;
   idempotent?: boolean;
 };
 

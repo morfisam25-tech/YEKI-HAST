@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction, query } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
+import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { computeCallAuthorization } from '../domain/call-authorization.ts';
 import { getTelephonyProvider } from '../providers/telephony.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
@@ -81,6 +82,7 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
   const listenerGender = parseRequestedGender(body.listenerGender);
   const languageCode = parseLanguage(body.languageCode);
   const maxSeconds = parseMaxSeconds(body.maxSeconds);
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
   const moods = new Set(['sad', 'angry', 'overwhelmed', 'lonely', 'just_talk', 'other']);
   const mood = body.mood === undefined || body.mood === null ? null : String(body.mood);
   if (mood !== null && !moods.has(mood)) throw new HttpError(400, 'invalid_mood');
@@ -127,14 +129,14 @@ export async function requestCall(req: IncomingMessage, res: ServerResponse) {
              pp.listener_rate_per_minute_minor::text listener_rate,
              pp.billing_increment_seconds
       FROM app.products p
-      JOIN app.service_catalog s ON s.code='human_listening' AND s.status='active'
-      JOIN app.markets m ON m.code='ir' AND m.is_active=true
+      JOIN app.service_catalog s ON s.code=$2 AND s.status='active'
+      JOIN app.markets m ON m.code=$3 AND m.is_active=true
       JOIN app.languages l ON l.code=$1 AND l.is_active=true
       JOIN app.pricing_plans pp
         ON pp.product_id=p.id AND pp.service_id=s.id AND pp.market_id=m.id AND pp.is_active=true
-      WHERE p.code='yeki_hast'
+      WHERE p.code=$4
       LIMIT 1
-    `, [languageCode]);
+    `, [languageCode, serviceCode, marketCode, productCode]);
     const ctx = ctxResult.rows[0];
     if (!ctx) throw new HttpError(503, 'call_market_unavailable');
 

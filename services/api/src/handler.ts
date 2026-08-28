@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
-import { validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
+import { validateEmailSecurityEnv, validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
 import { requireCallerClosedBetaEnabled } from './lib/caller-beta.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
+import { validateEmailProviderEnv } from './providers/email.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
 function ensureDatabaseReady(): void {
@@ -13,6 +14,15 @@ function ensureDatabaseReady(): void {
 function ensureOtpReady(): void {
   try { validateOtpEnv(); }
   catch { throw new HttpError(503, 'auth_not_configured'); }
+}
+function ensureEmailAuthReady(): void {
+  ensureDatabaseReady();
+  try {
+    validateEmailSecurityEnv();
+    validateEmailProviderEnv();
+  } catch {
+    throw new HttpError(503, 'email_auth_not_configured');
+  }
 }
 function ensureSensitiveDataReady(): void {
   ensureDatabaseReady();
@@ -40,6 +50,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/ready') { ensureDatabaseReady(); await query('SELECT 1'); sendJson(res, 200, { ok: true, database: 'ready' }); return; }
     if (method === 'GET' && url.pathname === '/v1/bootstrap') { ensureDatabaseReady(); const { bootstrap } = await import('./routes/bootstrap.ts'); return await bootstrap(res); }
     if (method === 'GET' && url.pathname === '/v1/payments/nextpay/callback') { ensureDatabaseReady(); const { nextPayCallback } = await import('./routes/payments.ts'); return await nextPayCallback(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/auth/email/request') { ensureEmailAuthReady(); const { requestEmailOtp } = await import('./routes/auth-email.ts'); return await requestEmailOtp(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/auth/email/verify') { ensureEmailAuthReady(); const { verifyEmailOtp } = await import('./routes/auth-email.ts'); return await verifyEmailOtp(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') { ensureOtpReady(); const { requestOtp } = await import('./routes/auth.ts'); return await requestOtp(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/otp/verify') { ensureOtpReady(); const { verifyOtp } = await import('./routes/auth.ts'); return await verifyOtp(req, res); }
     if (method === 'GET' && url.pathname === '/v1/auth/session') { ensureDatabaseReady(); const { getCurrentSession } = await import('./routes/auth.ts'); return await getCurrentSession(req, res); }

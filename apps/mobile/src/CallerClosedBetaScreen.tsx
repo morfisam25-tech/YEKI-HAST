@@ -26,6 +26,11 @@ type CallerCallResponse = CallResponse & { telephonyReady?: boolean };
 const terminalStatuses = new Set(['completed', 'missed', 'failed', 'cancelled', 'safety_terminated']);
 const cancellableStatuses = new Set(['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener']);
 const telephonyIdentityStatuses = new Set(['calling_caller', 'caller_answered', 'calling_listener', 'connected']);
+const terminationLockCodes = new Set([
+  'telephony_termination_pending',
+  'telephony_termination_reconcile_required',
+  'call_termination_in_progress',
+]);
 const CALL_STATUS_POLL_MS = 3_000;
 
 function messageFor(code: string): string {
@@ -62,6 +67,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [recoveryComplete, setRecoveryComplete] = useState(false);
   const [recoveryBlocked, setRecoveryBlocked] = useState(false);
   const [error, setError] = useState('');
+
+  function lockTerminationLocally(code: string) {
+    if (!terminationLockCodes.has(code)) return;
+    setCall((current) => current ? { ...current, terminationInProgress: true } : current);
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -207,7 +217,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function retryDispatch() {
-    if (!call || call.status !== 'routing') return;
+    if (!call || call.status !== 'routing' || call.terminationInProgress) return;
     setBusy(true);
     setError('');
     try {
@@ -234,27 +244,31 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function cancel() {
-    if (!call || !cancellableStatuses.has(call.status)) return;
+    if (!call || !cancellableStatuses.has(call.status) || call.terminationInProgress) return;
     setBusy(true);
     setError('');
     try {
       setCall(await cancelCall(token, call.callId));
     } catch (cause) {
-      setError(messageFor(getErrorCode(cause)));
+      const code = getErrorCode(cause);
+      lockTerminationLocally(code);
+      setError(messageFor(code));
     } finally {
       setBusy(false);
     }
   }
 
   async function safetyExit() {
-    if (!call || terminalStatuses.has(call.status)) return;
+    if (!call || terminalStatuses.has(call.status) || call.terminationInProgress) return;
     setBusy(true);
     setError('');
     try {
       const result = await safetyExitCall(token, call.callId);
       setCall((current) => current ? { ...current, status: result.status } : current);
     } catch (cause) {
-      setError(messageFor(getErrorCode(cause)));
+      const code = getErrorCode(cause);
+      lockTerminationLocally(code);
+      setError(messageFor(code));
     } finally {
       setBusy(false);
     }
@@ -263,7 +277,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const telephonyUnresolved = Boolean(
     call && telephonyIdentityStatuses.has(call.status) && call.telephonyReady === false,
   );
-  const dispatchRetryable = Boolean(call && call.status === 'routing');
+  const terminationInProgress = Boolean(call?.terminationInProgress);
+  const dispatchRetryable = Boolean(call && call.status === 'routing' && !terminationInProgress);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -324,13 +339,16 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           {telephonyUnresolved && (
             <Text style={styles.body}>شناسه تماس مخابراتی هنوز در سرور قطعی نشده است. برای جلوگیری از تماس تکراری، شروع دوباره ارسال نمی‌شود؛ فقط وضعیت همین تماس بررسی می‌شود.</Text>
           )}
+          {terminationInProgress && (
+            <Text style={styles.body}>پایان این تماس قبلاً شروع شده است. برای جلوگیری از درخواست تکراری، کنترل‌های پایان قفل شده‌اند؛ فقط وضعیت همین تماس را به‌روزرسانی کن.</Text>
+          )}
           {dispatchRetryable && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={retryDispatch}>
               <Text style={styles.primaryText}>{busy ? 'در حال تلاش…' : 'ادامه همین تماس'}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity disabled={busy} onPress={refreshCall}><Text style={styles.link}>به‌روزرسانی وضعیت</Text></TouchableOpacity>
-          {!terminalStatuses.has(call.status) && !telephonyUnresolved && (
+          {!terminalStatuses.has(call.status) && !telephonyUnresolved && !terminationInProgress && (
             <>
               {cancellableStatuses.has(call.status) && (
                 <TouchableOpacity disabled={busy} style={styles.secondary} onPress={cancel}>

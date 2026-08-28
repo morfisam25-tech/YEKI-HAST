@@ -6,6 +6,14 @@ import { decryptPrivateText } from '../lib/security.ts';
 import { getTelephonyProvider } from '../providers/telephony.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const terminationEventReasons = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
 
 export async function dispatchCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   const { userId } = await requireAuth(req);
@@ -43,6 +51,17 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     }
     if (!row.listener_user_id || !row.max_billable_seconds || row.max_billable_seconds < 1) {
       throw new HttpError(409, 'call_not_dispatchable');
+    }
+
+    const termination = await client.query(`
+      SELECT 1
+      FROM app.call_events
+      WHERE call_session_id=$1
+        AND metadata->>'reason' = ANY($2::text[])
+      LIMIT 1
+    `, [row.id, terminationEventReasons]);
+    if (termination.rowCount) {
+      throw new HttpError(409, 'call_termination_in_progress');
     }
 
     // Provider configuration/adapter availability is known before any external submission.

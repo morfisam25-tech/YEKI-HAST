@@ -14,6 +14,7 @@ import {
   type CallResponse,
 } from './api';
 import CallerWalletCard from './CallerWalletCard';
+import CallerRecentCallsCard from './CallerRecentCallsCard';
 
 type Props = {
   token: string;
@@ -37,7 +38,7 @@ function messageFor(code: string): string {
   const messages: Record<string, string> = {
     caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
-    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
+    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری سرور را تأیید کنی.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
     caller_active_call_conflict: 'چند تماس فعال همزمان پیدا شد. برای جلوگیری از انتخاب اشتباه، ادامه متوقف شده و نیاز به بررسی دارد.',
     no_listener_available: 'این شنونده دیگر آماده نیست؛ فهرست آماده‌ها به‌روزرسانی شد.',
@@ -367,6 +368,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           )}
         </View>
       )}
+
+      {recoveryComplete && <CallerRecentCallsCard token={token} />}
 
       {!!error && <Text style={styles.error}>{error}</Text>}
       <TouchableOpacity onPress={onClose}><Text style={styles.close}>بستن</Text></TouchableOpacity>

@@ -24,12 +24,26 @@ function boolean(name) {
   return value === 'true';
 }
 
+function optionalBoolean(name, fallback = false) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = raw.toLowerCase();
+  if (!['true', 'false'].includes(value)) throw new Error(`${name} must be true or false`);
+  return value === 'true';
+}
+
 function emailAddress(name) {
   const value = required(name).toLowerCase();
   const parts = value.split('@');
   if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s|[\r\n]/.test(value)) {
     throw new Error(`${name} is invalid`);
   }
+  return value;
+}
+
+function e164(name) {
+  const value = required(name);
+  if (!/^\+[1-9]\d{7,14}$/.test(value)) throw new Error(`${name} must be valid E.164`);
   return value;
 }
 
@@ -62,6 +76,20 @@ boolean('SMTP_SECURE');
 required('SMTP_USERNAME');
 required('SMTP_PASSWORD');
 emailAddress('SMTP_FROM_EMAIL');
+
+const bootstrapEnabled = optionalBoolean('BOOTSTRAP_ADMIN_ENABLED', false);
+const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
+const bootstrapPhone = process.env.BOOTSTRAP_ADMIN_PHONE_E164?.trim();
+if (bootstrapEnabled) {
+  const configuredIdentityCount = Number(Boolean(bootstrapEmail)) + Number(Boolean(bootstrapPhone));
+  if (configuredIdentityCount !== 1) {
+    throw new Error('Exactly one bootstrap admin identity must be configured when BOOTSTRAP_ADMIN_ENABLED=true');
+  }
+  if (bootstrapEmail) emailAddress('BOOTSTRAP_ADMIN_EMAIL');
+  if (bootstrapPhone) e164('BOOTSTRAP_ADMIN_PHONE_E164');
+} else if (bootstrapEmail || bootstrapPhone) {
+  throw new Error('Bootstrap admin identity must be removed when BOOTSTRAP_ADMIN_ENABLED is false');
+}
 
 const smsProvider = process.env.SMS_PROVIDER?.trim();
 if (smsProvider) {

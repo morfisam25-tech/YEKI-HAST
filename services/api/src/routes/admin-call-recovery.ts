@@ -5,6 +5,14 @@ import { HttpError, sendJson } from '../lib/http.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROUTING_STALE_MINUTES = 5;
+const TERMINATION_EVENT_REASONS = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
 
 export async function recoverStaleRoutingCall(
   req: IncomingMessage,
@@ -52,6 +60,15 @@ export async function recoverStaleRoutingCall(
       throw new HttpError(409, 'call_recovery_not_safe');
     }
     if (!row.is_stale) throw new HttpError(409, 'call_not_stale');
+
+    const termination = await client.query(`
+      SELECT 1
+      FROM app.call_events
+      WHERE call_session_id=$1
+        AND metadata->>'reason' = ANY($2::text[])
+      LIMIT 1
+    `, [rawCallId, TERMINATION_EVENT_REASONS]);
+    if (termination.rowCount) throw new HttpError(409, 'call_termination_in_progress');
 
     const authorized = BigInt(row.authorized_minor);
     if (authorized > 0n) {

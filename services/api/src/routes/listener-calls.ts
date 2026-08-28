@@ -5,6 +5,14 @@ import { HttpError, sendJson } from '../lib/http.ts';
 
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
 const TERMINAL_CALL_STATUSES = ['completed', 'missed', 'cancelled', 'failed', 'safety_terminated'];
+const TERMINATION_EVENT_REASONS = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
 
 function recentLimit(url: URL): number {
   const raw = url.searchParams.get('limit') ?? '10';
@@ -42,17 +50,14 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
              SELECT 1
              FROM app.call_events ce
              WHERE ce.call_session_id=cs.id
-               AND (
-                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
-                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
-               )
+               AND ce.metadata->>'reason' = ANY($3::text[])
            ) AS termination_in_progress
     FROM app.call_sessions cs
     WHERE cs.listener_user_id=$1
       AND cs.status::text = ANY($2::text[])
     ORDER BY cs.requested_at DESC
     LIMIT 2
-  `, [userId, ACTIVE_CALL_STATUSES]);
+  `, [userId, ACTIVE_CALL_STATUSES, TERMINATION_EVENT_REASONS]);
 
   if (result.rows.length > 1) throw new HttpError(409, 'listener_active_call_conflict');
   const row = result.rows[0];

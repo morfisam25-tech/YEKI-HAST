@@ -11,6 +11,7 @@ type Readiness = {
     payout: Integration;
     telephony: Integration;
     kycInquiry: Integration;
+    sensitiveData: Integration;
     callerAgePolicy: Integration;
     callerClosedBeta: { enabled: boolean };
     callerLaunch: { ready: boolean };
@@ -24,12 +25,13 @@ async function api<T>(path: string): Promise<T> {
   return body as T;
 }
 
-const labels: Array<[keyof Pick<Readiness['integrations'], 'sms' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'callerAgePolicy'>, string]> = [
+const labels: Array<[keyof Pick<Readiness['integrations'], 'sms' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'sensitiveData' | 'callerAgePolicy'>, string]> = [
   ['sms', 'OTP / SMS'],
   ['payment', 'شارژ کیف پول'],
   ['payout', 'تسویه شنونده'],
   ['telephony', 'اتصال تماس'],
   ['kycInquiry', 'استعلام KYC'],
+  ['sensitiveData', 'امنیت داده حساس'],
   ['callerAgePolicy', 'سیاست سن Caller'],
 ];
 
@@ -67,7 +69,7 @@ export default function ReadinessPage() {
               <span className="statusPill">{data.integrations.callerClosedBeta.enabled ? 'BETA ENABLED' : 'BETA DISABLED'}</span>
             </div>
             <p className="muted">
-              Caller فقط وقتی READY می‌شود که Beta، سیاست سن، SMS، پرداخت و Telephony همگی آماده باشند.
+              Caller فقط وقتی READY می‌شود که Beta، سیاست سن، SMS، پرداخت، Telephony و امنیت داده حساس همگی آماده باشند.
             </p>
 
             <div className="grid">

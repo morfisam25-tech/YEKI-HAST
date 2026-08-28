@@ -27,6 +27,12 @@ const reportCategories = [
   { code: 'other', label: 'سایر' },
 ] as const;
 
+const terminationLockCodes = new Set([
+  'telephony_termination_pending',
+  'telephony_termination_reconcile_required',
+  'call_termination_in_progress',
+]);
+
 function statusLabel(status: ListenerActiveCall['status']): string {
   const labels: Record<ListenerActiveCall['status'], string> = {
     requested: 'درخواست تماس ثبت شده',
@@ -130,7 +136,7 @@ export default function ListenerActiveCallCard({ token }: Props) {
   }, [token]);
 
   async function exitSafely() {
-    if (!activeCall || busy) return;
+    if (!activeCall || busy || activeCall.terminationInProgress) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -138,7 +144,11 @@ export default function ListenerActiveCallCard({ token }: Props) {
       await safetyExitCall(token, activeCall.callId);
       setNotice('توقف ایمن ثبت شد.');
     } catch (cause) {
-      setError(messageFor(getErrorCode(cause)));
+      const code = getErrorCode(cause);
+      if (terminationLockCodes.has(code)) {
+        setActiveCall((current) => current ? { ...current, terminationInProgress: true } : current);
+      }
+      setError(messageFor(code));
     } finally {
       await refresh().catch(() => undefined);
       await refreshRecent().catch(() => undefined);
@@ -179,6 +189,7 @@ export default function ListenerActiveCallCard({ token }: Props) {
 
   const canSafetyExit = Boolean(
     activeCall?.telephonyReady
+    && !activeCall.terminationInProgress
     && (activeCall.status === 'caller_answered'
       || activeCall.status === 'calling_listener'
       || activeCall.status === 'connected'),
@@ -204,6 +215,10 @@ export default function ListenerActiveCallCard({ token }: Props) {
             <Text style={styles.fact}>حداکثر زمان مجاز: {activeCall.maxBillableSeconds ? `${activeCall.maxBillableSeconds.toLocaleString('fa-IR')} ثانیه` : '—'}</Text>
             <Text style={styles.fact}>ثانیه ثبت‌شده: {activeCall.billableSeconds.toLocaleString('fa-IR')}</Text>
           </View>
+
+          {activeCall.terminationInProgress && (
+            <Text style={styles.error}>پایان این تماس قبلاً شروع شده است. برای جلوگیری از درخواست تکراری، Safety Exit قفل است و فقط وضعیت تماس بررسی می‌شود.</Text>
+          )}
 
           {canSafetyExit && (
             <TouchableOpacity

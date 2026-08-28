@@ -39,16 +39,20 @@ test('cancel refuses to submit provider termination after safety termination has
 });
 
 test('safety exit refuses to submit provider termination after caller cancel has started', () => {
-  const safetyStart = safety.indexOf('export async function safetyExitCall');
-  const providerSubmit = safety.indexOf("kind: 'provider_submit'", safetyStart);
-  const section = safety.slice(safetyStart, providerSubmit);
   for (const reason of [
     'cancel_termination_started',
     'cancel_termination_result_uncertain',
     'cancel_termination_confirmed',
   ]) {
-    assert.ok(section.includes(reason));
+    assert.ok(safety.includes(reason));
   }
+  assert.match(safety, /const cancelTerminationReasons = \[/);
+
+  const safetyStart = safety.indexOf('export async function safetyExitCall');
+  const providerSubmit = safety.indexOf("kind: 'provider_submit'", safetyStart);
+  assert.ok(safetyStart >= 0 && providerSubmit > safetyStart);
+  const section = safety.slice(safetyStart, providerSubmit);
+  assert.match(section, /cancelTerminationReasons/);
   assert.match(section, /call_termination_in_progress/);
 });
 

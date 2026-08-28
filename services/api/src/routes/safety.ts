@@ -72,6 +72,7 @@ async function participantContext(
   if (!isCaller && !isListener) throw new HttpError(403, 'not_call_participant');
   const otherUserId = isCaller ? row.listener_user_id : row.caller_user_id;
   if (!otherUserId) throw new HttpError(409, 'call_counterparty_missing');
+  if (otherUserId === userId) throw new HttpError(409, 'call_counterparty_invalid');
   return {
     ...row,
     role: isCaller ? 'caller' as const : 'listener' as const,

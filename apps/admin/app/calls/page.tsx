@@ -63,7 +63,7 @@ type CallAnomalies = {
       localFinalizeRetryAllowed: boolean;
     }>;
     missingBridge: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
-    stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
+    stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string; recoveryEligible: boolean }>;
     connectedOverrun: Array<{ callId: string; status: string; billingStartedAt: string; maxBillableSeconds: number; updatedAt: string }>;
     duplicateActiveCallers: Array<{ callerUserId: string; activeCallCount: number; callIds: string[] }>;
     duplicateActiveListeners: Array<{ listenerUserId: string; activeCallCount: number; callIds: string[] }>;
@@ -117,7 +117,7 @@ export default function CallsPage() {
 
   const recoverableCallIds = useMemo(() => new Set(
     anomalies?.anomalies.stalePreconnect
-      .filter((item) => item.status === 'routing')
+      .filter((item) => item.recoveryEligible)
       .map((item) => item.callId) ?? [],
   ), [anomalies]);
 
@@ -244,7 +244,7 @@ export default function CallsPage() {
             ))}
           </div>
         )}
-        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection مجاز است. dispatch یا termination مبهم هیچ retry خودکار provider ندارند. فقط وقتی termination قبلاً confirmed شده، retry معمول cancel می‌تواند local finalization را بدون تماس دوباره با provider کامل کند. هیچ repair مالی عمومی از این صفحه انجام نمی‌شود.</p>
+        <p className="muted">Recovery خودکار فقط برای routing قدیمی و بدون bridge/connection/termination intent مجاز است. dispatch یا termination مبهم هیچ retry خودکار provider ندارند. فقط وقتی termination قبلاً confirmed شده، retry معمول cancel می‌تواند local finalization را بدون تماس دوباره با provider کامل کند. هیچ repair مالی عمومی از این صفحه انجام نمی‌شود.</p>
       </section>
 
       <section className="panel">
@@ -267,7 +267,7 @@ export default function CallsPage() {
         {error && <p className="error">{error}</p>}
         <div className="queue">
           {calls.map((call) => {
-            const canRecover = call.status === 'routing' && recoverableCallIds.has(call.id);
+            const canRecover = recoverableCallIds.has(call.id);
             const dispatchUncertain = dispatchUncertainCallIds.has(call.id);
             const cancelTerminationState = cancelTerminationStateByCall.get(call.id);
             const invariantIssue = invariantIssuesByCall.get(call.id);

@@ -45,6 +45,13 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const accountAuthReady = emailAuthReady || smsReady;
   const callPhoneVerificationReady = manualPhoneVerificationEnabled || smsReady;
 
+  const bootstrapAdminEnabled = process.env.BOOTSTRAP_ADMIN_ENABLED?.trim().toLowerCase() === 'true';
+  const bootstrapAdminIdentityConfigured = configured(process.env.BOOTSTRAP_ADMIN_EMAIL)
+    || configured(process.env.BOOTSTRAP_ADMIN_PHONE_E164);
+  // The bootstrap switch is a one-time recovery surface, not a steady-state launch dependency.
+  // Public/caller launch must stay closed until the switch is off and its allowlisted identity is removed.
+  const adminBootstrapLockedDown = !bootstrapAdminEnabled && !bootstrapAdminIdentityConfigured;
+
   const catalog = await query<{ pricing_ready: boolean; language_ready: boolean }>(`
     SELECT
       EXISTS (
@@ -73,7 +80,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && callPhoneVerificationReady
     && paymentReady
     && telephonyReady
-    && sensitiveDataReady;
+    && sensitiveDataReady
+    && adminBootstrapLockedDown;
 
   sendJson(res, 200, {
     ok: true,
@@ -91,6 +99,11 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       telephony: { provider: telephonyProvider, ready: telephonyReady },
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
       sensitiveData: { ready: sensitiveDataReady },
+      adminBootstrap: {
+        lockedDown: adminBootstrapLockedDown,
+        enabled: bootstrapAdminEnabled,
+        identityConfigured: bootstrapAdminIdentityConfigured,
+      },
       callerCatalog: { ready: callerCatalogReady },
       callerAgePolicy: { ready: callerAgePolicyReady },
       callerClosedBeta: { enabled: callerClosedBetaEnabled },

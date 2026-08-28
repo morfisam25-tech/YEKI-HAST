@@ -8,13 +8,25 @@ const api = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.url)
 const caller = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
 const listener = await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8');
 
-test('caller and listener active-call reads derive termination state from durable call events', () => {
+const exactTerminationReasons = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
+
+test('caller and listener active-call reads derive termination state only from exact durable markers', () => {
   for (const source of [calls, listenerCalls]) {
     assert.match(source, /AS termination_in_progress/);
-    assert.match(source, /cancel_termination_%/);
-    assert.match(source, /safety_termination_%/);
+    assert.match(source, /ce\.metadata->>'reason' = ANY\(\$3::text\[\]\)/);
+    assert.doesNotMatch(source, /ce\.metadata->>'reason' LIKE/);
+    for (const reason of exactTerminationReasons) assert.match(source, new RegExp(reason));
     assert.match(source, /terminationInProgress: row\.termination_in_progress/);
   }
+  assert.equal((calls.match(/ce\.metadata->>'reason' = ANY\(\$3::text\[\]\)/g) ?? []).length, 2);
+  assert.equal((listenerCalls.match(/ce\.metadata->>'reason' = ANY\(\$3::text\[\]\)/g) ?? []).length, 1);
 });
 
 test('participant mobile contract exposes only a boolean termination signal', () => {

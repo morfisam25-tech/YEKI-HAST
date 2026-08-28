@@ -352,6 +352,21 @@ export async function cancelCall(req: IncomingMessage, res: ServerResponse, call
       };
     }
 
+    const competingTermination = await client.query(`
+      SELECT 1
+      FROM app.call_events
+      WHERE call_session_id=$1
+        AND metadata->>'reason' = ANY($2::text[])
+      LIMIT 1
+    `, [callId, [
+      'safety_termination_started',
+      'safety_termination_result_uncertain',
+      'safety_termination_confirmed',
+    ]]);
+    if (competingTermination.rowCount) {
+      throw new HttpError(409, 'call_termination_in_progress');
+    }
+
     const prior = await client.query<{ reason: string }>(`
       SELECT metadata->>'reason' AS reason
       FROM app.call_events

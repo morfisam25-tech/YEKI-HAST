@@ -56,6 +56,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && url.pathname === '/v1/auth/otp/verify') { ensureOtpReady(); const { verifyOtp } = await import('./routes/auth.ts'); return await verifyOtp(req, res); }
     if (method === 'GET' && url.pathname === '/v1/auth/session') { ensureDatabaseReady(); const { getCurrentSession } = await import('./routes/auth.ts'); return await getCurrentSession(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/logout') { ensureDatabaseReady(); const { logoutCurrentSession } = await import('./routes/auth.ts'); return await logoutCurrentSession(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/account/call-phone') { ensureDatabaseReady(); const { getCallPhoneStatus } = await import('./routes/account-contact.ts'); return await getCallPhoneStatus(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/account/call-phone') { ensureSensitiveDataReady(); const { setCallPhone } = await import('./routes/account-contact.ts'); return await setCallPhone(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet') { ensureDatabaseReady(); const { getWallet } = await import('./routes/payments.ts'); return await getWallet(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet/transactions') { ensureDatabaseReady(); const { getWalletTransactions } = await import('./routes/payments.ts'); return await getWalletTransactions(req, res); }
     if (method === 'POST' && url.pathname === '/v1/wallet/topups') { ensureDatabaseReady(); const { createWalletTopup } = await import('./routes/payments.ts'); return await createWalletTopup(req, res); }
@@ -94,7 +96,10 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/admin/caller-waitlist') { ensureDatabaseReady(); const { listAdminCallerWaitlist } = await import('./routes/admin-waitlist.ts'); return await listAdminCallerWaitlist(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/safety-cases') { ensureDatabaseReady(); const { listAdminSafetyCases } = await import('./routes/admin-safety.ts'); return await listAdminSafetyCases(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/calls') { ensureDatabaseReady(); const { listAdminCalls } = await import('./routes/admin-calls.ts'); return await listAdminCalls(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/admin/call-phone-verifications') { ensureSensitiveDataReady(); const { listPendingCallPhones } = await import('./routes/admin-contact.ts'); return await listPendingCallPhones(req, res); }
 
+    const adminPhoneVerifyMatch = url.pathname.match(/^\/v1\/admin\/users\/([^/]+)\/call-phone\/verify$/);
+    if (method === 'POST' && adminPhoneVerifyMatch) { ensureSensitiveDataReady(); const { verifyCallPhoneManually } = await import('./routes/admin-contact.ts'); return await verifyCallPhoneManually(req, res, adminPhoneVerifyMatch[1]); }
     const adminCallRecoveryMatch = url.pathname.match(/^\/v1\/admin\/calls\/([^/]+)\/recover-stale-routing$/);
     if (method === 'POST' && adminCallRecoveryMatch) { ensureDatabaseReady(); const { recoverStaleRoutingCall } = await import('./routes/admin-call-recovery.ts'); return await recoverStaleRoutingCall(req, res, adminCallRecoveryMatch[1]); }
     const adminSafetyActionMatch = url.pathname.match(/^\/v1\/admin\/safety-cases\/(reports|events)\/([^/]+)$/);

@@ -5,12 +5,29 @@ if (!connectionString) throw new Error('DATABASE_URL is required');
 
 const pool = new pg.Pool({ connectionString, max: 1, connectionTimeoutMillis: 10000 });
 try {
-  const migration = await pool.query(`
-    SELECT sha256 FROM public.yeki_hast_schema_migrations
-    WHERE filename='0001_initial.sql'
+  const migrations = await pool.query(`
+    SELECT filename, sha256
+    FROM public.yeki_hast_schema_migrations
+    WHERE filename IN ('0001_initial.sql','0002_email_auth.sql')
   `);
-  const expectedSha = 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09';
-  if (migration.rows[0]?.sha256 !== expectedSha) throw new Error('migration tracking mismatch');
+  const migrationMap = new Map(migrations.rows.map((row) => [row.filename, row.sha256]));
+  const expectedMigrations = new Map([
+    ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
+    ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+  ]);
+  for (const [filename, expectedSha] of expectedMigrations) {
+    if (migrationMap.get(filename) !== expectedSha) throw new Error(`migration tracking mismatch: ${filename}`);
+  }
+
+  const emailSchema = await pool.query(`
+    SELECT
+      to_regclass('private_data.user_emails')::text AS user_emails,
+      to_regclass('private_data.email_otp_challenges')::text AS email_otp_challenges
+  `);
+  if (emailSchema.rows[0]?.user_emails !== 'private_data.user_emails') throw new Error('user_emails schema missing');
+  if (emailSchema.rows[0]?.email_otp_challenges !== 'private_data.email_otp_challenges') {
+    throw new Error('email_otp_challenges schema missing');
+  }
 
   const result = await pool.query(`
     SELECT p.brand_name, m.code AS market_code, pp.currency_code,

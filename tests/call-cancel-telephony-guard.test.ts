@@ -7,9 +7,10 @@ const source = await readFile(new URL('../services/api/src/routes/calls.ts', imp
 test('caller cancellation keeps provider bridge private', () => {
   assert.match(source, /provider_bridge_id/);
   const cancelSection = source.slice(source.indexOf('export async function cancelCall'));
-  const successResponse = cancelSection.match(/sendJson\(res, 200, \{[^\n]+\}\);/)?.[0] ?? '';
-  assert.match(successResponse, /status: finalized\.status/);
-  assert.doesNotMatch(successResponse, /providerBridgeId|provider_bridge_id/);
+  const successResponses = [...cancelSection.matchAll(/sendJson\(res, 200, \{[^\n]+\}\);/g)].map((match) => match[0]);
+  assert.ok(successResponses.length >= 2);
+  assert.ok(successResponses.some((line) => /status: finalized\.status/.test(line)));
+  assert.doesNotMatch(successResponses.join('\n'), /providerBridgeId|provider_bridge_id/);
 });
 
 test('provider termination uses a durable started marker before external side effect', () => {

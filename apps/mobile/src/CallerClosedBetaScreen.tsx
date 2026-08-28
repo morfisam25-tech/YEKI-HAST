@@ -35,11 +35,13 @@ function messageFor(code: string): string {
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
     caller_active_call_conflict: 'چند تماس فعال همزمان پیدا شد. برای جلوگیری از انتخاب اشتباه، ادامه متوقف شده و نیاز به بررسی دارد.',
-    no_listener_available: 'فعلاً شنونده آماده‌ای پیدا نشد.',
+    no_listener_available: 'این شنونده دیگر آماده نیست؛ فهرست آماده‌ها به‌روزرسانی شد.',
     insufficient_balance: 'موجودی کیف پول برای شروع تماس کافی نیست.',
     telephony_not_configured: 'تماس واقعی هنوز برای این محیط فعال نشده.',
     telephony_dispatch_uncertain: 'نتیجه شروع تماس قطعی نشد. تماس جدید نساز و شروع را دوباره ارسال نکن؛ وضعیت همین تماس با «به‌روزرسانی وضعیت» بررسی می‌شود.',
+    telephony_termination_reconcile_required: 'نتیجه قطع تماس هنوز نیاز به تطبیق دارد. پایان تماس را دوباره ارسال نکن؛ فقط وضعیت همین تماس باید بررسی شود.',
     call_telephony_invariant: 'وضعیت مخابراتی این تماس با وضعیت سرور هم‌خوان نیست و نیاز به بررسی دارد.',
+    call_counterparty_invalid: 'اطلاعات طرف مقابل این تماس معتبر نیست و عملیات ایمنی متوقف شد.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_cannot_be_cancelled: 'این تماس از مرحله لغو عادی عبور کرده است.',
     telephony_termination_pending: 'درخواست پایان تماس ثبت شد اما قطع سمت سرویس تماس هنوز قطعی نشده است.',
@@ -184,6 +186,18 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
           setError(messageFor(recoveryCode));
           return;
         }
+      }
+      if (code === 'no_listener_available') {
+        setSelected(null);
+        setListeners((current) => current.filter((item) => item.id !== listener.id));
+        try {
+          const browse = await browseListeners(token, { limit: 20 });
+          setListeners(browse.listeners);
+        } catch {
+          // Keep the stale listener removed even if the refresh request itself fails.
+        }
+        setError(messageFor(code));
+        return;
       }
       setError(messageFor(code));
     } finally {

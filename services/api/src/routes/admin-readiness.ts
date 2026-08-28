@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { requireAdmin } from '../lib/admin.ts';
 import { sendJson } from '../lib/http.ts';
+import { validateSecurityEnv } from '../lib/security.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { validatePaymentProviderEnv } from '../providers/payment.ts';
 import { validatePayoutProviderEnv } from '../providers/payout.ts';
@@ -30,6 +31,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const payoutReady = ready(() => validatePayoutProviderEnv());
   const telephonyReady = ready(() => validateTelephonyEnv());
   const kycInquiryReady = ready(() => validateKycInquiryProviderEnv());
+  const sensitiveDataReady = ready(() => validateSecurityEnv());
   const callerAgePolicyReady = configured(process.env.CALLER_AGE_POLICY_VERSION)
     && Number.isInteger(Number(process.env.CALLER_MINIMUM_AGE))
     && Number(process.env.CALLER_MINIMUM_AGE) >= 13
@@ -39,7 +41,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && callerAgePolicyReady
     && smsReady
     && paymentReady
-    && telephonyReady;
+    && telephonyReady
+    && sensitiveDataReady;
 
   sendJson(res, 200, {
     ok: true,
@@ -50,6 +53,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       payout: { provider: payoutProvider, ready: payoutReady },
       telephony: { provider: telephonyProvider, ready: telephonyReady },
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
+      sensitiveData: { ready: sensitiveDataReady },
       callerAgePolicy: { ready: callerAgePolicyReady },
       callerClosedBeta: { enabled: callerClosedBetaEnabled },
       callerLaunch: { ready: callerLaunchReady },

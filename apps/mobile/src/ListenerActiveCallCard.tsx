@@ -56,6 +56,7 @@ function messageFor(code: string): string {
     listener_active_call_conflict: 'بیش از یک تماس فعال برای این حساب ثبت شده؛ کنترل تماس قفل شد تا اپراتور بررسی کند.',
     telephony_dispatch_uncertain: 'وضعیت شبکه تلفنی هنوز قطعی نیست؛ کنترل ایمنی فعلاً قفل است.',
     call_telephony_invariant: 'وضعیت تماس با شبکه تلفنی هم‌خوان نیست و نیاز به بررسی دارد.',
+    call_termination_in_progress: 'پایان تماس از مسیر دیگری قبلاً شروع شده است؛ Safety Exit را دوباره ارسال نکن و وضعیت همین تماس را بررسی کن.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_not_found: 'این تماس دیگر در دسترس نیست.',
     not_call_participant: 'این اقدام برای این تماس مجاز نیست.',

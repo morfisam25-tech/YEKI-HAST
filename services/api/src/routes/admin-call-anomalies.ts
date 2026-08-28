@@ -6,6 +6,14 @@ import { sendJson } from '../lib/http.ts';
 const PRECONNECT_STALE_MINUTES = 5;
 const CONNECTED_GRACE_SECONDS = 120;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
+const TERMINATION_EVENT_REASONS = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
 
 export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
@@ -87,14 +95,29 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     status: string;
     requested_at: string;
     updated_at: string;
+    recovery_eligible: boolean;
   }>(`
-    SELECT id::text, status::text, requested_at::text, updated_at::text
-    FROM app.call_sessions
-    WHERE status::text IN ('routing','calling_caller','caller_answered','calling_listener')
-      AND updated_at < now() - ($1::int * interval '1 minute')
-    ORDER BY updated_at ASC
+    SELECT cs.id::text,
+           cs.status::text,
+           cs.requested_at::text,
+           cs.updated_at::text,
+           (
+             cs.status::text='routing'
+             AND cs.provider_bridge_id IS NULL
+             AND cs.connected_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1
+               FROM app.call_events ce
+               WHERE ce.call_session_id=cs.id
+                 AND ce.metadata->>'reason' = ANY($2::text[])
+             )
+           ) AS recovery_eligible
+    FROM app.call_sessions cs
+    WHERE cs.status::text IN ('routing','calling_caller','caller_answered','calling_listener')
+      AND cs.updated_at < now() - ($1::int * interval '1 minute')
+    ORDER BY cs.updated_at ASC
     LIMIT 100
-  `, [PRECONNECT_STALE_MINUTES]);
+  `, [PRECONNECT_STALE_MINUTES, TERMINATION_EVENT_REASONS]);
 
   const connectedOverrun = await query<{
     id: string;
@@ -348,6 +371,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         status: row.status,
         requestedAt: row.requested_at,
         updatedAt: row.updated_at,
+        recoveryEligible: row.recovery_eligible,
       })),
       connectedOverrun: connectedOverrun.rows.map((row) => ({
         callId: row.id,

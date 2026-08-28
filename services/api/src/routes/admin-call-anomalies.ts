@@ -6,14 +6,17 @@ import { sendJson } from '../lib/http.ts';
 const PRECONNECT_STALE_MINUTES = 5;
 const CONNECTED_GRACE_SECONDS = 120;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
-const TERMINATION_EVENT_REASONS = [
+const CANCEL_TERMINATION_REASONS = [
   'cancel_termination_started',
   'cancel_termination_result_uncertain',
   'cancel_termination_confirmed',
+];
+const SAFETY_TERMINATION_REASONS = [
   'safety_termination_started',
   'safety_termination_result_uncertain',
   'safety_termination_confirmed',
 ];
+const TERMINATION_EVENT_REASONS = [...CANCEL_TERMINATION_REASONS, ...SAFETY_TERMINATION_REASONS];
 
 export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
@@ -70,11 +73,32 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     WHERE has_started OR has_uncertain OR has_confirmed
     ORDER BY event_at ASC
     LIMIT 100
-  `, [ACTIVE_CALL_STATUSES, [
-    'cancel_termination_started',
-    'cancel_termination_result_uncertain',
-    'cancel_termination_confirmed',
-  ]]);
+  `, [ACTIVE_CALL_STATUSES, CANCEL_TERMINATION_REASONS]);
+
+  const terminationFlowConflicts = await query<{
+    id: string;
+    status: string;
+    event_at: string;
+    updated_at: string;
+  }>(`
+    WITH flow_state AS (
+      SELECT cs.id,
+             cs.status,
+             cs.updated_at,
+             MAX(ce.created_at) AS event_at,
+             BOOL_OR(ce.metadata->>'reason' = ANY($1::text[])) AS has_cancel,
+             BOOL_OR(ce.metadata->>'reason' = ANY($2::text[])) AS has_safety
+      FROM app.call_sessions cs
+      JOIN app.call_events ce ON ce.call_session_id=cs.id
+      WHERE ce.metadata->>'reason' = ANY($3::text[])
+      GROUP BY cs.id, cs.status, cs.updated_at
+    )
+    SELECT id::text, status::text, event_at::text, updated_at::text
+    FROM flow_state
+    WHERE has_cancel AND has_safety
+    ORDER BY event_at ASC
+    LIMIT 100
+  `, [CANCEL_TERMINATION_REASONS, SAFETY_TERMINATION_REASONS, TERMINATION_EVENT_REASONS]);
 
   const missingBridge = await query<{
     id: string;
@@ -331,6 +355,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     counts: {
       dispatchUncertain: dispatchUncertain.rowCount ?? dispatchUncertain.rows.length,
       cancelTerminationPending: cancelTerminationPending.rowCount ?? cancelTerminationPending.rows.length,
+      terminationFlowConflicts: terminationFlowConflicts.rowCount ?? terminationFlowConflicts.rows.length,
       missingBridge: missingBridge.rowCount ?? missingBridge.rows.length,
       stalePreconnect: stalePreconnect.rowCount ?? stalePreconnect.rows.length,
       connectedOverrun: connectedOverrun.rowCount ?? connectedOverrun.rows.length,
@@ -359,6 +384,15 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
         reconciliationRequired: row.termination_state !== 'confirmed_local_finalize_pending',
         providerTerminationRetryAllowed: false,
         localFinalizeRetryAllowed: row.termination_state === 'confirmed_local_finalize_pending',
+      })),
+      terminationFlowConflicts: terminationFlowConflicts.rows.map((row) => ({
+        callId: row.id,
+        status: row.status,
+        eventAt: row.event_at,
+        updatedAt: row.updated_at,
+        reconciliationRequired: true,
+        providerTerminationRetryAllowed: false,
+        automaticRepairAllowed: false,
       })),
       missingBridge: missingBridge.rows.map((row) => ({
         callId: row.id,

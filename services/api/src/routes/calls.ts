@@ -244,15 +244,24 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null;
+    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
-    SELECT id::text, status::text, listener_user_id::text, currency_code,
-           authorized_minor::text, max_billable_seconds, requested_at::text,
-           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text,
-           provider_bridge_id
-    FROM app.call_sessions
-    WHERE caller_user_id=$1 AND status::text = ANY($2::text[])
-    ORDER BY requested_at DESC
+    SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
+           cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
+           cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
+           cs.provider_bridge_id,
+           EXISTS (
+             SELECT 1
+             FROM app.call_events ce
+             WHERE ce.call_session_id=cs.id
+               AND (
+                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
+                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
+               )
+           ) AS termination_in_progress
+    FROM app.call_sessions cs
+    WHERE cs.caller_user_id=$1 AND cs.status::text = ANY($2::text[])
+    ORDER BY cs.requested_at DESC
     LIMIT 2
   `, [userId, activeCallStatuses]);
   if (result.rows.length > 1) throw new HttpError(409, 'caller_active_call_conflict');
@@ -270,6 +279,7 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
       authorizedMinor: row.authorized_minor,
       maxBillableSeconds: row.max_billable_seconds,
       telephonyReady: Boolean(row.provider_bridge_id),
+      terminationInProgress: row.termination_in_progress,
       requestedAt: row.requested_at,
       connectedAt: row.connected_at,
       endedAt: row.ended_at,
@@ -286,14 +296,23 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null;
+    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
-    SELECT id::text, status::text, listener_user_id::text, currency_code,
-           authorized_minor::text, max_billable_seconds, requested_at::text,
-           connected_at::text, ended_at::text, billable_seconds, caller_charge_minor::text,
-           provider_bridge_id
-    FROM app.call_sessions
-    WHERE id=$1 AND caller_user_id=$2
+    SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
+           cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
+           cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
+           cs.provider_bridge_id,
+           EXISTS (
+             SELECT 1
+             FROM app.call_events ce
+             WHERE ce.call_session_id=cs.id
+               AND (
+                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
+                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
+               )
+           ) AS termination_in_progress
+    FROM app.call_sessions cs
+    WHERE cs.id=$1 AND cs.caller_user_id=$2
   `, [callId, userId]);
   const row = result.rows[0];
   if (!row) throw new HttpError(404, 'call_not_found');
@@ -305,6 +324,7 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     authorizedMinor: row.authorized_minor,
     maxBillableSeconds: row.max_billable_seconds,
     telephonyReady: Boolean(row.provider_bridge_id),
+    terminationInProgress: row.termination_in_progress,
     requestedAt: row.requested_at,
     connectedAt: row.connected_at,
     endedAt: row.ended_at,

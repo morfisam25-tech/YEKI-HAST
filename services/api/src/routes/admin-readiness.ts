@@ -3,8 +3,9 @@ import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
-import { validateSecurityEnv } from '../lib/security.ts';
+import { validateEmailSecurityEnv, validateSecurityEnv } from '../lib/security.ts';
 import { getSmsProvider } from '../providers/sms.ts';
+import { validateEmailProviderEnv } from '../providers/email.ts';
 import { validatePaymentProviderEnv } from '../providers/payment.ts';
 import { validatePayoutProviderEnv } from '../providers/payout.ts';
 import { validateTelephonyEnv } from '../providers/telephony.ts';
@@ -22,6 +23,7 @@ function configured(value: string | undefined): boolean {
 export async function getAdminIntegrationReadiness(req: IncomingMessage, res: ServerResponse) {
   await requireAdmin(req);
 
+  const emailProvider = process.env.EMAIL_PROVIDER?.trim() || null;
   const smsProvider = process.env.SMS_PROVIDER?.trim() || null;
   const paymentProvider = process.env.PAYMENT_PROVIDER?.trim() || null;
   const payoutProvider = process.env.PAYOUT_PROVIDER?.trim() || null;
@@ -29,12 +31,20 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const kycInquiryProvider = process.env.KYC_INQUIRY_PROVIDER?.trim() || null;
   const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
 
+  const emailAuthReady = ready(() => {
+    validateEmailSecurityEnv();
+    validateEmailProviderEnv();
+  });
   const smsReady = ready(() => getSmsProvider());
   const paymentReady = ready(() => validatePaymentProviderEnv());
   const payoutReady = ready(() => validatePayoutProviderEnv());
   const telephonyReady = ready(() => validateTelephonyEnv());
   const kycInquiryReady = ready(() => validateKycInquiryProviderEnv());
   const sensitiveDataReady = ready(() => validateSecurityEnv());
+  const manualPhoneVerificationEnabled = process.env.MANUAL_PHONE_VERIFICATION_BETA_ENABLED?.trim().toLowerCase() === 'true';
+  const accountAuthReady = emailAuthReady || smsReady;
+  const callPhoneVerificationReady = manualPhoneVerificationEnabled || smsReady;
+
   const catalog = await query<{ pricing_ready: boolean; language_ready: boolean }>(`
     SELECT
       EXISTS (
@@ -59,7 +69,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const callerLaunchReady = callerClosedBetaEnabled
     && callerAgePolicyReady
     && callerCatalogReady
-    && smsReady
+    && accountAuthReady
+    && callPhoneVerificationReady
     && paymentReady
     && telephonyReady
     && sensitiveDataReady;
@@ -68,7 +79,13 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     ok: true,
     generatedAt: new Date().toISOString(),
     integrations: {
-      sms: { provider: smsProvider, ready: smsReady },
+      emailAuth: { provider: emailProvider, ready: emailAuthReady },
+      sms: { provider: smsProvider, ready: smsReady, optionalWhenEmailAndManualPhoneVerificationReady: true },
+      accountAuth: { ready: accountAuthReady },
+      callPhoneVerification: {
+        ready: callPhoneVerificationReady,
+        manualBetaEnabled: manualPhoneVerificationEnabled,
+      },
       payment: { provider: paymentProvider, ready: paymentReady },
       payout: { provider: payoutProvider, ready: payoutReady },
       telephony: { provider: telephonyProvider, ready: telephonyReady },

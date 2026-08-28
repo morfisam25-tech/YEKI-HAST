@@ -90,7 +90,7 @@ jobs:
           SMTP_USERNAME: ci-user
           SMTP_PASSWORD: ci-password
           SMTP_FROM_EMAIL: no-reply@example.test
-        run: npm run verify:production-security
+        run: npm run verify:security-config
 
   typecheck:
     runs-on: ubuntu-latest

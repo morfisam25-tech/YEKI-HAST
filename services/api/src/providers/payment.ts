@@ -53,6 +53,20 @@ function required(name: string): string {
   return value;
 }
 
+function validateCallbackBaseUrl(): void {
+  const raw = process.env.PAYMENT_CALLBACK_BASE_URL?.trim();
+  if (!raw) {
+    if (process.env.NODE_ENV === 'production') throw new PaymentProviderError('payment_provider_not_configured');
+    return;
+  }
+  let url: URL;
+  try { url = new URL(raw); }
+  catch { throw new PaymentProviderError('payment_provider_not_configured'); }
+  if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
+    throw new PaymentProviderError('payment_provider_not_configured');
+  }
+}
+
 function parseProviderCode(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isInteger(parsed)) throw new PaymentProviderError('payment_provider_invalid_response');
@@ -159,6 +173,7 @@ export function validatePaymentProviderEnv(): void {
   const provider = process.env.PAYMENT_PROVIDER?.trim();
   if (provider !== 'nextpay') throw new PaymentProviderError('payment_provider_not_configured');
   new NextPayProvider();
+  validateCallbackBaseUrl();
 }
 
 export function getPaymentProvider(): PaymentProvider {

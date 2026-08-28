@@ -1,10 +1,10 @@
-export const ADMIN_SESSION_COOKIE = 'yeki_admin_session';
+export const WEB_SESSION_COOKIE = 'yeki_web_session';
 
 export function backendBaseUrl(): string {
-  const configured = process.env.ADMIN_API_BASE_URL?.trim();
+  const configured = process.env.WEB_API_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
   if (process.env.NODE_ENV !== 'production') return 'http://localhost:4000';
-  throw new Error('ADMIN_API_BASE_URL is required in production');
+  throw new Error('WEB_API_BASE_URL is required in production');
 }
 
 export async function backendRequest(path: string, init: RequestInit = {}) {

@@ -66,10 +66,10 @@ const labels: Array<[keyof Summary['counts'], string]> = [
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
-    invalid_phone: 'شماره موبایل معتبر نیست.',
+    invalid_email: 'ایمیل معتبر نیست.',
     invalid_otp: 'کد تأیید درست نیست یا منقضی شده.',
     otp_request_rate_limited: 'تعداد درخواست کد زیاد شده؛ بعداً دوباره امتحان کن.',
-    sms_delivery_unavailable: 'ارسال پیامک در دسترس نیست.',
+    email_delivery_unavailable: 'ارسال ایمیل ورود در دسترس نیست.',
     admin_required: 'این حساب دسترسی ادمین فعال ندارد.',
     unauthorized: 'نشست ادمین معتبر نیست.',
     assessment_already_reviewed: 'این آزمون قبلاً بررسی شده.',
@@ -100,7 +100,7 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<ApplicationDetail | null>(null);
   const [kyc, setKyc] = useState<KycDetail | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -156,7 +156,7 @@ export default function AdminPage() {
     setBusy(true);
     setError('');
     try {
-      await api('/api/auth/request', { method: 'POST', body: JSON.stringify({ phone }) });
+      await api('/api/auth/request', { method: 'POST', body: JSON.stringify({ email }) });
       setCodeSent(true);
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
@@ -168,7 +168,7 @@ export default function AdminPage() {
     setBusy(true);
     setError('');
     try {
-      await api('/api/auth/verify', { method: 'POST', body: JSON.stringify({ phone, code }) });
+      await api('/api/auth/verify', { method: 'POST', body: JSON.stringify({ email, code }) });
       await loadDashboard();
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'request_failed'));
@@ -250,17 +250,17 @@ export default function AdminPage() {
         <section className="panel authPanel">
           <p className="kicker">YEKI HAST · ADMIN</p>
           <h1>ورود عملیات</h1>
-          <p className="muted">ورود با OTP اصلی انجام می‌شود و فقط حساب دارای نقش ادمین فعال وارد می‌شود.</p>
-          <label>شماره موبایل</label>
-          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="0912..." inputMode="tel" dir="ltr" />
+          <p className="muted">ورود ادمین با Email OTP انجام می‌شود و فقط حساب دارای نقش ادمین فعال وارد می‌شود.</p>
+          <label>ایمیل ادمین</label>
+          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@example.com" type="email" autoComplete="email" inputMode="email" dir="ltr" />
           {!codeSent ? (
-            <button disabled={busy || phone.trim().length < 8} onClick={requestCode}>{busy ? 'در حال ارسال…' : 'ارسال کد'}</button>
+            <button disabled={busy || !email.trim()} onClick={requestCode}>{busy ? 'در حال ارسال…' : 'ارسال کد به ایمیل'}</button>
           ) : (
             <>
-              <label>کد ۶ رقمی</label>
+              <label>کد ۶ رقمی ایمیل‌شده</label>
               <input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="------" inputMode="numeric" dir="ltr" />
               <button disabled={busy || code.length !== 6} onClick={verifyCode}>{busy ? 'در حال بررسی…' : 'ورود به پنل'}</button>
-              <button className="ghost" disabled={busy} onClick={() => { setCodeSent(false); setCode(''); }}>تغییر شماره</button>
+              <button className="ghost" disabled={busy} onClick={() => { setCodeSent(false); setCode(''); }}>تغییر ایمیل</button>
             </>
           )}
           {error && <p className="error">{error}</p>}

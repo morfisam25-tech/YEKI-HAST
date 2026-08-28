@@ -4,19 +4,33 @@ import test from 'node:test';
 
 const page = await readFile(new URL('../apps/web/app/page.tsx', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../apps/web/app/styles.css', import.meta.url), 'utf8');
+const requestProxy = await readFile(new URL('../apps/web/app/api/auth/request/route.ts', import.meta.url), 'utf8');
+const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/route.ts', import.meta.url), 'utf8');
+const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
-test('web landing explains the product and OTP purpose in Persian', () => {
+test('web landing explains the product and primary email OTP purpose in Persian', () => {
   assert.match(page, /سرویسی برای گفت‌وگوی صوتی با شنونده‌های انسانی تأییدشده/);
-  assert.match(page, /ورود با شماره موبایل/);
-  assert.match(page, /برای تأیید شماره موبایل، یک کد یک‌بارمصرف برای شما پیامک می‌شود/);
-  assert.match(page, /شماره موبایل شما برای ورود و امنیت حساب استفاده می‌شود/);
+  assert.match(page, /ورود با ایمیل/);
+  assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
+  assert.match(page, /شماره تماس برای تماس صوتی جداگانه ثبت و/);
+  assert.doesNotMatch(page, /ورود با شماره موبایل|پیامک‌شده/);
 });
 
-test('web login uses the existing OTP API and keeps auth fail-closed', () => {
-  assert.match(page, /\/v1\/auth\/otp\/request/);
-  assert.match(page, /\/v1\/auth\/otp\/verify/);
+test('web email login stays same-origin and proxies to the backend email auth API', () => {
+  assert.match(page, /\/api\/auth\/request/);
+  assert.match(page, /\/api\/auth\/verify/);
+  assert.match(requestProxy, /\/v1\/auth\/email\/request/);
+  assert.match(verifyProxy, /\/v1\/auth\/email\/verify/);
   assert.match(page, /if \(!response\.ok\) throw new Error/);
   assert.doesNotMatch(page, /localStorage|sessionStorage/);
+});
+
+test('web verified session is HttpOnly and logout revokes the backend session best-effort', () => {
+  assert.match(verifyProxy, /httpOnly: true/);
+  assert.match(verifyProxy, /sameSite: 'strict'/);
+  assert.match(logoutProxy, /\/v1\/auth\/logout/);
+  assert.match(logoutProxy, /store\.delete\(WEB_SESSION_COOKIE\)/);
+  assert.match(logoutProxy, /authorization: `Bearer \$\{token\}`/);
 });
 
 test('web landing keeps RTL responsive layouts explicit', () => {

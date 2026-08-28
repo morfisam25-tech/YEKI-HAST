@@ -1,16 +1,8 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import {
-  ADMIN_SESSION_COOKIE,
-  backendRequest,
-  jsonOrNull,
-  proxyError,
-} from '../../_backend';
+import { WEB_SESSION_COOKIE, backendRequest, jsonOrNull, proxyError } from '../../_backend';
 
-type SessionPayload = {
-  token?: unknown;
-  expiresInHours?: unknown;
-};
+type SessionPayload = { token?: unknown; expiresInHours?: unknown };
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { email?: unknown; code?: unknown } | null;
@@ -34,24 +26,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid_session_response' }, { status: 502 });
   }
 
-  // Confirm the authenticated user is an active admin before storing a browser session.
-  const adminCheck = await backendRequest('/v1/admin/operations/summary', {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  const adminPayload = await jsonOrNull(adminCheck);
-  if (!adminCheck.ok) {
-    const status = adminCheck.status === 403 ? 403 : 502;
-    return NextResponse.json({ error: proxyError(adminPayload, 'admin_check_failed') }, { status });
-  }
-
   const store = await cookies();
-  store.set(ADMIN_SESSION_COOKIE, token, {
+  store.set(WEB_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
     maxAge: Math.floor(expiresInHours * 60 * 60),
   });
-
   return NextResponse.json({ ok: true });
 }

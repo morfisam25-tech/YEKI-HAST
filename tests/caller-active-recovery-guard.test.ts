@@ -10,8 +10,8 @@ const screen = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen
 
 test('caller active-call recovery is caller-scoped and limited to active states', () => {
   assert.match(calls, /export async function getActiveCall/);
-  assert.match(calls, /WHERE caller_user_id=\$1 AND status::text = ANY\(\$2::text\[\]\)/);
-  assert.match(calls, /ORDER BY requested_at DESC/);
+  assert.match(calls, /WHERE cs\.caller_user_id=\$1 AND cs\.status::text = ANY\(\$2::text\[\]\)/);
+  assert.match(calls, /ORDER BY cs\.requested_at DESC/);
   assert.match(calls, /LIMIT 2/);
   assert.match(calls, /if \(result\.rows\.length > 1\) throw new HttpError\(409, 'caller_active_call_conflict'\)/);
   assert.match(screen, /caller_active_call_conflict:/);
@@ -57,8 +57,8 @@ test('request race recovers the winning active call instead of leaving caller st
 
 test('uncertain telephony dispatch keeps the caller on the same call without blind provider retry', () => {
   assert.match(screen, /telephony_dispatch_uncertain:/);
-  assert.match(screen, /if \(!call \|\| call\.status !== 'routing'\) return/);
-  assert.match(screen, /const dispatchRetryable = Boolean\(call && call\.status === 'routing'\)/);
+  assert.match(screen, /if \(!call \|\| call\.status !== 'routing' \|\| call\.terminationInProgress\) return/);
+  assert.match(screen, /const dispatchRetryable = Boolean\(call && call\.status === 'routing' && !terminationInProgress\)/);
   assert.match(screen, /شروع دوباره ارسال نمی‌شود/);
   assert.match(dispatch, /if \(row\.status === 'calling_caller'\) \{[\s\S]*telephony_dispatch_uncertain/);
 });
@@ -71,11 +71,13 @@ test('telephony readiness is exposed without exposing the provider bridge id', (
   assert.doesNotMatch(screen, /providerBridgeId|provider_bridge_id/);
 });
 
-test('unresolved telephony identity hides cancel and safety controls until provider truth is known', () => {
+test('unresolved telephony identity or termination state hides duplicate end controls', () => {
   assert.match(screen, /const telephonyUnresolved = Boolean/);
+  assert.match(screen, /const terminationInProgress = Boolean\(call\?\.terminationInProgress\)/);
   assert.match(screen, /const dispatchRetryable = Boolean/);
-  assert.match(screen, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved/);
+  assert.match(screen, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved && !terminationInProgress/);
   assert.match(screen, /برای جلوگیری از تماس تکراری/);
+  assert.match(screen, /کنترل‌های پایان قفل شده‌اند/);
 });
 
 test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {
@@ -88,8 +90,9 @@ test('live caller status auto-sync polls only non-terminal calls and cleans up i
   assert.match(screen, /getErrorCode\(cause\) !== 'network_error'/);
 });
 
-test('connected calls remain non-cancellable in caller UI while safety exit stays available once telephony is known', () => {
+test('connected calls remain non-cancellable in caller UI while safety exit stays available only before termination starts', () => {
   assert.match(screen, /const cancellableStatuses = new Set\(\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'\]\)/);
   assert.doesNotMatch(screen, /cancellableStatuses[^\n]*connected/);
   assert.match(screen, /پایان فوری برای ایمنی/);
+  assert.match(screen, /!terminationInProgress/);
 });

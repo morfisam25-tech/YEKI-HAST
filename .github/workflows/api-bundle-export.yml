@@ -1,4 +1,4 @@
-name: API Bundle Export
+name: Deployment Source Export
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  bundle:
+  export:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -54,4 +54,9 @@ jobs:
         with:
           name: yeki-hast-api-bundle
           path: dist-api
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-admin-source
+          path: apps/admin
           retention-days: 1

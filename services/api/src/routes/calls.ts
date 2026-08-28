@@ -8,6 +8,14 @@ import { requireCurrentCallerAgeAssertion } from './caller.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const activeCallStatuses = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
+const terminationEventReasons = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
 
 function parseRequestedGender(value: unknown): 'female' | 'male' | 'any' {
   if (value === undefined || value === null || value === 'any') return 'any';
@@ -254,16 +262,13 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
              SELECT 1
              FROM app.call_events ce
              WHERE ce.call_session_id=cs.id
-               AND (
-                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
-                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
-               )
+               AND ce.metadata->>'reason' = ANY($3::text[])
            ) AS termination_in_progress
     FROM app.call_sessions cs
     WHERE cs.caller_user_id=$1 AND cs.status::text = ANY($2::text[])
     ORDER BY cs.requested_at DESC
     LIMIT 2
-  `, [userId, activeCallStatuses]);
+  `, [userId, activeCallStatuses, terminationEventReasons]);
   if (result.rows.length > 1) throw new HttpError(409, 'caller_active_call_conflict');
   const row = result.rows[0];
   if (!row) {
@@ -306,14 +311,11 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
              SELECT 1
              FROM app.call_events ce
              WHERE ce.call_session_id=cs.id
-               AND (
-                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
-                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
-               )
+               AND ce.metadata->>'reason' = ANY($3::text[])
            ) AS termination_in_progress
     FROM app.call_sessions cs
     WHERE cs.id=$1 AND cs.caller_user_id=$2
-  `, [callId, userId]);
+  `, [callId, userId, terminationEventReasons]);
   const row = result.rows[0];
   if (!row) throw new HttpError(404, 'call_not_found');
   sendJson(res, 200, {

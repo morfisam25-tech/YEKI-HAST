@@ -42,5 +42,23 @@ test('mobile listener work mode polls active call only while foregrounded and ex
   assert.match(card, /activeCall\.status === 'calling_listener'/);
   assert.match(card, /activeCall\.status === 'connected'/);
   assert.doesNotMatch(card, /cancelCall|dispatchCall/);
-  assert.match(workScreen, /<ListenerActiveCallCard token=\{token\} \/>/);
+  assert.match(workScreen, /<ListenerActiveCallCard token=\{token\} onActiveCallConflictChange=\{setActiveCallConflict\} \/>/);
+});
+
+test('duplicate listener active calls lock ready-state controls without mutating presence automatically', () => {
+  assert.match(card, /onActiveCallConflictChange\?: \(conflicted: boolean\) => void/);
+  assert.match(card, /code === 'listener_active_call_conflict'/);
+  assert.match(card, /onActiveCallConflictChange\?\.\(true\)/);
+  assert.match(card, /onActiveCallConflictChange\?\.\(false\)/);
+  assert.match(workScreen, /const \[activeCallConflict, setActiveCallConflict\] = useState\(false\)/);
+  assert.match(workScreen, /activeCallConflict && status !== 'offline'/);
+  assert.match(workScreen, /disabled=\{workControlsLocked\}/);
+  assert.match(workScreen, /سرور این حساب را به‌دلیل وجود چند تماس فعال از دریافت تماس جدید کنار می‌گذارد/);
+  assert.doesNotMatch(workScreen, /activeCallConflict[\s\S]{0,200}setListenerPresence\(token, 'offline'/);
+});
+
+test('paused listener work mode renders one resume path rather than duplicate online actions', () => {
+  assert.match(workScreen, /!isOnline && !isPaused/);
+  assert.match(workScreen, /\{isPaused && \(/);
+  assert.match(workScreen, />ادامه کار</);
 });

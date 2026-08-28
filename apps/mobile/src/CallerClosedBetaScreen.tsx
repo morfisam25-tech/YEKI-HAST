@@ -13,6 +13,7 @@ import {
   type BrowseListener,
   type CallResponse,
 } from './api';
+import CallPhoneSetupCard from './CallPhoneSetupCard';
 import CallerWalletCard from './CallerWalletCard';
 import CallerRecentCallsCard from './CallerRecentCallsCard';
 
@@ -38,7 +39,7 @@ function messageFor(code: string): string {
   const messages: Record<string, string> = {
     caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
-    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری سرور را تأیید کنی.',
+    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
     caller_active_call_conflict: 'چند تماس فعال همزمان پیدا شد. برای جلوگیری از انتخاب اشتباه، ادامه متوقف شده و نیاز به بررسی دارد.',
     no_listener_available: 'این شنونده دیگر آماده نیست؛ فهرست آماده‌ها به‌روزرسانی شد.',
@@ -67,6 +68,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [recoveryComplete, setRecoveryComplete] = useState(false);
   const [recoveryBlocked, setRecoveryBlocked] = useState(false);
+  const [callPhoneVerified, setCallPhoneVerified] = useState(false);
   const [error, setError] = useState('');
 
   function lockTerminationLocally(code: string) {
@@ -124,7 +126,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }, [token, stage, call?.callId, call?.status]);
 
   async function acceptAgeGate() {
-    if (recoveryBlocked) return;
+    if (recoveryBlocked || !callPhoneVerified) return;
     setBusy(true);
     setError('');
     try {
@@ -141,7 +143,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function refreshListeners() {
-    if (recoveryBlocked) return;
+    if (recoveryBlocked || !callPhoneVerified) return;
     setBusy(true);
     setError('');
     try {
@@ -155,7 +157,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   async function startCall(listener: BrowseListener) {
-    if (recoveryBlocked) return;
+    if (recoveryBlocked || !callPhoneVerified) return;
     const languageCode = listener.languages[0]?.code;
     if (!languageCode) {
       setError('برای این شنونده زبان فعالی ثبت نشده.');
@@ -284,7 +286,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Text style={styles.title}>Caller · بتای بسته</Text>
-      <Text style={styles.note}>دسترسی این صفحه با وضعیت فعلی سرور کنترل می‌شود و هیچ مسیر تماس بدون age-gate باز نمی‌شود.</Text>
+      <Text style={styles.note}>ورود حساب با ایمیل انجام می‌شود؛ شروع تماس جدید فقط بعد از تأیید جداگانه شماره تماس و age-gate باز می‌شود.</Text>
 
       {!recoveryComplete && (
         <View style={styles.card}>
@@ -293,7 +295,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token={token} />}
+      {recoveryComplete && !recoveryBlocked && stage !== 'call' && (
+        <CallPhoneSetupCard token={token} onVerifiedChange={setCallPhoneVerified} />
+      )}
+
+      {recoveryComplete && !recoveryBlocked && stage !== 'call' && callPhoneVerified && <CallerWalletCard token={token} />}
 
       {recoveryComplete && recoveryBlocked && (
         <View style={styles.card}>
@@ -302,7 +308,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {recoveryComplete && !recoveryBlocked && stage === 'age-gate' && (
+      {recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'age-gate' && (
         <View style={styles.card}>
           <Text style={styles.heading}>تأیید شرط سنی</Text>
           <Text style={styles.body}>قبل از دیدن مسیر تماس باید شرط سنی نسخه جاری سرور را تأیید کنی. مقدار سن از داخل اپ حدس زده نمی‌شود.</Text>
@@ -312,7 +318,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         </View>
       )}
 
-      {recoveryComplete && !recoveryBlocked && stage === 'browse' && (
+      {recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'browse' && (
         <View style={styles.card}>
           <Text style={styles.heading}>شنونده‌های آماده</Text>
           {minimumAge !== null && <Text style={styles.meta}>سیاست جاری: حداقل {minimumAge} سال</Text>}

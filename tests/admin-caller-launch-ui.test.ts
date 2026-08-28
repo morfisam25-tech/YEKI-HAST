@@ -19,10 +19,15 @@ test('Caller launch readiness remains fail-closed on every required dependency',
   assert.match(backend, /&& smsReady/);
   assert.match(backend, /&& paymentReady/);
   assert.match(backend, /&& telephonyReady/);
+  assert.match(backend, /&& sensitiveDataReady/);
 });
 
-test('readiness UI does not bind or render credential values', () => {
+test('admin readiness UI surfaces sensitive-data readiness without credential values', () => {
+  assert.match(page, /sensitiveData: Integration/);
+  assert.match(page, /\['sensitiveData', 'امنیت داده حساس'\]/);
+  assert.match(page, /Telephony و امنیت داده حساس/);
   assert.doesNotMatch(page, /\b(apiKey|secretKey|password|credential)\s*[:=]/i);
   assert.doesNotMatch(page, /data\.integrations\.[A-Za-z]+\.(apiKey|secretKey|password|credential)/i);
+  assert.match(backend, /sensitiveData: \{ ready: sensitiveDataReady \}/);
   assert.match(backend, /secretsIncluded: false/);
 });

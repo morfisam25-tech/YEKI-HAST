@@ -18,7 +18,7 @@ type ReportCase = {
   privateDetailsIncluded: false;
 };
 
-type TerminationState = 'finalized' | 'confirmed_local_finalize_pending' | 'uncertain' | 'started_unresolved' | 'not_started';
+type TerminationState = 'finalized' | 'legacy_terminal_unverified' | 'confirmed_local_finalize_pending' | 'uncertain' | 'started_unresolved' | 'not_started';
 
 type SafetyEvent = {
   id: string;
@@ -61,6 +61,7 @@ function short(value: string | null): string {
 function terminationLabel(state: TerminationState): string {
   const labels: Record<TerminationState, string> = {
     finalized: 'FINALIZED',
+    legacy_terminal_unverified: 'RECONCILE',
     confirmed_local_finalize_pending: 'LOCAL FINALIZE',
     uncertain: 'RECONCILE',
     started_unresolved: 'RECONCILE',

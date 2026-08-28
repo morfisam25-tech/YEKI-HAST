@@ -17,7 +17,8 @@ test('listener recent calls are authenticated, listener-scoped and terminal-only
   for (const status of ['completed', 'missed', 'cancelled', 'failed', 'safety_terminated']) {
     assert.ok(backend.includes(`'${status}'`));
   }
-  assert.match(section, /value > 20/);
+  assert.match(backend, /function recentLimit/);
+  assert.match(backend, /value > 20/);
 });
 
 test('listener recent call response keeps caller and provider identity private', () => {

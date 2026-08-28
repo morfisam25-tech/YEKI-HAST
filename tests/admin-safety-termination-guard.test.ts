@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const backend = await readFile(new URL('../services/api/src/routes/admin-safety.ts', import.meta.url), 'utf8');
 const page = await readFile(new URL('../apps/admin/app/safety/page.tsx', import.meta.url), 'utf8');
 
-test('admin safety queue classifies two-phase termination without bridge identity', () => {
+test('admin safety queue classifies two-phase and legacy termination without exposing bridge identity', () => {
   for (const reason of [
     'safety_termination_started',
     'safety_termination_result_uncertain',
@@ -15,6 +15,7 @@ test('admin safety queue classifies two-phase termination without bridge identit
   }
   for (const state of [
     'finalized',
+    'legacy_terminal_unverified',
     'confirmed_local_finalize_pending',
     'uncertain',
     'started_unresolved',
@@ -22,8 +23,10 @@ test('admin safety queue classifies two-phase termination without bridge identit
   ]) {
     assert.ok(backend.includes(state));
   }
+  assert.match(backend, /cs\.provider_bridge_id IS NULL OR COALESCE\(term\.has_confirmed, false\)/);
   assert.match(backend, /providerBridgeIdIncluded: false/);
-  assert.doesNotMatch(backend, /SELECT[^;]*provider_bridge_id/i);
+  const response = backend.slice(backend.indexOf('sendJson(res, 200'));
+  assert.doesNotMatch(response, /providerBridgeId:\s*row|provider_bridge_id:\s*row/);
 });
 
 test('admin safety termination diagnostics never permit provider retry', () => {
@@ -34,6 +37,7 @@ test('admin safety termination diagnostics never permit provider retry', () => {
 });
 
 test('admin safety UI makes reconcile and local-finalize states explicit without automatic repair', () => {
+  assert.match(page, /legacy_terminal_unverified: 'RECONCILE'/);
   assert.match(page, /confirmed_local_finalize_pending: 'LOCAL FINALIZE'/);
   assert.match(page, /uncertain: 'RECONCILE'/);
   assert.match(page, /started_unresolved: 'RECONCILE'/);

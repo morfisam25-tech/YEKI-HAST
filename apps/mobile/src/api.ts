@@ -1,4 +1,4 @@
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast.vercel.app').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast-theta.vercel.app').replace(/\/$/, '');
 
 export type BootstrapLanguage = {
   code: string;
@@ -13,7 +13,7 @@ export type BootstrapResponse = {
     currencyCode: string;
     callerRatePerMinuteMinor: number;
     listenerRatePerMinuteMinor: number;
-    platformGrossSpreadPerMinuteMinor: number;
+    platformGrossSpreadPerMinute: number;
     billingIncrementSeconds: number;
     displayUnit: string;
     displayDivisor: number;
@@ -78,412 +78,198 @@ export type ListenerPresenceResponse = {
   lastHeartbeatAt: string | null;
 };
 
-export type ListenerEarningStatus = 'pending' | 'available' | 'paid';
-
 export type ListenerEarningsResponse = {
-  summary: Array<{
-    currencyCode: string;
-    status: ListenerEarningStatus;
-    amountMinor: string;
-    earningCount: number;
-  }>;
+  availableMinor: number;
+  pendingMinor: number;
+  currencyCode: string;
+  displayUnit: string;
+  displayDivisor: number;
   recent: Array<{
-    currencyCode: string;
-    amountMinor: string;
-    status: ListenerEarningStatus;
+    id: string;
+    amountMinor: number;
+    status: 'pending' | 'available' | 'paid' | 'reversed';
+    sourceType: 'call' | 'guarantee';
     createdAt: string;
-    updatedAt: string;
   }>;
 };
 
-export type ListenerActiveCall = {
-  callId: string;
-  status: 'requested' | 'routing' | 'calling_caller' | 'caller_answered' | 'calling_listener' | 'connected';
+export type CallerWalletResponse = {
+  availableMinor: number;
+  heldMinor: number;
   currencyCode: string;
-  maxBillableSeconds: number | null;
-  telephonyReady: boolean;
-  terminationInProgress: boolean;
-  requestedAt: string;
-  connectedAt: string | null;
+  displayUnit: string;
+  displayDivisor: number;
+};
+
+export type CallerRecentCall = {
+  id: string;
+  listenerNickname: string | null;
+  status: string;
+  startedAt: string | null;
   endedAt: string | null;
-  billableSeconds: number;
-  listenerEarningMinor: string;
+  durationSeconds: number | null;
+  callerChargedMinor: number | null;
+  currencyCode: string;
+  displayUnit: string;
+  displayDivisor: number;
+  canRate: boolean;
+  canReport: boolean;
 };
 
 export type ListenerActiveCallResponse = {
-  activeCall: ListenerActiveCall | null;
-  providerBridgeIncluded?: false;
-  callerIdentityIncluded?: false;
-};
-
-export type ListenerRecentCall = {
-  callId: string;
-  status: 'completed' | 'missed' | 'cancelled' | 'failed' | 'safety_terminated';
-  currencyCode: string;
-  requestedAt: string;
-  connectedAt: string | null;
-  endedAt: string | null;
-  billableSeconds: number;
-  listenerEarningMinor: string;
-  counterpartyActionAvailable: boolean;
-};
-
-export type ListenerRecentCallsResponse = {
-  calls: ListenerRecentCall[];
-  providerBridgeIncluded?: false;
-  callerIdentityIncluded?: false;
-};
-
-export type WalletResponse = {
-  wallets: Array<{
-    currencyCode: string;
-    balanceMinor: string;
-    reservedMinor: string;
-    availableMinor: string;
-    version: string;
-  }>;
-};
-
-export type WalletTransactionsResponse = {
-  transactions: Array<{
-    id: string;
-    currencyCode: string;
-    type: string;
-    deltaMinor: string;
-    balanceAfterMinor: string;
-    callId: string | null;
-    paymentAttemptId: string | null;
-    reasonCode: string | null;
-    createdAt: string;
-  }>;
-};
-
-export type WalletTopupResponse = {
-  ok?: boolean;
-  attemptId: string;
-  provider?: string;
-  status: string;
-  currencyCode: string;
-  amountMinor: string;
-  providerPaymentId?: string | null;
-  paymentUrl?: string | null;
-  createdAt?: string;
-  completedAt?: string | null;
-  providerCode?: number | null;
-  balanceMinor?: string | null;
-  idempotent?: boolean;
-};
-
-export type CallResponse = {
-  ok?: boolean;
-  callId: string;
-  status: string;
-  listenerId?: string | null;
-  currencyCode?: string;
-  authorizedMinor?: string;
-  maxBillableSeconds?: number | null;
-  requestedAt?: string;
-  connectedAt?: string | null;
-  endedAt?: string | null;
-  billableSeconds?: number;
-  callerChargeMinor?: string;
-  telephonyReady?: boolean;
-  terminationInProgress?: boolean;
-  idempotent?: boolean;
-};
-
-export type SafetyExitResponse = {
-  ok: true;
-  callId: string;
-  status: string;
-  blocked: boolean;
-  idempotent: boolean;
-  safetyEventId: string | null;
-  settlement: null | {
-    billableSeconds: number;
-    callerChargeMinor: string;
-    listenerEarningMinor: string;
-    idempotent: boolean;
-  };
-};
-
-export type BrowseListener = {
   id: string;
-  nickname: string;
-  gender: 'female' | 'male';
-  verified: boolean;
-  reliabilityScore: number;
-  shortIntro: string | null;
-  listeningStyle: string | null;
-  completedCalls: number;
-  ratingAverage: number | null;
-  ratingCount: number;
-  presence: string;
-  languages: Array<{ code: string; nameFa: string; nameEn: string | null; proficiency: string }>;
+  status: string;
+  callerUserId: string;
+  startedAt: string | null;
+  durationSeconds: number | null;
+  callerRatePerMinuteMinor: number;
+  listenerRatePerMinuteMinor: number;
+  currencyCode: string;
+  displayUnit: string;
+  displayDivisor: number;
 };
 
-class ApiError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(code: string, status: number) {
-    super(code);
-    this.code = code;
-    this.status = status;
-  }
+export function normalizeIranPhone(raw: string): string {
+  const value = raw.replace(/[\s()-]/g, '');
+  if (/^09\d{9}$/.test(value)) return `+98${value.slice(1)}`;
+  if (/^\+989\d{9}$/.test(value)) return value;
+  throw new Error('invalid_phone');
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      accept: 'application/json',
-      ...(init.body ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...(init.headers ?? {}),
-    },
-  });
+async function api<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set('content-type', 'application/json');
+  if (token) headers.set('authorization', `Bearer ${token}`);
 
-  let body: unknown = null;
-  try { body = await response.json(); } catch {}
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const code = body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
-      ? String((body as { error: string }).error)
-      : 'request_failed';
-    throw new ApiError(code, response.status);
+    const error = new Error(body?.error || `http_${response.status}`);
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
   }
   return body as T;
 }
 
-export function normalizeIranPhone(input: string): string {
-  const value = input.replace(/[\s()-]/g, '');
-  if (/^09\d{9}$/.test(value)) return `+98${value.slice(1)}`;
-  if (/^\+98\d{10}$/.test(value)) return value;
-  throw new ApiError('invalid_phone', 400);
+export function getBootstrap() {
+  return api<BootstrapResponse>('/v1/bootstrap');
 }
 
-export function getErrorCode(error: unknown): string {
-  return error instanceof ApiError ? error.code : 'network_error';
-}
-
-export function getBootstrap(): Promise<BootstrapResponse> {
-  return request('/v1/bootstrap');
-}
-
-export async function requestOtp(phoneE164: string): Promise<void> {
-  await request('/v1/auth/otp/request', {
+export function requestOtp(phone: string) {
+  return api<{ ok: true; expiresInSeconds: number }>('/v1/auth/request', {
     method: 'POST',
-    body: JSON.stringify({ phone: phoneE164 }),
+    body: JSON.stringify({ phone: normalizeIranPhone(phone) }),
   });
 }
 
-export function verifyOtp(phoneE164: string, code: string): Promise<SessionResponse> {
-  return request('/v1/auth/otp/verify', {
+export function verifyOtp(phone: string, code: string) {
+  return api<SessionResponse>('/v1/auth/verify', {
     method: 'POST',
-    body: JSON.stringify({ phone: phoneE164, code }),
+    body: JSON.stringify({ phone: normalizeIranPhone(phone), code }),
   });
 }
 
-export function getCurrentSession(token: string): Promise<{ ok: true; userId: string }> {
-  return request('/v1/auth/session', {}, token);
+export function getSession(token: string) {
+  return api<{ authenticated: boolean; userId?: string; roles?: string[] }>('/v1/auth/session', {}, token);
 }
 
-export function logoutCurrentSession(token: string): Promise<{ ok: true }> {
-  return request('/v1/auth/logout', { method: 'POST' }, token);
+export function getListenerApplication(token: string) {
+  return api<ListenerApplicationResponse>('/v1/listener/application', {}, token);
 }
 
-export function getWallet(token: string): Promise<WalletResponse> {
-  return request('/v1/wallet', {}, token);
-}
-
-export function getWalletTransactions(token: string, currencyCode = 'IRR', limit = 50): Promise<WalletTransactionsResponse> {
-  const params = new URLSearchParams({ currency: currencyCode, limit: String(limit) });
-  return request(`/v1/wallet/transactions?${params.toString()}`, {}, token);
-}
-
-export function createWalletTopup(
-  token: string,
-  amountMinor: string,
-  idempotencyKey: string,
-): Promise<WalletTopupResponse> {
-  return request('/v1/wallet/topups', {
+export function submitListenerApplication(token: string, body: {
+  nickname: string;
+  declaredGender: 'female' | 'male';
+  languages: Array<{ code: string; proficiency: string }>;
+  shortIntro?: string;
+  listeningStyle?: string;
+}) {
+  return api<ListenerApplicationResponse>('/v1/listener/application', {
     method: 'POST',
-    body: JSON.stringify({ amountMinor, idempotencyKey }),
+    body: JSON.stringify(body),
   }, token);
 }
 
-export function getWalletTopup(token: string, attemptId: string): Promise<WalletTopupResponse> {
-  return request(`/v1/wallet/topups/${encodeURIComponent(attemptId)}`, {}, token);
-}
-
-export function verifyWalletTopup(token: string, attemptId: string): Promise<WalletTopupResponse> {
-  return request(`/v1/wallet/topups/${encodeURIComponent(attemptId)}/verify`, { method: 'POST' }, token);
-}
-
-export function createListenerApplication(
-  token: string,
-  input: {
-    nickname: string;
-    gender: 'female' | 'male';
-    shortIntro?: string;
-    listeningStyle?: string;
-    languages: Array<{ code: string; proficiency: 'conversational' | 'fluent' | 'native' }>;
-  },
-): Promise<{ ok: true; applicationId: string; status: string }> {
-  return request('/v1/listener/application', {
+export function updateListenerTraining(token: string, moduleKey: ListenerTrainingModuleKey, progressPercent: number) {
+  return api('/v1/listener/training', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ moduleKey, progressPercent }),
   }, token);
 }
 
-export function getListenerApplication(token: string): Promise<ListenerApplicationResponse> {
-  return request('/v1/listener/application', {}, token);
-}
-
-export function completeListenerTraining(
-  token: string,
-  moduleKey: ListenerTrainingModuleKey,
-): Promise<{ ok: true; applicationId: string; trainingComplete: boolean; status: string }> {
-  return request('/v1/listener/training/complete', {
+export function submitListenerAssessment(token: string, answers: Array<{ questionKey: string; answer: string }>) {
+  return api('/v1/listener/assessment', {
     method: 'POST',
-    body: JSON.stringify({ moduleKey }),
+    body: JSON.stringify({ answers }),
   }, token);
 }
 
-export function submitListenerAssessment(
-  token: string,
-  answers: Record<string, string>,
-): Promise<{ ok: true; attemptId: string; status: 'pending' }> {
-  return request('/v1/listener/assessment', {
+export function getListenerKyc(token: string) {
+  return api<ListenerKycStatusResponse>('/v1/listener/kyc', {}, token);
+}
+
+export function submitListenerKyc(token: string, body: {
+  nationalId: string;
+  birthDateJalali: string;
+  firstName: string;
+  lastName: string;
+  iban?: string;
+}) {
+  return api<ListenerKycStatusResponse>('/v1/listener/kyc', {
     method: 'POST',
-    body: JSON.stringify({ scenarioVersion: 'listener-beta-v1', answers }),
+    body: JSON.stringify(body),
   }, token);
 }
 
-export function getListenerKycStatus(token: string): Promise<ListenerKycStatusResponse> {
-  return request('/v1/listener/kyc', {}, token);
+export function getListenerPresence(token: string) {
+  return api<ListenerPresenceResponse>('/v1/listener/presence', {}, token);
 }
 
-export function submitListenerKyc(
-  token: string,
-  input: {
-    legalName: string;
-    nationalId: string;
-    dateOfBirthJalali: string;
-    bankIban: string;
-    bankAccountHolder?: string;
-  },
-): Promise<{ ok: true; status: 'pending'; applicationId: string }> {
-  return request('/v1/listener/kyc', {
+export function updateListenerPresence(token: string, body: {
+  status: 'online' | 'offline' | 'paused';
+  acceptsMale: boolean;
+  acceptsFemale: boolean;
+}) {
+  return api<ListenerPresenceResponse>('/v1/listener/presence', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   }, token);
 }
 
-export function getListenerPresence(token: string): Promise<ListenerPresenceResponse> {
-  return request('/v1/listener/presence', {}, token);
+export function heartbeatListener(token: string) {
+  return api('/v1/listener/presence/heartbeat', { method: 'POST', body: '{}' }, token);
 }
 
-export function getListenerEarnings(token: string): Promise<ListenerEarningsResponse> {
-  return request('/v1/listener/earnings', {}, token);
+export function getListenerEarnings(token: string) {
+  return api<ListenerEarningsResponse>('/v1/listener/earnings', {}, token);
 }
 
-export function getListenerActiveCall(token: string): Promise<ListenerActiveCallResponse> {
-  return request('/v1/listener/calls/active', {}, token);
+export function getListenerActiveCall(token: string) {
+  return api<ListenerActiveCallResponse | { active: false }>('/v1/listener/calls/active', {}, token);
 }
 
-export function getListenerRecentCalls(token: string, limit = 10): Promise<ListenerRecentCallsResponse> {
-  return request(`/v1/listener/calls/recent?limit=${encodeURIComponent(String(limit))}`, {}, token);
+export function getCallerWallet(token: string) {
+  return api<CallerWalletResponse>('/v1/wallet', {}, token);
 }
 
-export function setListenerPresence(
-  token: string,
-  status: 'online' | 'offline' | 'paused',
-  acceptsMale = true,
-  acceptsFemale = true,
-): Promise<{ ok: true; status: 'online' | 'offline' | 'paused'; acceptsMale: boolean; acceptsFemale: boolean; workSessionId: string | null }> {
-  return request('/v1/listener/presence', {
+export function getCallerRecentCalls(token: string) {
+  return api<{ calls: CallerRecentCall[] }>('/v1/caller/calls/recent', {}, token);
+}
+
+export function cancelCallerCall(token: string, callId: string) {
+  return api(`/v1/calls/${encodeURIComponent(callId)}/cancel`, { method: 'POST', body: '{}' }, token);
+}
+
+export function submitCallRating(token: string, callId: string, score: number) {
+  return api(`/v1/calls/${encodeURIComponent(callId)}/rating`, {
     method: 'POST',
-    body: JSON.stringify({ status, acceptsMale, acceptsFemale }),
+    body: JSON.stringify({ score }),
   }, token);
 }
 
-export function heartbeatListenerPresence(token: string): Promise<{ ok: true; status: 'online' | 'paused' }> {
-  return request('/v1/listener/presence/heartbeat', { method: 'POST' }, token);
-}
-
-export function confirmCallerAge(token: string): Promise<{ ok: true; minimumAge: number; policyVersion: string }> {
-  return request('/v1/caller/age-gate', { method: 'POST', body: JSON.stringify({ confirmed: true }) }, token);
-}
-
-export function joinCallerWaitlist(
-  token: string,
-  input: { source?: string; gender?: 'female' | 'male'; preferredLanguageCode?: string },
-): Promise<{ ok: true; waitlistEntryId: string }> {
-  return request('/v1/caller/waitlist', { method: 'POST', body: JSON.stringify(input) }, token);
-}
-
-export function browseListeners(
-  token: string,
-  input: { languageCode?: string; gender?: 'female' | 'male' | 'any'; limit?: number } = {},
-): Promise<{ listeners: BrowseListener[] }> {
-  const params = new URLSearchParams();
-  if (input.languageCode) params.set('language', input.languageCode);
-  if (input.gender && input.gender !== 'any') params.set('gender', input.gender);
-  if (input.limit) params.set('limit', String(input.limit));
-  const suffix = params.toString() ? `?${params.toString()}` : '';
-  return request(`/v1/listeners${suffix}`, {}, token);
-}
-
-export function requestCall(
-  token: string,
-  input: {
-    clientRequestId: string;
-    listenerId?: string;
-    listenerGender?: 'female' | 'male' | 'any';
-    languageCode: string;
-    mood?: 'sad' | 'angry' | 'overwhelmed' | 'lonely' | 'just_talk' | 'other';
-    topicCode?: string;
-    maxSeconds?: number;
-  },
-): Promise<CallResponse> {
-  return request('/v1/calls/request', { method: 'POST', body: JSON.stringify(input) }, token);
-}
-
-export function getActiveCall(token: string): Promise<{ activeCall: CallResponse | null }> {
-  return request('/v1/calls/active', {}, token);
-}
-
-export function dispatchCall(token: string, callId: string): Promise<CallResponse> {
-  return request(`/v1/calls/${encodeURIComponent(callId)}/dispatch`, { method: 'POST' }, token);
-}
-
-export function getCall(token: string, callId: string): Promise<CallResponse> {
-  return request(`/v1/calls/${encodeURIComponent(callId)}`, {}, token);
-}
-
-export function cancelCall(token: string, callId: string): Promise<CallResponse> {
-  return request(`/v1/calls/${encodeURIComponent(callId)}/cancel`, { method: 'POST' }, token);
-}
-
-export function safetyExitCall(
-  token: string,
-  callId: string,
-  input: { details?: string; blockCounterparty?: boolean } = {},
-): Promise<SafetyExitResponse> {
-  return request(`/v1/calls/${encodeURIComponent(callId)}/safety-exit`, {
+export function submitCallReport(token: string, callId: string, category: string, description?: string) {
+  return api(`/v1/calls/${encodeURIComponent(callId)}/report`, {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ category, description }),
   }, token);
-}
-
-export function reportCallSafety(
-  token: string,
-  input: { callId: string; category: string; details?: string },
-): Promise<{ ok: true; reportId: string }> {
-  return request('/v1/safety/report', { method: 'POST', body: JSON.stringify(input) }, token);
-}
-
-export function blockCallCounterparty(token: string, callId: string): Promise<{ ok: true; blocked: true }> {
-  return request('/v1/safety/block', { method: 'POST', body: JSON.stringify({ callId }) }, token);
 }

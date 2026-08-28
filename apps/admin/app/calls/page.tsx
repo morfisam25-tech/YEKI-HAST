@@ -33,6 +33,7 @@ type CallAnomalies = {
   counts: {
     dispatchUncertain: number;
     cancelTerminationPending: number;
+    terminationFlowConflicts: number;
     missingBridge: number;
     stalePreconnect: number;
     connectedOverrun: number;
@@ -61,6 +62,15 @@ type CallAnomalies = {
       reconciliationRequired: boolean;
       providerTerminationRetryAllowed: false;
       localFinalizeRetryAllowed: boolean;
+    }>;
+    terminationFlowConflicts: Array<{
+      callId: string;
+      status: string;
+      eventAt: string;
+      updatedAt: string;
+      reconciliationRequired: true;
+      providerTerminationRetryAllowed: false;
+      automaticRepairAllowed: false;
     }>;
     missingBridge: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string }>;
     stalePreconnect: Array<{ callId: string; status: string; requestedAt: string; updatedAt: string; recoveryEligible: boolean }>;
@@ -129,6 +139,10 @@ export default function CallsPage() {
     anomalies?.anomalies.cancelTerminationPending.map((item) => [item.callId, item.terminationState] as const) ?? [],
   ), [anomalies]);
 
+  const terminationFlowConflictCallIds = useMemo(() => new Set(
+    anomalies?.anomalies.terminationFlowConflicts.map((item) => item.callId) ?? [],
+  ), [anomalies]);
+
   const invariantIssuesByCall = useMemo(() => new Map(
     anomalies?.anomalies.invariantViolations.map((item) => [item.callId, item.issueCode]) ?? [],
   ), [anomalies]);
@@ -191,6 +205,7 @@ export default function CallsPage() {
         <div className="facts compact">
           <p><b>Dispatch نیازمند Reconcile:</b> {anomalies?.counts.dispatchUncertain ?? '—'}</p>
           <p><b>Termination در انتظار:</b> {anomalies?.counts.cancelTerminationPending ?? '—'}</p>
+          <p><b>Termination flow conflict:</b> {anomalies?.counts.terminationFlowConflicts ?? '—'}</p>
           <p><b>Bridge invariant:</b> {anomalies?.counts.missingBridge ?? '—'}</p>
           <p><b>Pre-connect مانده:</b> {anomalies?.counts.stalePreconnect ?? '—'}</p>
           <p><b>Connected overrun:</b> {anomalies?.counts.connectedOverrun ?? '—'}</p>
@@ -220,6 +235,16 @@ export default function CallsPage() {
                     ? 'قطع provider تأیید شده؛ retry مسیر cancel فقط local DB/wallet finalization را انجام می‌دهد.'
                     : 'نتیجه خارجی هنوز برای finalize مالی کافی نیست و باید با شواهد provider reconcile شود.'}
                 </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {!!anomalies?.anomalies.terminationFlowConflicts.length && (
+          <div className="queue">
+            {anomalies.anomalies.terminationFlowConflicts.map((item) => (
+              <div className="subPanel" key={item.callId}>
+                <p className="error">RECONCILE · termination_flow_conflict · Call {short(item.callId)}</p>
+                <p className="muted">برای این تماس هم markerهای Cancel و هم Safety ثبت شده‌اند. Provider termination retry و repair خودکار ممنوع است؛ فقط با شواهد واقعی reconcile شود.</p>
               </div>
             ))}
           </div>
@@ -270,6 +295,7 @@ export default function CallsPage() {
             const canRecover = recoverableCallIds.has(call.id);
             const dispatchUncertain = dispatchUncertainCallIds.has(call.id);
             const cancelTerminationState = cancelTerminationStateByCall.get(call.id);
+            const terminationFlowConflict = terminationFlowConflictCallIds.has(call.id);
             const invariantIssue = invariantIssuesByCall.get(call.id);
             const duplicateActiveCaller = duplicateActiveCallerCallIds.has(call.id);
             const duplicateActiveListener = duplicateActiveListenerCallIds.has(call.id);
@@ -300,6 +326,7 @@ export default function CallsPage() {
                     {terminationLabel(cancelTerminationState)} · provider termination retry ممنوع
                   </p>
                 )}
+                {terminationFlowConflict && <p className="error">RECONCILE: termination_flow_conflict · automatic repair ممنوع</p>}
                 {duplicateActiveCaller && <p className="error">Invariant: caller_has_multiple_active_calls</p>}
                 {duplicateActiveListener && <p className="error">Invariant: listener_has_multiple_active_calls</p>}
                 {invariantIssue && <p className="error">Invariant: {invariantIssue}</p>}

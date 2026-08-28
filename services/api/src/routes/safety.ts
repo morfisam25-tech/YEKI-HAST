@@ -27,6 +27,11 @@ const safetyTerminationReasons = [
   'safety_termination_result_uncertain',
   'safety_termination_confirmed',
 ];
+const cancelTerminationReasons = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+];
 
 function callIdFrom(value: unknown): string {
   const callId = String(value ?? '').trim();
@@ -178,6 +183,19 @@ export async function safetyExitCall(req: IncomingMessage, res: ServerResponse, 
       && !call.provider_bridge_id
     ) {
       throw new HttpError(409, 'call_telephony_invariant');
+    }
+
+    if (call.provider_bridge_id) {
+      const competingTermination = await client.query(`
+        SELECT 1
+        FROM app.call_events
+        WHERE call_session_id=$1
+          AND metadata->>'reason' = ANY($2::text[])
+        LIMIT 1
+      `, [callId, cancelTerminationReasons]);
+      if (competingTermination.rowCount) {
+        throw new HttpError(409, 'call_termination_in_progress');
+      }
     }
 
     const prior = await client.query<{

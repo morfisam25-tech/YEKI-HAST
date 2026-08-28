@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
+import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 
 const PRESENCE_STALE_MS = 90_000;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
@@ -39,6 +40,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
   const language = optionalLanguage(url.searchParams.get('language'));
   const onlineOnly = url.searchParams.get('online') !== 'false';
   const limit = limitFrom(url.searchParams.get('limit'));
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
 
   const result = await query<{
     listener_user_id: string;
@@ -57,9 +59,9 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
     WITH ctx AS (
       SELECT p.id product_id, s.id service_id, m.id market_id
       FROM app.products p
-      JOIN app.service_catalog s ON s.code='human_listening' AND s.status='active'
-      JOIN app.markets m ON m.code='ir' AND m.is_active=true
-      WHERE p.code='yeki_hast'
+      JOIN app.service_catalog s ON s.code=$8 AND s.status='active'
+      JOIN app.markets m ON m.code=$9 AND m.is_active=true
+      WHERE p.code=$7
       LIMIT 1
     ), caller AS (
       SELECT (
@@ -153,7 +155,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       )
     ) DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
     LIMIT $4
-  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId]);
+  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId, productCode, serviceCode, marketCode]);
 
   sendJson(res, 200, {
     listeners: result.rows.map((row) => ({
@@ -175,6 +177,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
 
 export async function setListenerPresence(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
   const body = await readJson<{
     status?: unknown;
     acceptsMale?: unknown;
@@ -197,11 +200,11 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
       SELECT la.status::text application_status, lp.is_verified, k.status::text kyc_status
       FROM app.listener_profiles lp
       JOIN app.listener_applications la ON la.user_id=lp.user_id
-      JOIN app.service_catalog s ON s.id=la.service_id AND s.code='human_listening'
+      JOIN app.service_catalog s ON s.id=la.service_id AND s.code=$2
       LEFT JOIN private_data.listener_kyc k ON k.user_id=lp.user_id
       WHERE lp.user_id=$1
       FOR UPDATE OF la, lp
-    `, [userId]);
+    `, [userId, serviceCode]);
     const listenerRow = listener.rows[0];
     if (!listenerRow) throw new HttpError(403, 'listener_not_approved');
     if (!listenerRow.is_verified || listenerRow.kyc_status !== 'verified') throw new HttpError(403, 'listener_verification_required');
@@ -210,11 +213,11 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
     const context = await client.query<{ product_id: string; service_id: string; market_id: string }>(`
       SELECT p.id::text product_id, s.id::text service_id, m.id::text market_id
       FROM app.products p
-      JOIN app.service_catalog s ON s.code='human_listening' AND s.status='active'
-      JOIN app.markets m ON m.code='ir' AND m.is_active=true
-      WHERE p.code='yeki_hast'
+      JOIN app.service_catalog s ON s.code=$2 AND s.status='active'
+      JOIN app.markets m ON m.code=$3 AND m.is_active=true
+      WHERE p.code=$1
       LIMIT 1
-    `);
+    `, [productCode, serviceCode, marketCode]);
     const ctx = context.rows[0];
     if (!ctx) throw new HttpError(503, 'marketplace_unavailable');
 
@@ -297,8 +300,8 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
         UPDATE app.listener_applications la
         SET status='active'
         FROM app.service_catalog s
-        WHERE la.user_id=$1 AND la.service_id=s.id AND s.code='human_listening' AND la.status='approved'
-      `, [userId]);
+        WHERE la.user_id=$1 AND la.service_id=s.id AND s.code=$2 AND la.status='approved'
+      `, [userId, serviceCode]);
     }
 
     return { status, acceptsMale, acceptsFemale, workSessionId };
@@ -309,24 +312,26 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
 
 export async function heartbeatListenerPresence(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
   const result = await query<{ status: string }>(`
     UPDATE app.listener_presence pres
     SET last_heartbeat_at=now(), updated_at=now()
     FROM app.products p, app.service_catalog s, app.markets m
     WHERE pres.listener_user_id=$1
-      AND pres.product_id=p.id AND p.code='yeki_hast'
-      AND pres.service_id=s.id AND s.code='human_listening'
-      AND pres.market_id=m.id AND m.code='ir'
+      AND pres.product_id=p.id AND p.code=$2
+      AND pres.service_id=s.id AND s.code=$3
+      AND pres.market_id=m.id AND m.code=$4
       AND pres.status IN ('online','paused')
       AND pres.last_heartbeat_at > now() - interval '90 seconds'
     RETURNING pres.status::text
-  `, [userId]);
+  `, [userId, productCode, serviceCode, marketCode]);
   if (!result.rows[0]) throw new HttpError(409, 'listener_not_online');
   sendJson(res, 200, { ok: true, status: result.rows[0].status });
 }
 
 export async function getListenerPresence(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
   const result = await withTransaction(async (client) => {
     const rowResult = await client.query<{
       status: string;
@@ -340,12 +345,12 @@ export async function getListenerPresence(req: IncomingMessage, res: ServerRespo
              pres.online_since::text, pres.last_heartbeat_at::text,
              pres.current_work_session_id::text
       FROM app.listener_presence pres
-      JOIN app.products p ON p.id=pres.product_id AND p.code='yeki_hast'
-      JOIN app.service_catalog s ON s.id=pres.service_id AND s.code='human_listening'
-      JOIN app.markets m ON m.id=pres.market_id AND m.code='ir'
+      JOIN app.products p ON p.id=pres.product_id AND p.code=$2
+      JOIN app.service_catalog s ON s.id=pres.service_id AND s.code=$3
+      JOIN app.markets m ON m.id=pres.market_id AND m.code=$4
       WHERE pres.listener_user_id=$1
       FOR UPDATE OF pres
-    `, [userId]);
+    `, [userId, productCode, serviceCode, marketCode]);
     const row = rowResult.rows[0];
     if (!row) {
       return { status: 'offline', acceptsMale: true, acceptsFemale: true, onlineSince: null, lastHeartbeatAt: null };
@@ -365,10 +370,10 @@ export async function getListenerPresence(req: IncomingMessage, res: ServerRespo
             auto_offline_reason='heartbeat_timeout', updated_at=now()
         FROM app.products p, app.service_catalog s, app.markets m
         WHERE pres.listener_user_id=$1
-          AND pres.product_id=p.id AND p.code='yeki_hast'
-          AND pres.service_id=s.id AND s.code='human_listening'
-          AND pres.market_id=m.id AND m.code='ir'
-      `, [userId]);
+          AND pres.product_id=p.id AND p.code=$2
+          AND pres.service_id=s.id AND s.code=$3
+          AND pres.market_id=m.id AND m.code=$4
+      `, [userId, productCode, serviceCode, marketCode]);
       return {
         status: 'offline',
         acceptsMale: row.accepts_male,

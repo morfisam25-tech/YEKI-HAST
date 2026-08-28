@@ -1,11 +1,10 @@
 import type { ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { sendJson } from '../lib/http.ts';
+import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 
 export async function bootstrap(res: ServerResponse) {
-  const productCode = process.env.DEFAULT_PRODUCT_CODE ?? 'yeki_hast';
-  const serviceCode = process.env.DEFAULT_SERVICE_CODE ?? 'human_listening';
-  const marketCode = process.env.DEFAULT_MARKET_CODE ?? 'ir';
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
   const result = await query<{
     brand_name: string;
     market_code: string;

@@ -3,6 +3,16 @@ import { previewCallSettlementBigInt } from '../../../../packages/domain/src/bil
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PRE_CONNECTED_STATUSES = ['calling_caller', 'caller_answered', 'calling_listener'] as const;
+const TERMINATION_EVENT_REASONS = [
+  'cancel_termination_started',
+  'cancel_termination_result_uncertain',
+  'cancel_termination_confirmed',
+  'safety_termination_started',
+  'safety_termination_result_uncertain',
+  'safety_termination_confirmed',
+];
+
+type TransactionClient = Parameters<Parameters<typeof withTransaction>[0]>[0];
 
 function assertCallId(callId: string): void {
   if (!UUID_RE.test(callId)) throw new Error('invalid_call');
@@ -16,6 +26,17 @@ function eventDate(value: Date | undefined, code: string): Date {
   const date = value ?? new Date();
   if (!Number.isFinite(date.getTime())) throw new Error(code);
   return date;
+}
+
+async function hasTerminationIntent(client: TransactionClient, callId: string): Promise<boolean> {
+  const result = await client.query(`
+    SELECT 1
+    FROM app.call_events
+    WHERE call_session_id=$1
+      AND metadata->>'reason' = ANY($2::text[])
+    LIMIT 1
+  `, [callId, TERMINATION_EVENT_REASONS]);
+  return Boolean(result.rowCount);
 }
 
 async function transitionByProvider(input: {
@@ -49,6 +70,7 @@ async function transitionByProvider(input: {
       return { callId: input.callId, status: row.status, idempotent: true };
     }
     if (row.status !== input.fromStatus) throw new Error('invalid_call_transition');
+    if (await hasTerminationIntent(client, input.callId)) throw new Error('call_termination_in_progress');
 
     await client.query(`
       UPDATE app.call_sessions
@@ -114,6 +136,7 @@ export async function markCallConnectedByProvider(input: {
       return { callId: input.callId, status: 'connected' as const, idempotent: true };
     }
     if (row.status !== 'calling_listener') throw new Error('call_cannot_connect');
+    if (await hasTerminationIntent(client, input.callId)) throw new Error('call_termination_in_progress');
 
     await client.query(`
       UPDATE app.call_sessions
@@ -161,6 +184,7 @@ export async function endUnconnectedCallByProvider(input: {
     if (!PRE_CONNECTED_STATUSES.includes(row.status as (typeof PRE_CONNECTED_STATUSES)[number])) {
       throw new Error('call_not_unconnected_terminal');
     }
+    if (await hasTerminationIntent(client, input.callId)) throw new Error('call_termination_in_progress');
 
     const authorized = BigInt(row.authorized_minor);
     if (authorized > 0n) {
@@ -250,6 +274,9 @@ export async function settleCallByProvider(input: {
     }
     const safetyTerminated = row.status === 'safety_terminated';
     if (row.status !== 'connected' && !safetyTerminated) throw new Error('call_not_settleable');
+    if (!safetyTerminated && await hasTerminationIntent(client, input.callId)) {
+      throw new Error('call_termination_in_progress');
+    }
 
     if (safetyTerminated) {
       const alreadySettled = await client.query(`

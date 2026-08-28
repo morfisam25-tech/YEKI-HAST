@@ -26,21 +26,31 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
     billable_seconds: number;
     listener_earning_minor: string;
     provider_bridge_id: string | null;
+    termination_in_progress: boolean;
   }>(`
-    SELECT id::text,
-           status::text,
-           currency_code,
-           max_billable_seconds,
-           requested_at::text,
-           connected_at::text,
-           ended_at::text,
-           billable_seconds,
-           listener_earning_minor::text,
-           provider_bridge_id
-    FROM app.call_sessions
-    WHERE listener_user_id=$1
-      AND status::text = ANY($2::text[])
-    ORDER BY requested_at DESC
+    SELECT cs.id::text,
+           cs.status::text,
+           cs.currency_code,
+           cs.max_billable_seconds,
+           cs.requested_at::text,
+           cs.connected_at::text,
+           cs.ended_at::text,
+           cs.billable_seconds,
+           cs.listener_earning_minor::text,
+           cs.provider_bridge_id,
+           EXISTS (
+             SELECT 1
+             FROM app.call_events ce
+             WHERE ce.call_session_id=cs.id
+               AND (
+                 ce.metadata->>'reason' LIKE 'cancel_termination_%'
+                 OR ce.metadata->>'reason' LIKE 'safety_termination_%'
+               )
+           ) AS termination_in_progress
+    FROM app.call_sessions cs
+    WHERE cs.listener_user_id=$1
+      AND cs.status::text = ANY($2::text[])
+    ORDER BY cs.requested_at DESC
     LIMIT 2
   `, [userId, ACTIVE_CALL_STATUSES]);
 
@@ -58,6 +68,7 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
       currencyCode: row.currency_code,
       maxBillableSeconds: row.max_billable_seconds,
       telephonyReady: Boolean(row.provider_bridge_id),
+      terminationInProgress: row.termination_in_progress,
       requestedAt: row.requested_at,
       connectedAt: row.connected_at,
       endedAt: row.ended_at,

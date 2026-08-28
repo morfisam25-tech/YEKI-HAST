@@ -10,7 +10,11 @@ function blockPredicate(source: string, callerParam: string): string {
   assert.ok(start >= 0);
   const end = source.indexOf(')', source.indexOf('(b.expires_at IS NULL OR b.expires_at>now())', start));
   assert.ok(end > start);
-  return source.slice(start, end + 1).replaceAll(callerParam, '$CALLER');
+  return source
+    .slice(start, end + 1)
+    .replaceAll(callerParam, '$CALLER')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 test('marketplace hides active blocks in either direction', () => {

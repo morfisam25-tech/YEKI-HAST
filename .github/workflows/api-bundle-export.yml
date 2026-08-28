@@ -10,14 +10,12 @@ permissions:
 jobs:
   bundle:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install workspace links
-        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Bundle API
         run: |
           npx --yes esbuild@0.25.9 api/index.ts \
@@ -26,6 +24,7 @@ jobs:
             --target=node22 \
             --format=esm \
             --external:pg \
+            --alias:@yeki-hast/types=./packages/types/src/index.ts \
             --minify \
             --outfile=dist-api/index.mjs
           wc -c dist-api/index.mjs

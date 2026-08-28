@@ -18,6 +18,8 @@ type ReportCase = {
   privateDetailsIncluded: false;
 };
 
+type TerminationState = 'finalized' | 'confirmed_local_finalize_pending' | 'uncertain' | 'started_unresolved' | 'not_started';
+
 type SafetyEvent = {
   id: string;
   callId: string;
@@ -31,7 +33,12 @@ type SafetyEvent = {
   triggeredAt: string;
   resolvedAt: string | null;
   updatedAt: string;
+  terminationState: TerminationState | null;
+  terminationReconciliationRequired: boolean;
+  providerTerminationRetryAllowed: false | null;
+  localFinalizeRetryAllowed: boolean;
   privateDetailsIncluded: false;
+  providerBridgeIdIncluded: false;
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,6 +56,17 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 function short(value: string | null): string {
   return value ? `${value.slice(0, 8)}…` : '—';
+}
+
+function terminationLabel(state: TerminationState): string {
+  const labels: Record<TerminationState, string> = {
+    finalized: 'FINALIZED',
+    confirmed_local_finalize_pending: 'LOCAL FINALIZE',
+    uncertain: 'RECONCILE',
+    started_unresolved: 'RECONCILE',
+    not_started: 'CHECK',
+  };
+  return labels[state];
 }
 
 export default function SafetyPage() {
@@ -173,7 +191,14 @@ export default function SafetyPage() {
                 <p><b>Triggered by:</b> {item.triggeredBy}</p>
                 <p><b>User ref:</b> {short(item.triggerUserId)}</p>
                 <p><b>Assigned:</b> {short(item.assignedAdminUserId)}</p>
+                {item.terminationState && <p><b>Telephony termination:</b> {terminationLabel(item.terminationState)}</p>}
               </div>
+              {item.terminationReconciliationRequired && (
+                <p className="error">نتیجه قطع شبکه تلفنی نیاز به تطبیق دارد. provider termination را از این صف دوباره ارسال نکن.</p>
+              )}
+              {item.localFinalizeRetryAllowed && (
+                <p className="muted">قطع خارجی تأیید شده است؛ فقط local finalization باقی مانده و provider retry مجاز نیست.</p>
+              )}
               {item.resolutionCode && <p className="muted">Resolution: {item.resolutionCode}</p>}
               <p className="muted">زمان رخداد: {new Date(item.triggeredAt).toLocaleString('fa-IR')}</p>
               {actions('events', item)}

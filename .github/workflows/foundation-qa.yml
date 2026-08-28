@@ -27,11 +27,17 @@ jobs:
           node --experimental-strip-types --check api/index.ts
           node --experimental-strip-types --check api/runtime.ts
           node --experimental-strip-types --check apps/mobile/src/api.ts
+          node --experimental-strip-types --check apps/mobile/src/email-auth-api.ts
+          node --experimental-strip-types --check apps/mobile/src/call-phone-api.ts
           node --experimental-strip-types --check services/api/src/providers/sms.ts
+          node --experimental-strip-types --check services/api/src/providers/email.ts
           node --experimental-strip-types --check services/api/src/providers/payment.ts
           node --experimental-strip-types --check services/api/src/providers/payout.ts
           node --experimental-strip-types --check services/api/src/providers/telephony.ts
           node --experimental-strip-types --check services/api/src/routes/auth.ts
+          node --experimental-strip-types --check services/api/src/routes/auth-email.ts
+          node --experimental-strip-types --check services/api/src/routes/account-contact.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-contact.ts
           node --experimental-strip-types --check services/api/src/routes/payments.ts
           node --experimental-strip-types --check services/api/src/routes/listener.ts
           node --experimental-strip-types --check services/api/src/routes/kyc.ts
@@ -50,6 +56,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/admin-calls.ts
           node --experimental-strip-types --check services/api/src/routes/payouts.ts
           node --experimental-strip-types --check services/api/src/lib/admin.ts
+          node --experimental-strip-types --check services/api/src/lib/call-phone.ts
           node --experimental-strip-types --check services/api/src/lib/security.ts
           node --experimental-strip-types --check services/api/src/domain/iran-identifiers.ts
           node --experimental-strip-types --check services/api/src/domain/persian-calendar.ts

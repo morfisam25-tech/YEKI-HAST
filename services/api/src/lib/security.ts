@@ -24,6 +24,10 @@ export function phoneHash(phoneE164: string): string {
   return createHmac('sha256', required('PHONE_HASH_PEPPER')).update(phoneE164).digest('hex');
 }
 
+export function emailHash(email: string): string {
+  return createHmac('sha256', required('EMAIL_HASH_PEPPER')).update(email).digest('hex');
+}
+
 export function ipHash(ip: string): string {
   return createHmac('sha256', required('IP_HASH_PEPPER')).update(ip).digest('hex');
 }
@@ -31,6 +35,12 @@ export function ipHash(ip: string): string {
 export function otpHash(phoneE164: string, purpose: string, code: string): string {
   return createHmac('sha256', required('OTP_HASH_PEPPER'))
     .update(`${phoneE164}|${purpose}|${code}`)
+    .digest('hex');
+}
+
+export function emailOtpHash(email: string, purpose: string, code: string): string {
+  return createHmac('sha256', required('OTP_HASH_PEPPER'))
+    .update(`email|${email}|${purpose}|${code}`)
     .digest('hex');
 }
 
@@ -92,6 +102,13 @@ function encryptionKeyRing(): EncryptionKeyRing {
 
 export function validateSecurityEnv(): void {
   required('PHONE_HASH_PEPPER');
+  required('IP_HASH_PEPPER');
+  required('OTP_HASH_PEPPER');
+  encryptionKeyRing();
+}
+
+export function validateEmailSecurityEnv(): void {
+  required('EMAIL_HASH_PEPPER');
   required('IP_HASH_PEPPER');
   required('OTP_HASH_PEPPER');
   encryptionKeyRing();

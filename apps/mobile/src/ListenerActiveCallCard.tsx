@@ -11,7 +11,10 @@ import {
   type ListenerRecentCall,
 } from './api';
 
-type Props = { token: string };
+type Props = {
+  token: string;
+  onActiveCallConflictChange?: (conflicted: boolean) => void;
+};
 
 const reportCategories = [
   { code: 'sexual_behavior', label: 'رفتار جنسی نامناسب' },
@@ -77,7 +80,7 @@ function messageFor(code: string): string {
   return messages[code] ?? 'عملیات انجام نشد. دوباره امتحان کن.';
 }
 
-export default function ListenerActiveCallCard({ token }: Props) {
+export default function ListenerActiveCallCard({ token, onActiveCallConflictChange }: Props) {
   const [activeCall, setActiveCall] = useState<ListenerActiveCall | null>(null);
   const [recentCalls, setRecentCalls] = useState<ListenerRecentCall[]>([]);
   const [busy, setBusy] = useState(false);
@@ -107,10 +110,17 @@ export default function ListenerActiveCallCard({ token }: Props) {
       const nextCallId = value.activeCall?.callId ?? null;
       activeCallIdRef.current = nextCallId;
       setActiveCall(value.activeCall);
+      onActiveCallConflictChange?.(false);
       setError('');
       if (previousCallId && !nextCallId) await refreshRecent();
     } catch (cause) {
-      setError(messageFor(getErrorCode(cause)));
+      const code = getErrorCode(cause);
+      if (code === 'listener_active_call_conflict') {
+        activeCallIdRef.current = null;
+        setActiveCall(null);
+        onActiveCallConflictChange?.(true);
+      }
+      setError(messageFor(code));
     } finally {
       refreshInFlight.current = false;
     }

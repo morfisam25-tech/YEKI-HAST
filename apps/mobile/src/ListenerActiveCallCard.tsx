@@ -29,7 +29,8 @@ function messageFor(code: string): string {
     call_telephony_invariant: 'وضعیت تماس با شبکه تلفنی هم‌خوان نیست و نیاز به بررسی دارد.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     safety_settlement_pending: 'توقف ایمن ثبت شد اما تسویه تماس هنوز در حال نهایی‌شدن است.',
-    telephony_termination_pending: 'توقف ایمن ثبت شد اما قطع شبکه تلفنی هنوز قطعی نشده است.',
+    telephony_termination_pending: 'درخواست توقف ایمن ثبت شد اما نتیجه قطع شبکه تلفنی قطعی نیست؛ دوباره Safety Exit را ارسال نکن.',
+    telephony_termination_reconcile_required: 'نتیجه قطع شبکه تلفنی نیاز به تطبیق عملیاتی دارد؛ Safety Exit را دوباره ارسال نکن.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'وضعیت تماس قابل دریافت نیست. دوباره امتحان کن.';

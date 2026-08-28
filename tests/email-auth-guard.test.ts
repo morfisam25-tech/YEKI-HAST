@@ -39,7 +39,8 @@ test('email OTP is hashed, rate limited, attempt limited, and session-backed', (
   assert.match(route, /safeEqualHex/);
   assert.match(route, /private_data\.auth_sessions/);
   assert.match(route, /encryptPrivateText\(email/);
-  assert.doesNotMatch(route, /INSERT INTO private_data\.user_emails[\s\S]{0,400}\bemail\b(?!_ciphertext|_hash|_verified_at)/);
+  assert.match(route, /INSERT INTO private_data\.user_emails\(\s*user_id, email_ciphertext, email_hash, email_verified_at\s*\)/);
+  assert.doesNotMatch(route, /INSERT INTO private_data\.user_emails\(\s*user_id,\s*email\s*[,)]/);
 });
 
 test('production email provider fails closed and supports encrypted SMTP transport', () => {

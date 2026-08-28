@@ -60,9 +60,9 @@ test('caller sees only bounded recent wallet history without internal transactio
   assert.doesNotMatch(wallet, /transaction\.paymentAttemptId|transaction\.callId|transaction\.reasonCode/);
 });
 
-test('wallet card is hidden while a call is active or recovery conflict is unresolved', () => {
+test('wallet card is hidden until call phone verification and while a call or recovery conflict is active', () => {
   assert.match(caller, /import CallerWalletCard from '\.\/CallerWalletCard'/);
-  assert.match(caller, /recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token=\{token\} \/>/);
+  assert.match(caller, /recoveryComplete && !recoveryBlocked && stage !== 'call' && callPhoneVerified && <CallerWalletCard token=\{token\} \/>/);
 });
 
 test('mobile API retains wallet and topup lifecycle functions', () => {

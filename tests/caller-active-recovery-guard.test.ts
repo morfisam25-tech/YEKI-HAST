@@ -23,10 +23,10 @@ test('duplicate active-call recovery blocks new caller flow until reviewed', () 
   assert.match(screen, /const \[recoveryBlocked, setRecoveryBlocked\] = useState\(false\)/);
   assert.match(screen, /if \(code === 'caller_active_call_conflict'\) setRecoveryBlocked\(true\)/);
   assert.match(screen, /if \(recoveryCode === 'caller_active_call_conflict'\) setRecoveryBlocked\(true\)/);
-  assert.match(screen, /if \(recoveryBlocked\) return;/);
+  assert.match(screen, /if \(recoveryBlocked \|\| !callPhoneVerified\) return;/);
   assert.match(screen, /recoveryComplete && recoveryBlocked/);
-  assert.match(screen, /recoveryComplete && !recoveryBlocked && stage === 'age-gate'/);
-  assert.match(screen, /recoveryComplete && !recoveryBlocked && stage === 'browse'/);
+  assert.match(screen, /recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'age-gate'/);
+  assert.match(screen, /recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'browse'/);
   assert.match(screen, /شروع تماس جدید در این صفحه موقتاً بسته است/);
   assert.doesNotMatch(screen, /force-cancel|repair-conflict|resolve-conflict/);
 });

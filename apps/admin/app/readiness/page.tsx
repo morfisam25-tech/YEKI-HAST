@@ -6,7 +6,10 @@ type Integration = { provider?: string | null; ready: boolean };
 type Readiness = {
   generatedAt: string;
   integrations: {
-    sms: Integration;
+    emailAuth: Integration;
+    sms: Integration & { optionalWhenEmailAndManualPhoneVerificationReady?: boolean };
+    accountAuth: Integration;
+    callPhoneVerification: Integration & { manualBetaEnabled?: boolean };
     payment: Integration;
     payout: Integration;
     telephony: Integration;
@@ -26,8 +29,11 @@ async function api<T>(path: string): Promise<T> {
   return body as T;
 }
 
-const labels: Array<[keyof Pick<Readiness['integrations'], 'sms' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'sensitiveData' | 'callerCatalog' | 'callerAgePolicy'>, string]> = [
-  ['sms', 'OTP / SMS'],
+const labels: Array<[keyof Pick<Readiness['integrations'], 'emailAuth' | 'sms' | 'accountAuth' | 'callPhoneVerification' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'sensitiveData' | 'callerCatalog' | 'callerAgePolicy'>, string]> = [
+  ['emailAuth', 'ورود با ایمیل'],
+  ['accountAuth', 'ورود حساب'],
+  ['callPhoneVerification', 'تأیید شماره تماس'],
+  ['sms', 'OTP / SMS (مسیر جایگزین)'],
   ['payment', 'شارژ کیف پول'],
   ['payout', 'تسویه شنونده'],
   ['telephony', 'اتصال تماس'],
@@ -71,7 +77,7 @@ export default function ReadinessPage() {
               <span className="statusPill">{data.integrations.callerClosedBeta.enabled ? 'BETA ENABLED' : 'BETA DISABLED'}</span>
             </div>
             <p className="muted">
-              Caller فقط وقتی READY می‌شود که Beta، سیاست سن، کاتالوگ و قیمت‌گذاری، SMS، پرداخت، Telephony و امنیت داده حساس همگی آماده باشند.
+              Caller فقط وقتی READY می‌شود که Beta، سیاست سن، کاتالوگ و قیمت‌گذاری، ورود حساب، تأیید شماره تماس، پرداخت، Telephony و امنیت داده حساس آماده باشند. SMS به‌تنهایی الزام مستقل لانچ نیست؛ در بتای دستی می‌تواند با ورود ایمیلی و تأیید دستی شماره جایگزین شود.
             </p>
 
             <div className="grid">
@@ -81,7 +87,7 @@ export default function ReadinessPage() {
                   <article key={key}>
                     <small>{label}</small>
                     <strong>{item.ready ? 'READY' : 'BLOCKED'}</strong>
-                    <p className="muted">{item.provider ?? 'بدون provider'}</p>
+                    <p className="muted">{item.provider ?? (key === 'callPhoneVerification' && data.integrations.callPhoneVerification.manualBetaEnabled ? 'manual beta' : 'بدون provider')}</p>
                   </article>
                 );
               })}

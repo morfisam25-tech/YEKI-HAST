@@ -64,12 +64,33 @@ jobs:
           node --experimental-strip-types --check services/api/src/domain/call-authorization.ts
           node --experimental-strip-types --check services/api/src/domain/payment-status.ts
           node --experimental-strip-types --check services/api/src/handler.ts
+          node --check scripts/verify-production-security-config.mjs
 
       - name: Foundation tests
         run: npm test
 
       - name: Foundation invariant validator
         run: npm run validate:foundation
+
+      - name: Email-first production security verifier
+        env:
+          NODE_ENV: production
+          DEV_EXPOSE_OTP: 'false'
+          PHONE_HASH_PEPPER: ci-phone-pepper-0000000000000000000000000000
+          EMAIL_HASH_PEPPER: ci-email-pepper-0000000000000000000000000000
+          IP_HASH_PEPPER: ci-ip-pepper-000000000000000000000000000000
+          OTP_HASH_PEPPER: ci-otp-pepper-0000000000000000000000000000
+          KYC_HASH_PEPPER: ci-kyc-pepper-0000000000000000000000000000
+          ACTIVE_DATA_ENCRYPTION_KEY_ID: k1
+          DATA_ENCRYPTION_KEYS: '{"k1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+          EMAIL_PROVIDER: smtp
+          SMTP_HOST: smtp.example.test
+          SMTP_PORT: '587'
+          SMTP_SECURE: 'false'
+          SMTP_USERNAME: ci-user
+          SMTP_PASSWORD: ci-password
+          SMTP_FROM_EMAIL: no-reply@example.test
+        run: npm run verify:prod-security
 
   typecheck:
     runs-on: ubuntu-latest

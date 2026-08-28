@@ -1,12 +1,10 @@
 export const ADMIN_SESSION_COOKIE = 'yeki_admin_session';
 
-const PRODUCTION_API_BASE_URL = 'https://yeki-hast-theta.vercel.app';
-
 export function backendBaseUrl(): string {
   const configured = process.env.ADMIN_API_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
-  if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;
-  return 'http://localhost:4000';
+  if (process.env.NODE_ENV !== 'production') return 'http://localhost:4000';
+  throw new Error('ADMIN_API_BASE_URL is required in production');
 }
 
 export async function backendRequest(path: string, init: RequestInit = {}) {

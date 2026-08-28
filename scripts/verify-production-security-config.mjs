@@ -15,14 +15,32 @@ function integer(name, fallback, min, max) {
   const raw = process.env[name]?.trim();
   const value = raw ? Number(raw) : fallback;
   if (!Number.isInteger(value) || value < min || value > max) throw new Error(`${name} is invalid`);
+  return value;
+}
+
+function boolean(name) {
+  const value = required(name).toLowerCase();
+  if (!['true', 'false'].includes(value)) throw new Error(`${name} must be true or false`);
+  return value === 'true';
+}
+
+function emailAddress(name) {
+  const value = required(name).toLowerCase();
+  const parts = value.split('@');
+  if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s|[\r\n]/.test(value)) {
+    throw new Error(`${name} is invalid`);
+  }
+  return value;
 }
 
 if (process.env.NODE_ENV !== 'production') throw new Error('NODE_ENV must be production');
 if (process.env.DEV_EXPOSE_OTP === 'true') throw new Error('DEV_EXPOSE_OTP must not be enabled in production');
 
 strongSecret('PHONE_HASH_PEPPER');
+strongSecret('EMAIL_HASH_PEPPER');
 strongSecret('IP_HASH_PEPPER');
 strongSecret('OTP_HASH_PEPPER');
+strongSecret('KYC_HASH_PEPPER');
 
 const activeKeyId = required('ACTIVE_DATA_ENCRYPTION_KEY_ID');
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(activeKeyId)) throw new Error('ACTIVE_DATA_ENCRYPTION_KEY_ID is invalid');
@@ -36,15 +54,42 @@ if (typeof activeKey !== 'string' || Buffer.from(activeKey, 'base64').length !==
   throw new Error('Active data encryption key must decode to 32 bytes');
 }
 
-const smsProvider = required('SMS_PROVIDER');
-if (smsProvider !== 'kavenegar') throw new Error('Production SMS_PROVIDER must be kavenegar');
-strongSecret('KAVENEGAR_API_KEY');
-const template = required('KAVENEGAR_OTP_TEMPLATE');
-if (!/^[A-Za-z0-9-]{1,100}$/.test(template)) throw new Error('KAVENEGAR_OTP_TEMPLATE is invalid');
+const emailProvider = required('EMAIL_PROVIDER');
+if (emailProvider !== 'smtp') throw new Error('Production EMAIL_PROVIDER must be smtp');
+required('SMTP_HOST');
+integer('SMTP_PORT', undefined, 1, 65535);
+boolean('SMTP_SECURE');
+required('SMTP_USERNAME');
+required('SMTP_PASSWORD');
+emailAddress('SMTP_FROM_EMAIL');
+
+const smsProvider = process.env.SMS_PROVIDER?.trim();
+if (smsProvider) {
+  if (smsProvider === 'dev') throw new Error('dev SMS provider is forbidden in production');
+  if (smsProvider === 'kavenegar') {
+    required('KAVENEGAR_API_KEY');
+    required('KAVENEGAR_OTP_TEMPLATE');
+  } else if (smsProvider === 'ippanel') {
+    required('IPPANEL_API_KEY');
+    required('IPPANEL_PATTERN_CODE');
+    required('IPPANEL_FROM_NUMBER');
+  } else if (smsProvider === 'smsir') {
+    required('SMSIR_API_KEY');
+    integer('SMSIR_OTP_TEMPLATE_ID', undefined, 1, Number.MAX_SAFE_INTEGER);
+    const parameterName = process.env.SMSIR_OTP_PARAMETER_NAME?.trim() || 'CODE';
+    if (!/^[A-Za-z0-9_]{1,32}$/.test(parameterName)) throw new Error('SMSIR_OTP_PARAMETER_NAME is invalid');
+    if (process.env.SMSIR_OTP_TEMPLATE_APPROVED?.trim().toLowerCase() !== 'true') {
+      throw new Error('SMSIR_OTP_TEMPLATE_APPROVED must be true in production');
+    }
+  } else {
+    throw new Error(`Unsupported production SMS_PROVIDER: ${smsProvider}`);
+  }
+}
 
 integer('SESSION_TTL_HOURS', 720, 1, 8760);
 integer('OTP_TTL_SECONDS', 300, 60, 1800);
 integer('OTP_PHONE_LIMIT_PER_15M', 5, 1, 100);
+integer('OTP_EMAIL_LIMIT_PER_15M', 5, 1, 100);
 integer('OTP_IP_LIMIT_PER_15M', 20, 1, 1000);
 integer('OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000);
 

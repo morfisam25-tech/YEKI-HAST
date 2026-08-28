@@ -92,7 +92,9 @@ export async function listAdminSafetyCases(req: IncomingMessage, res: ServerResp
            se.resolution_code, se.triggered_at::text, se.resolved_at::text, se.updated_at::text,
            CASE
              WHEN se.action_code IS DISTINCT FROM 'end_for_safety' THEN NULL
-             WHEN cs.status::text='safety_terminated' THEN 'finalized'
+             WHEN cs.status::text='safety_terminated'
+                  AND (cs.provider_bridge_id IS NULL OR COALESCE(term.has_confirmed, false)) THEN 'finalized'
+             WHEN cs.status::text='safety_terminated' THEN 'legacy_terminal_unverified'
              WHEN COALESCE(term.has_confirmed, false) THEN 'confirmed_local_finalize_pending'
              WHEN COALESCE(term.has_uncertain, false) THEN 'uncertain'
              WHEN COALESCE(term.has_started, false) THEN 'started_unresolved'

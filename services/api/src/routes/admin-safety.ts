@@ -85,17 +85,40 @@ export async function listAdminSafetyCases(req: IncomingMessage, res: ServerResp
     triggered_at: string;
     resolved_at: string | null;
     updated_at: string;
+    termination_state: string | null;
   }>(`
-    SELECT id::text, call_session_id::text, triggered_by::text, trigger_user_id::text,
-           severity::text, status::text, action_code, assigned_admin_user_id::text,
-           resolution_code, triggered_at::text, resolved_at::text, updated_at::text
-    FROM app.safety_events
-    WHERE ($1::text IS NULL OR status::text=$1)
+    SELECT se.id::text, se.call_session_id::text, se.triggered_by::text, se.trigger_user_id::text,
+           se.severity::text, se.status::text, se.action_code, se.assigned_admin_user_id::text,
+           se.resolution_code, se.triggered_at::text, se.resolved_at::text, se.updated_at::text,
+           CASE
+             WHEN se.action_code IS DISTINCT FROM 'end_for_safety' THEN NULL
+             WHEN cs.status::text='safety_terminated' THEN 'finalized'
+             WHEN COALESCE(term.has_confirmed, false) THEN 'confirmed_local_finalize_pending'
+             WHEN COALESCE(term.has_uncertain, false) THEN 'uncertain'
+             WHEN COALESCE(term.has_started, false) THEN 'started_unresolved'
+             ELSE 'not_started'
+           END AS termination_state
+    FROM app.safety_events se
+    LEFT JOIN app.call_sessions cs ON cs.id=se.call_session_id
+    LEFT JOIN LATERAL (
+      SELECT
+        BOOL_OR(ce.metadata->>'reason'='safety_termination_started') AS has_started,
+        BOOL_OR(ce.metadata->>'reason'='safety_termination_result_uncertain') AS has_uncertain,
+        BOOL_OR(ce.metadata->>'reason'='safety_termination_confirmed') AS has_confirmed
+      FROM app.call_events ce
+      WHERE ce.call_session_id=se.call_session_id
+        AND ce.metadata->>'reason' = ANY($3::text[])
+    ) term ON true
+    WHERE ($1::text IS NULL OR se.status::text=$1)
     ORDER BY
-      CASE severity::text WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-      triggered_at DESC
+      CASE se.severity::text WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+      se.triggered_at DESC
     LIMIT $2
-  `, [status, limit]);
+  `, [status, limit, [
+    'safety_termination_started',
+    'safety_termination_result_uncertain',
+    'safety_termination_confirmed',
+  ]]);
 
   sendJson(res, 200, {
     ok: true,
@@ -128,7 +151,14 @@ export async function listAdminSafetyCases(req: IncomingMessage, res: ServerResp
       triggeredAt: row.triggered_at,
       resolvedAt: row.resolved_at,
       updatedAt: row.updated_at,
+      terminationState: row.termination_state,
+      terminationReconciliationRequired: row.termination_state !== null
+        && row.termination_state !== 'finalized'
+        && row.termination_state !== 'confirmed_local_finalize_pending',
+      providerTerminationRetryAllowed: row.termination_state === null ? null : false,
+      localFinalizeRetryAllowed: row.termination_state === 'confirmed_local_finalize_pending',
       privateDetailsIncluded: false,
+      providerBridgeIdIncluded: false,
     })),
   });
 }

@@ -114,6 +114,12 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       AND pres.product_id=c.product_id AND pres.service_id=c.service_id AND pres.market_id=c.market_id
     WHERE lp.is_verified=true
       AND lp.user_id<>$6::uuid
+      AND NOT EXISTS (
+        SELECT 1 FROM app.blocks b
+        WHERE ((b.blocker_user_id=$6 AND b.blocked_user_id=lp.user_id)
+            OR (b.blocker_user_id=lp.user_id AND b.blocked_user_id=$6))
+          AND (b.expires_at IS NULL OR b.expires_at>now())
+      )
       AND ($1::text IS NULL OR lp.gender::text=$1)
       AND ($2::text IS NULL OR EXISTS (
         SELECT 1

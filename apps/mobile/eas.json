@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/eas.json",
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://yeki-hast-theta.vercel.app"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://yeki-hast-theta.vercel.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

@@ -43,9 +43,17 @@ test('caller age readiness uses bounded policy values', () => {
   assert.match(source, /<= 99/);
 });
 
+test('admin bootstrap must be completely disarmed before caller launch can become ready', () => {
+  assert.match(source, /BOOTSTRAP_ADMIN_ENABLED/);
+  assert.match(source, /BOOTSTRAP_ADMIN_EMAIL/);
+  assert.match(source, /BOOTSTRAP_ADMIN_PHONE_E164/);
+  assert.match(source, /adminBootstrapLockedDown = !bootstrapAdminEnabled && !bootstrapAdminIdentityConfigured/);
+  assert.match(source, /adminBootstrap: \{[\s\S]*lockedDown: adminBootstrapLockedDown[\s\S]*enabled: bootstrapAdminEnabled[\s\S]*identityConfigured: bootstrapAdminIdentityConfigured/);
+});
+
 test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
   assert.match(source, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callPhoneVerificationReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown/);
   assert.match(source, /callerClosedBeta: \{ enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
 });

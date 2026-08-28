@@ -27,7 +27,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, {
       ok: true,
       service: 'yeki-hast-api',
-      version: '0.0.9',
+      version: '0.0.10',
       ...(url.pathname === '/' ? { endpoints: ['/health', '/ready', '/v1/bootstrap'] } : {}),
     });
     return;

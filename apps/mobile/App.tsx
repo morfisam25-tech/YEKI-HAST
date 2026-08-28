@@ -16,13 +16,12 @@ import {
   getErrorCode,
   getListenerApplication,
   logoutCurrentSession,
-  normalizeIranPhone,
-  requestOtp,
-  verifyOtp,
   type BootstrapLanguage,
+  type SessionResponse,
 } from './src/api';
 import { clearStoredSession, loadStoredSession, saveStoredSession } from './src/session-storage';
 import CallerClosedBetaScreen from './src/CallerClosedBetaScreen';
+import EmailAuthScreen from './src/EmailAuthScreen';
 import ListenerKycScreen from './src/ListenerKycScreen';
 import ListenerTrainingScreen from './src/ListenerTrainingScreen';
 import ListenerWorkScreen from './src/ListenerWorkScreen';
@@ -31,8 +30,7 @@ type Screen =
   | 'home'
   | 'waitlist'
   | 'listener-intro'
-  | 'auth-phone'
-  | 'auth-code'
+  | 'auth-email'
   | 'caller-beta'
   | 'listener-profile'
   | 'listener-training'
@@ -60,11 +58,6 @@ function Choice({ label, selected, onPress }: ChoiceProps) {
 
 function errorMessage(code: string): string {
   const messages: Record<string, string> = {
-    invalid_phone: 'شماره موبایل را درست وارد کن.',
-    invalid_otp: 'کد واردشده درست نیست یا منقضی شده.',
-    otp_request_rate_limited: 'تعداد درخواست کد زیاد شده. کمی بعد دوباره امتحان کن.',
-    auth_not_configured: 'ورود نسخه آزمایشی هنوز فعال نشده.',
-    sms_delivery_unavailable: 'ارسال پیامک موقتاً در دسترس نیست.',
     caller_closed_beta_disabled: 'بتای Caller برای این محیط فعال نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
@@ -90,9 +83,6 @@ export default function App() {
   const [sessionRestoreComplete, setSessionRestoreComplete] = useState(false);
   const [languageOptions, setLanguageOptions] = useState<BootstrapLanguage[]>(fallbackLanguages);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['fa']);
-  const [phone, setPhone] = useState('');
-  const [phoneE164, setPhoneE164] = useState('');
-  const [otp, setOtp] = useState('');
   const [token, setToken] = useState('');
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState<'female' | 'male' | null>(null);
@@ -187,8 +177,7 @@ export default function App() {
   function beginListenerAuth() {
     setAuthPurpose('listener');
     setError('');
-    setOtp('');
-    setScreen('auth-phone');
+    setScreen('auth-email');
   }
 
   function beginCallerAuth() {
@@ -198,46 +187,21 @@ export default function App() {
     }
     setAuthPurpose('caller');
     setError('');
-    setOtp('');
-    setScreen('auth-phone');
+    setScreen('auth-email');
   }
 
-  async function sendCode() {
-    setError('');
-    setBusy(true);
-    try {
-      const normalized = normalizeIranPhone(phone);
-      await requestOtp(normalized);
-      setPhoneE164(normalized);
-      setScreen('auth-code');
-    } catch (cause) {
-      setError(errorMessage(getErrorCode(cause)));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmCode() {
-    setError('');
-    setBusy(true);
-    try {
-      const session = await verifyOtp(phoneE164, otp.trim());
-      setToken(session.token);
-      await saveStoredSession(session.token, authPurpose).catch(() => undefined);
-      if (authPurpose === 'caller') {
-        if (!callerBetaEnabled) {
-          setScreen('waitlist');
-          return;
-        }
-        setScreen('caller-beta');
+  async function completeEmailAuth(session: SessionResponse) {
+    setToken(session.token);
+    await saveStoredSession(session.token, authPurpose).catch(() => undefined);
+    if (authPurpose === 'caller') {
+      if (!callerBetaEnabled) {
+        setScreen('waitlist');
         return;
       }
-      await resumeListener(session.token);
-    } catch (cause) {
-      setError(errorMessage(getErrorCode(cause)));
-    } finally {
-      setBusy(false);
+      setScreen('caller-beta');
+      return;
     }
+    await resumeListener(session.token);
   }
 
   async function logout() {
@@ -252,9 +216,6 @@ export default function App() {
       await clearStoredSession().catch(() => undefined);
       setToken('');
       setAuthPurpose('listener');
-      setPhone('');
-      setPhoneE164('');
-      setOtp('');
       setError('');
       setScreen('home');
       setBusy(false);
@@ -319,7 +280,7 @@ export default function App() {
               <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
               <Text style={styles.heroBody}>
                 {callerBetaEnabled
-                  ? 'بتای بسته Caller برای این محیط فعال است. ورود فقط بعد از تأیید شماره و شرط سنی انجام می‌شود.'
+                  ? 'بتای بسته Caller برای این محیط فعال است. ورود با ایمیل انجام می‌شود و شماره تماس جداگانه تأیید می‌شود.'
                   : 'بخش مکالمه برای Caller هنوز در بتای بسته است.'}
               </Text>
               <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>
@@ -329,7 +290,7 @@ export default function App() {
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>شنونده خوبی هستی؟</Text>
-              <Text style={styles.body}>اول کار را ببین، با شماره موبایل وارد شو و پروفایل آزمایشی‌ات را بساز.</Text>
+              <Text style={styles.body}>اول کار را ببین، با ایمیل وارد شو و پروفایل آزمایشی‌ات را بساز.</Text>
               <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('listener-intro')}>
                 <Text style={styles.primaryButtonText}>می‌خوام شنونده بشم</Text>
               </TouchableOpacity>
@@ -360,53 +321,17 @@ export default function App() {
             <View style={styles.rule}><Text style={styles.ruleText}>✓ وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ شماره واقعی دو طرف نمایش داده نمی‌شود.</Text></View>
             <TouchableOpacity style={styles.primaryButton} onPress={beginListenerAuth}>
-              <Text style={styles.primaryButtonText}>ادامه با شماره موبایل</Text>
+              <Text style={styles.primaryButtonText}>ادامه با ایمیل</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setScreen('home')}><Text style={styles.link}>فعلاً نه</Text></TouchableOpacity>
           </View>
         )}
 
-        {screen === 'auth-phone' && (
-          <View style={styles.card}>
-            <Text style={styles.titleSmall}>{authPurpose === 'caller' ? 'ورود Caller' : 'ورود با شماره موبایل'}</Text>
-            <Text style={styles.helper}>شماره فقط نزد پلتفرم می‌ماند و در پروفایل عمومی نمایش داده نمی‌شود.</Text>
-            <TextInput
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="0912..."
-              style={styles.input}
-              textAlign="right"
-            />
-            {!!error && <Text style={styles.error}>{error}</Text>}
-            <TouchableOpacity disabled={busy} style={[styles.primaryButton, busy && styles.disabled]} onPress={sendCode}>
-              <Text style={styles.primaryButtonText}>{busy ? 'در حال ارسال…' : 'ارسال کد'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setScreen(authPurpose === 'caller' ? 'home' : 'listener-intro')}>
-              <Text style={styles.link}>برگشت</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {screen === 'auth-code' && (
-          <View style={styles.card}>
-            <Text style={styles.titleSmall}>کد تأیید</Text>
-            <Text style={styles.helper}>کد ۶ رقمی پیامک‌شده را وارد کن.</Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={otp}
-              onChangeText={(value) => setOtp(value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="------"
-              maxLength={6}
-              style={styles.input}
-              textAlign="center"
-            />
-            {!!error && <Text style={styles.error}>{error}</Text>}
-            <TouchableOpacity disabled={busy || otp.length !== 6} style={[styles.primaryButton, (busy || otp.length !== 6) && styles.disabled]} onPress={confirmCode}>
-              <Text style={styles.primaryButtonText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setScreen('auth-phone')}><Text style={styles.link}>تغییر شماره</Text></TouchableOpacity>
-          </View>
+        {screen === 'auth-email' && (
+          <EmailAuthScreen
+            onAuthenticated={completeEmailAuth}
+            onBack={() => setScreen(authPurpose === 'caller' ? 'home' : 'listener-intro')}
+          />
         )}
 
         {screen === 'listener-profile' && (

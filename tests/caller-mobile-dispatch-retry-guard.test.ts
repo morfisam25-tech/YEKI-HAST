@@ -12,10 +12,10 @@ test('caller UI keeps the created call before dispatch so a network failure cann
   assert.ok(persistIndex < dispatchIndex, 'callId must be retained before dispatch begins');
 });
 
-test('only routing calls may retry dispatch with the same call id instead of creating another request', () => {
-  assert.match(source, /if \(!call \|\| call\.status !== 'routing'\) return/);
+test('only routing calls with no termination in progress may retry dispatch with the same call id', () => {
+  assert.match(source, /if \(!call \|\| call\.status !== 'routing' \|\| call\.terminationInProgress\) return/);
   assert.match(source, /dispatchCall\(token, call\.callId\)/);
-  assert.match(source, /const dispatchRetryable = Boolean\(call && call\.status === 'routing'\)/);
+  assert.match(source, /const dispatchRetryable = Boolean\(call && call\.status === 'routing' && !terminationInProgress\)/);
   assert.match(source, /ادامه همین تماس/);
 });
 

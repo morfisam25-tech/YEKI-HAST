@@ -20,6 +20,7 @@ function messageFor(code: string): string {
     listener_verification_required: 'احراز هویت شنونده هنوز کامل نشده.',
     no_callers_accepted: 'برای Online شدن حداقل یک گروه Caller را فعال کن.',
     listener_not_online: 'وضعیت آنلاین منقضی شده؛ دوباره Online شو.',
+    listener_active_call_conflict: 'بیش از یک تماس فعال برای این حساب ثبت شده؛ کنترل‌های دریافت تماس تا بررسی وضعیت قفل‌اند.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'خطایی رخ داد. دوباره امتحان کن.';
@@ -29,6 +30,7 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
   const [presence, setPresence] = useState<ListenerPresenceResponse | null>(null);
   const [acceptsMale, setAcceptsMale] = useState(true);
   const [acceptsFemale, setAcceptsFemale] = useState(true);
+  const [activeCallConflict, setActiveCallConflict] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const presenceRef = useRef<ListenerPresenceResponse | null>(null);
@@ -97,6 +99,10 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
   async function changeStatus(status: PresenceStatus) {
     if (busy) return;
+    if (activeCallConflict && status !== 'offline') {
+      setError(messageFor('listener_active_call_conflict'));
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -118,6 +124,10 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
   async function updateCallerPreference(kind: 'male' | 'female') {
     if (!presence || busy) return;
+    if (activeCallConflict) {
+      setError(messageFor('listener_active_call_conflict'));
+      return;
+    }
     const nextMale = kind === 'male' ? !acceptsMale : acceptsMale;
     const nextFemale = kind === 'female' ? !acceptsFemale : acceptsFemale;
     if (presence.status === 'online' && !nextMale && !nextFemale) {
@@ -166,34 +176,44 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
   const isOnline = presence.status === 'online';
   const isPaused = presence.status === 'paused';
+  const workControlsLocked = busy || activeCallConflict;
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>حالت کاری شنونده</Text>
-      <View style={[styles.statusBox, isOnline && styles.onlineBox, isPaused && styles.pausedBox]}>
+      <View style={[styles.statusBox, isOnline && styles.onlineBox, isPaused && styles.pausedBox, activeCallConflict && styles.conflictBox]}>
         <Text style={styles.statusText}>
-          {isOnline ? '● آنلاین — آماده دریافت تماس' : isPaused ? '● مکث — تماس جدید نمی‌آید' : '○ آفلاین'}
+          {activeCallConflict
+            ? '⚠ چند تماس فعال ثبت شده — دریافت تماس جدید قفل است'
+            : isOnline
+              ? '● آنلاین — آماده دریافت تماس'
+              : isPaused
+                ? '● مکث — تماس جدید نمی‌آید'
+                : '○ آفلاین'}
         </Text>
       </View>
 
       <Text style={styles.helper}>Heartbeat فقط وقتی اپ باز و وضعیت Online یا Pause باشد هر ۳۰ ثانیه ارسال می‌شود. با رفتن اپ به پس‌زمینه، حضور به‌صورت امن Offline می‌شود؛ guard سرور هم بعد از ۹۰ ثانیه stale presence را رد می‌کند.</Text>
+      {activeCallConflict && (
+        <Text style={styles.error}>سرور این حساب را به‌دلیل وجود چند تماس فعال از دریافت تماس جدید کنار می‌گذارد. Online، Pause و تغییر گروه Caller تا رفع تعارض قفل‌اند؛ Offline همچنان مجاز است.</Text>
+      )}
 
-      <ListenerActiveCallCard token={token} />
+      <ListenerActiveCallCard token={token} onActiveCallConflictChange={setActiveCallConflict} />
       <ListenerEarningsCard token={token} />
 
       <Text style={styles.label}>Callerهایی که می‌پذیری</Text>
       <View style={styles.row}>
         <TouchableOpacity
-          disabled={busy}
+          disabled={workControlsLocked}
           onPress={() => updateCallerPreference('female')}
-          style={[styles.choice, acceptsFemale && styles.choiceSelected, busy && styles.disabled]}
+          style={[styles.choice, acceptsFemale && styles.choiceSelected, workControlsLocked && styles.disabled]}
         >
           <Text style={styles.choiceText}>زن {acceptsFemale ? '✓' : ''}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          disabled={busy}
+          disabled={workControlsLocked}
           onPress={() => updateCallerPreference('male')}
-          style={[styles.choice, acceptsMale && styles.choiceSelected, busy && styles.disabled]}
+          style={[styles.choice, acceptsMale && styles.choiceSelected, workControlsLocked && styles.disabled]}
         >
           <Text style={styles.choiceText}>مرد {acceptsMale ? '✓' : ''}</Text>
         </TouchableOpacity>
@@ -201,13 +221,13 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
       {!!error && <Text style={styles.error}>{error}</Text>}
 
-      {!isOnline && (
-        <TouchableOpacity disabled={busy || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={[styles.primaryButton, (busy || (!acceptsMale && !acceptsFemale)) && styles.disabled]}>
+      {!isOnline && !isPaused && (
+        <TouchableOpacity disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={[styles.primaryButton, (workControlsLocked || (!acceptsMale && !acceptsFemale)) && styles.disabled]}>
           <Text style={styles.primaryText}>{busy ? 'در حال ثبت…' : 'Online — آماده‌ام'}</Text>
         </TouchableOpacity>
       )}
       {isOnline && (
-        <TouchableOpacity disabled={busy} onPress={() => changeStatus('paused')} style={[styles.pauseButton, busy && styles.disabled]}>
+        <TouchableOpacity disabled={workControlsLocked} onPress={() => changeStatus('paused')} style={[styles.pauseButton, workControlsLocked && styles.disabled]}>
           <Text style={styles.pauseText}>Pause</Text>
         </TouchableOpacity>
       )}
@@ -217,7 +237,7 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
         </TouchableOpacity>
       )}
       {isPaused && (
-        <TouchableOpacity disabled={busy || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={[styles.primaryButton, (busy || (!acceptsMale && !acceptsFemale)) && styles.disabled]}>
+        <TouchableOpacity disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)} onPress={() => changeStatus('online')} style={[styles.primaryButton, (workControlsLocked || (!acceptsMale && !acceptsFemale)) && styles.disabled]}>
           <Text style={styles.primaryText}>ادامه کار</Text>
         </TouchableOpacity>
       )}
@@ -238,6 +258,7 @@ const styles = StyleSheet.create({
   statusBox: { backgroundColor: '#f2f1ed', padding: 15, borderRadius: 14 },
   onlineBox: { backgroundColor: '#eaf2e6' },
   pausedBox: { backgroundColor: '#fbf2df' },
+  conflictBox: { backgroundColor: '#f9ecea' },
   statusText: { color: '#30312d', textAlign: 'right', fontWeight: '800' },
   row: { flexDirection: 'row-reverse', gap: 10 },
   choice: { borderWidth: 1, borderColor: '#d8d5cd', paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },

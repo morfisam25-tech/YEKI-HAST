@@ -24,6 +24,18 @@ test('integration readiness validates providers and sensitive-data security with
   assert.doesNotMatch(source, /sendJson[\s\S]*HASH_PEPPER/);
 });
 
+test('Caller catalog readiness follows the shared operating context and active catalog state', () => {
+  assert.match(source, /getDefaultOperatingContextCodes/);
+  assert.match(source, /const \{ productCode, serviceCode, marketCode \} = getDefaultOperatingContextCodes\(\)/);
+  assert.match(source, /FROM app\.pricing_plans pp/);
+  assert.match(source, /p\.code=\$1/);
+  assert.match(source, /s\.code=\$2 AND s\.status='active'/);
+  assert.match(source, /m\.code=\$3 AND m\.is_active=true/);
+  assert.match(source, /pp\.is_active=true/);
+  assert.match(source, /FROM app\.languages WHERE is_active=true/);
+  assert.match(source, /callerCatalog: \{ ready: callerCatalogReady \}/);
+});
+
 test('caller age readiness uses bounded policy values', () => {
   assert.match(source, /CALLER_AGE_POLICY_VERSION/);
   assert.match(source, /CALLER_MINIMUM_AGE/);
@@ -33,7 +45,7 @@ test('caller age readiness uses bounded policy values', () => {
 
 test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
   assert.match(source, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*smsReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady/);
   assert.match(source, /callerClosedBeta: \{ enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
 });

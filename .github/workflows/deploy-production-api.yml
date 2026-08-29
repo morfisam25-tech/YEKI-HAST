@@ -28,6 +28,10 @@ jobs:
       PRODUCTION_SMTP_PASSWORD: ${{ secrets.PRODUCTION_SMTP_PASSWORD }}
       PRODUCTION_SMTP_FROM_EMAIL: ${{ secrets.PRODUCTION_SMTP_FROM_EMAIL }}
       PRODUCTION_SMTP_FROM_NAME: ${{ secrets.PRODUCTION_SMTP_FROM_NAME }}
+      PRODUCTION_PRIVACY_POLICY_URL: ${{ secrets.PRODUCTION_PRIVACY_POLICY_URL }}
+      PRODUCTION_TERMS_OF_SERVICE_URL: ${{ secrets.PRODUCTION_TERMS_OF_SERVICE_URL }}
+      PRODUCTION_ACCOUNT_DELETION_URL: ${{ secrets.PRODUCTION_ACCOUNT_DELETION_URL }}
+      PRODUCTION_SUPPORT_EMAIL: ${{ secrets.PRODUCTION_SUPPORT_EMAIL }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_TEAM_SLUG: unique-6ff0
       VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
@@ -169,6 +173,8 @@ jobs:
             && body?.market?.code === 'ir'
             && Array.isArray(body?.languages)
             && body.languages.length > 0
+            && body?.features?.callerClosedBetaEnabled === false
+            && typeof body?.legal?.ready === 'boolean'
           );
           console.log('production API smoke PASS');
           NODE

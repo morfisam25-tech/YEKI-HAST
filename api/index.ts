@@ -9,10 +9,17 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+export function normalizedDatabaseUrl(connectionString: string): string {
+  const url = new URL(connectionString);
+  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (!isLocal) url.searchParams.set('sslmode', 'verify-full');
+  return url.toString();
+}
+
 async function loadPgPool(connectionString: string) {
   const pg = await import('pg');
   return new pg.Pool({
-    connectionString,
+    connectionString: normalizedDatabaseUrl(connectionString),
     max: 2,
     idleTimeoutMillis: 5_000,
     connectionTimeoutMillis: 10_000,

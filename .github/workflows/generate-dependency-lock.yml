@@ -35,11 +35,19 @@ jobs:
       - name: Verify the generated lock can drive a clean install
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Preserve validated lock as fallback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Commit validated lock to main
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- package-lock.json; then
+          if [ -z "$(git status --porcelain -- package-lock.json)" ]; then
             echo 'package-lock.json is already current'
             exit 0
           fi

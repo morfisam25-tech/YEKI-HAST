@@ -1,0 +1,147 @@
+import { randomBytes } from 'node:crypto';
+
+const TEAM_ID = 'team_GmseY3ibD05FWemVhLElL3hI';
+const PROJECT_ID = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
+const API_ORIGIN = 'https://api.vercel.com';
+
+function required(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required`);
+  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
+  return value;
+}
+
+function validateDatabaseUrl(value) {
+  let url;
+  try { url = new URL(value); }
+  catch { throw new Error('PRODUCTION_DATABASE_URL is not a valid URL'); }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+    throw new Error('PRODUCTION_DATABASE_URL must be PostgreSQL');
+  }
+  if (!url.hostname || !url.username || !url.password || url.pathname === '/') {
+    throw new Error('PRODUCTION_DATABASE_URL is incomplete');
+  }
+  if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname)) {
+    throw new Error('PRODUCTION_DATABASE_URL must not point to localhost');
+  }
+}
+
+function validateEmail(value) {
+  const parts = value.toLowerCase().split('@');
+  if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s/.test(value)) {
+    throw new Error('PRODUCTION_SMTP_FROM_EMAIL is invalid');
+  }
+}
+
+function productionTarget(env) {
+  return Array.isArray(env?.target) && env.target.includes('production');
+}
+
+function randomSecret() {
+  return randomBytes(32).toString('base64url');
+}
+
+async function vercelJson(url, init = {}) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${required('VERCEL_TOKEN')}`,
+      accept: 'application/json',
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) throw new Error(`Vercel API request failed with status ${response.status}`);
+  return response.json();
+}
+
+const databaseUrl = required('PRODUCTION_DATABASE_URL');
+validateDatabaseUrl(databaseUrl);
+
+const smtpHost = required('PRODUCTION_SMTP_HOST');
+const smtpPort = required('PRODUCTION_SMTP_PORT');
+const smtpSecure = required('PRODUCTION_SMTP_SECURE').toLowerCase();
+const smtpUsername = required('PRODUCTION_SMTP_USERNAME');
+const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
+const smtpFromEmail = required('PRODUCTION_SMTP_FROM_EMAIL').toLowerCase();
+const smtpFromName = (process.env.PRODUCTION_SMTP_FROM_NAME?.trim() || 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
+
+const portNumber = Number(smtpPort);
+if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+  throw new Error('PRODUCTION_SMTP_PORT is invalid');
+}
+if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SECURE must be true or false');
+validateEmail(smtpFromEmail);
+if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
+
+const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
+const listed = await vercelJson(listUrl);
+const envs = Array.isArray(listed?.envs) ? listed.envs : [];
+const existingProductionKeys = new Set(
+  envs.filter(productionTarget).map((env) => env?.key).filter((key) => typeof key === 'string'),
+);
+
+const entries = [];
+function setPlain(key, value) {
+  entries.push({ key, value: String(value), type: 'plain', target: ['production'] });
+}
+function setSensitive(key, value) {
+  entries.push({ key, value: String(value), type: 'sensitive', target: ['production'] });
+}
+
+setSensitive('DATABASE_URL', databaseUrl);
+setPlain('DB_POOL_MAX', '10');
+
+setPlain('EMAIL_PROVIDER', 'smtp');
+setPlain('SMTP_HOST', smtpHost);
+setPlain('SMTP_PORT', String(portNumber));
+setPlain('SMTP_SECURE', smtpSecure);
+setSensitive('SMTP_USERNAME', smtpUsername);
+setSensitive('SMTP_PASSWORD', smtpPassword);
+setPlain('SMTP_FROM_EMAIL', smtpFromEmail);
+setPlain('SMTP_FROM_NAME', smtpFromName);
+
+setPlain('SESSION_TTL_HOURS', '720');
+setPlain('OTP_TTL_SECONDS', '300');
+setPlain('OTP_PHONE_LIMIT_PER_15M', '5');
+setPlain('OTP_EMAIL_LIMIT_PER_15M', '5');
+setPlain('OTP_IP_LIMIT_PER_15M', '20');
+setPlain('OTP_GLOBAL_LIMIT_PER_15M', '1000');
+setPlain('DEV_EXPOSE_OTP', 'false');
+
+setPlain('BOOTSTRAP_ADMIN_ENABLED', 'false');
+setPlain('CALLER_CLOSED_BETA_ENABLED', 'false');
+setPlain('MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false');
+setPlain('DEFAULT_PRODUCT_CODE', 'yeki_hast');
+setPlain('DEFAULT_SERVICE_CODE', 'human_listening');
+setPlain('DEFAULT_MARKET_CODE', 'ir');
+
+for (const key of [
+  'PHONE_HASH_PEPPER',
+  'EMAIL_HASH_PEPPER',
+  'IP_HASH_PEPPER',
+  'OTP_HASH_PEPPER',
+  'KYC_HASH_PEPPER',
+]) {
+  if (!existingProductionKeys.has(key)) setSensitive(key, randomSecret());
+}
+
+const hasEncryptionKeyId = existingProductionKeys.has('ACTIVE_DATA_ENCRYPTION_KEY_ID');
+const hasEncryptionRing = existingProductionKeys.has('DATA_ENCRYPTION_KEYS');
+if (hasEncryptionKeyId !== hasEncryptionRing) {
+  throw new Error('Production encryption configuration is partial; refusing to rotate or guess it');
+}
+if (!hasEncryptionKeyId) {
+  const keyId = 'k1';
+  const key = randomBytes(32).toString('base64');
+  setPlain('ACTIVE_DATA_ENCRYPTION_KEY_ID', keyId);
+  setSensitive('DATA_ENCRYPTION_KEYS', JSON.stringify({ [keyId]: key }));
+}
+
+const updateUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?upsert=true&teamId=${encodeURIComponent(TEAM_ID)}`;
+const updated = await vercelJson(updateUrl, { method: 'POST', body: JSON.stringify(entries) });
+if (Array.isArray(updated?.failed) && updated.failed.length > 0) {
+  throw new Error(`Vercel environment sync reported ${updated.failed.length} failed item(s)`);
+}
+
+console.log(`production API environment sync PASS (${entries.length} keys checked/upserted; values hidden)`);

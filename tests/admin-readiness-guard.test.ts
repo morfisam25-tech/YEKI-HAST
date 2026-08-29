@@ -53,9 +53,17 @@ test('admin bootstrap must be completely disarmed before caller launch can becom
   assert.match(source, /adminBootstrap: \{[\s\S]*lockedDown: adminBootstrapLockedDown[\s\S]*enabled: bootstrapAdminEnabled[\s\S]*identityConfigured: bootstrapAdminIdentityConfigured[\s\S]*expiryConfigured: bootstrapAdminExpiryConfigured[\s\S]*windowOpen: bootstrapAdminWindowOpen/);
 });
 
+test('commercial hosting is an explicit fail-closed Caller launch dependency', () => {
+  assert.match(source, /isCommercialHostingApproved/);
+  assert.match(source, /const commercialHostingApproved = isCommercialHostingApproved\(\)/);
+  assert.match(source, /commercialHosting: \{ ready: commercialHostingApproved \}/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*&& commercialHostingApproved/);
+});
+
 test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
-  assert.match(source, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaEnabled[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callPhoneVerificationReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown/);
-  assert.match(source, /callerClosedBeta: \{ enabled: callerClosedBetaEnabled \}/);
+  assert.match(source, /isCallerClosedBetaConfigured/);
+  assert.match(source, /isCallerClosedBetaEnabled/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*commercialHostingApproved[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callPhoneVerificationReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown[\s\S]*publicRelease\.ready/);
+  assert.match(source, /callerClosedBeta: \{ configured: callerClosedBetaConfigured, enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
 });

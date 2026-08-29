@@ -32,7 +32,7 @@ export async function query<T extends QueryResultRow = QueryResultRow>(text: str
   return getPool().query<T>(text, values);
 }
 
-export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>) {
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');

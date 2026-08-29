@@ -40,14 +40,6 @@ type Screen =
 type AuthPurpose = 'listener' | 'caller';
 type ChoiceProps = { label: string; selected?: boolean; onPress: () => void };
 
-const fallbackLanguages: BootstrapLanguage[] = [
-  { code: 'fa', nameFa: 'فارسی', nameEn: 'Persian' },
-  { code: 'az', nameFa: 'ترکی آذری', nameEn: 'Azerbaijani' },
-  { code: 'ku', nameFa: 'کردی', nameEn: 'Kurdish' },
-  { code: 'lrc', nameFa: 'لری', nameEn: 'Luri' },
-  { code: 'ar', nameFa: 'عربی', nameEn: 'Arabic' },
-];
-
 function Choice({ label, selected, onPress }: ChoiceProps) {
   return (
     <TouchableOpacity onPress={onPress} style={[styles.choice, selected && styles.choiceSelected]}>
@@ -80,9 +72,11 @@ export default function App() {
   const [authPurpose, setAuthPurpose] = useState<AuthPurpose>('listener');
   const [callerBetaEnabled, setCallerBetaEnabled] = useState(false);
   const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [sessionRestoreComplete, setSessionRestoreComplete] = useState(false);
-  const [languageOptions, setLanguageOptions] = useState<BootstrapLanguage[]>(fallbackLanguages);
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['fa']);
+  const [languageOptions, setLanguageOptions] = useState<BootstrapLanguage[]>([]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [token, setToken] = useState('');
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState<'female' | 'male' | null>(null);
@@ -91,22 +85,38 @@ export default function App() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let disposed = false;
+    setBootstrapReady(false);
+    setBootstrapAvailable(false);
+
     getBootstrap()
       .then((value) => {
+        if (disposed) return;
+        if (!value.languages.length) throw new Error('bootstrap_languages_unavailable');
         const bootstrap = value as typeof value & { features?: { callerClosedBetaEnabled?: boolean } };
         setCallerBetaEnabled(bootstrap.features?.callerClosedBetaEnabled === true);
-        if (value.languages.length) {
-          setLanguageOptions(value.languages);
-          if (!value.languages.some((x) => x.code === 'fa')) {
-            setSelectedLanguages([value.languages[0].code]);
-          }
-        }
+        setLanguageOptions(value.languages);
+        setSelectedLanguages((current) => {
+          const stillValid = current.filter((code) => value.languages.some((item) => item.code === code));
+          if (stillValid.length) return stillValid;
+          const preferred = value.languages.find((item) => item.code === 'fa') ?? value.languages[0];
+          return [preferred.code];
+        });
+        setBootstrapAvailable(true);
       })
       .catch(() => {
+        if (disposed) return;
         setCallerBetaEnabled(false);
+        setLanguageOptions([]);
+        setSelectedLanguages([]);
+        setBootstrapAvailable(false);
       })
-      .finally(() => setBootstrapReady(true));
-  }, []);
+      .finally(() => {
+        if (!disposed) setBootstrapReady(true);
+      });
+
+    return () => { disposed = true; };
+  }, [bootstrapAttempt]);
 
   async function resumeListener(sessionToken: string) {
     try {
@@ -124,6 +134,10 @@ export default function App() {
 
   useEffect(() => {
     if (!bootstrapReady) return;
+    if (!bootstrapAvailable) {
+      setSessionRestoreComplete(true);
+      return;
+    }
     let disposed = false;
 
     async function restoreSession() {
@@ -157,7 +171,7 @@ export default function App() {
 
     void restoreSession();
     return () => { disposed = true; };
-  }, [bootstrapReady, callerBetaEnabled]);
+  }, [bootstrapReady, bootstrapAvailable, callerBetaEnabled]);
 
   const canContinueProfile = useMemo(
     () => nickname.trim().length >= 2 && gender !== null && selectedLanguages.length > 0,
@@ -173,6 +187,12 @@ export default function App() {
       return [...current, code];
     });
   };
+
+  function retryBootstrap() {
+    setError('');
+    setSessionRestoreComplete(false);
+    setBootstrapAttempt((current) => current + 1);
+  }
 
   function beginListenerAuth() {
     setAuthPurpose('listener');
@@ -241,13 +261,31 @@ export default function App() {
     }
   }
 
-  if (!sessionRestoreComplete) {
+  if (!bootstrapReady || !sessionRestoreComplete) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         <View style={styles.restorePage}>
           <Text style={styles.brand}>یکی هست</Text>
-          <Text style={styles.helper}>در حال بررسی نشست امن…</Text>
+          <Text style={styles.helper}>در حال بررسی سرویس و نشست امن…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!bootstrapAvailable) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <View style={styles.restorePage}>
+          <Text style={styles.brand}>یکی هست</Text>
+          <Text style={styles.titleSmall}>سرویس موقتاً در دسترس نیست</Text>
+          <Text style={styles.body}>
+            برای جلوگیری از ثبت ناقص یا استفاده از اطلاعات قدیمی، تا زمانی که اطلاعات اصلی سرویس از سرور دریافت نشود ورود و ثبت‌نام باز نمی‌شود.
+          </Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={retryBootstrap}>
+            <Text style={styles.primaryButtonText}>تلاش دوباره</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

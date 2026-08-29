@@ -45,6 +45,8 @@ jobs:
             echo "::error::Unexpected repository"
             exit 1
           fi
+
+          missing=()
           for name in \
             VERCEL_TOKEN \
             PRODUCTION_DATABASE_URL \
@@ -52,10 +54,13 @@ jobs:
             PRODUCTION_SMTP_PASSWORD
           do
             if [ -z "${!name:-}" ]; then
-              echo "::error::${name} repository secret is required"
-              exit 1
+              missing+=("$name")
             fi
           done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing required repository secret(s): %s\n' "$(IFS=', '; echo "${missing[*]}")"
+            exit 1
+          fi
 
       - name: Checkout
         uses: actions/checkout@v4

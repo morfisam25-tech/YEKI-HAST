@@ -41,6 +41,20 @@ function emailAddress(name) {
   return value;
 }
 
+function publicHttpsUrl(name) {
+  const value = required(name);
+  let url;
+  try { url = new URL(value); }
+  catch { throw new Error(`${name} must be a valid URL`); }
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
+    throw new Error(`${name} must be a public HTTPS URL without embedded credentials`);
+  }
+  if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname)) {
+    throw new Error(`${name} must not point to localhost`);
+  }
+  return value;
+}
+
 function e164(name) {
   const value = required(name);
   if (!/^\+[1-9]\d{7,14}$/.test(value)) throw new Error(`${name} must be valid E.164`);
@@ -125,6 +139,17 @@ if (smsProvider) {
   } else {
     throw new Error(`Unsupported production SMS_PROVIDER: ${smsProvider}`);
   }
+}
+
+const callerClosedBetaEnabled = optionalBoolean('CALLER_CLOSED_BETA_ENABLED', false);
+if (callerClosedBetaEnabled) {
+  // Do not allow a caller-facing launch until the real public policy/support surfaces exist.
+  publicHttpsUrl('PRIVACY_POLICY_URL');
+  publicHttpsUrl('TERMS_OF_SERVICE_URL');
+  publicHttpsUrl('ACCOUNT_DELETION_URL');
+  emailAddress('SUPPORT_EMAIL');
+  integer('CALLER_MINIMUM_AGE', undefined, 13, 99);
+  required('CALLER_AGE_POLICY_VERSION');
 }
 
 integer('SESSION_TTL_HOURS', 720, 1, 8760);

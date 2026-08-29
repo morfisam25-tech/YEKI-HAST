@@ -167,7 +167,7 @@ jobs:
           }
 
           await waitFor('/health', (body) => body?.ok === true && body?.service === 'yeki-hast-api');
-          await waitFor('/ready', (body) => body?.ok === true && body?.database === 'ready');
+          await waitFor('/ready', (body) => body?.ok === true && body?.database === 'ready' && body?.schema === 'ready');
           await waitFor('/v1/bootstrap', (body) =>
             typeof body?.brandName === 'string'
             && body?.market?.code === 'ir'

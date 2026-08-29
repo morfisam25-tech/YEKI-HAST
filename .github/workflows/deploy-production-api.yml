@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes esbuild@0.25.9 api/index.ts \
+          npx --no-install esbuild api/index.ts \
             --bundle \
             --platform=node \
             --target=node22 \
@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 pull \
+          npx --no-install vercel pull \
             --yes \
             --environment=production \
             --token "$VERCEL_TOKEN" \
@@ -157,7 +157,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 build \
+          npx --no-install vercel build \
             --prod \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -168,7 +168,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 deploy \
+          npx --no-install vercel deploy \
             --prebuilt \
             --prod \
             --yes \

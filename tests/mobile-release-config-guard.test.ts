@@ -14,6 +14,11 @@ test('mobile app has stable Android and iOS application identifiers', () => {
   assert.equal(appConfig.expo.ios.bundleIdentifier, 'app.yekihast.mobile');
 });
 
+test('Android app-data backup stays disabled for sensitive account and session data', () => {
+  assert.equal(appConfig.expo.android.allowBackup, false);
+  assert.equal(appConfig.expo.plugins?.[0]?.[0], 'expo-secure-store');
+});
+
 test('mobile preview build is internally distributable, explicit and uses production API origin', () => {
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.environment, 'preview');

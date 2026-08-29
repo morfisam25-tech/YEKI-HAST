@@ -47,8 +47,10 @@ test('admin bootstrap must be completely disarmed before caller launch can becom
   assert.match(source, /BOOTSTRAP_ADMIN_ENABLED/);
   assert.match(source, /BOOTSTRAP_ADMIN_EMAIL/);
   assert.match(source, /BOOTSTRAP_ADMIN_PHONE_E164/);
-  assert.match(source, /adminBootstrapLockedDown = !bootstrapAdminEnabled && !bootstrapAdminIdentityConfigured/);
-  assert.match(source, /adminBootstrap: \{[\s\S]*lockedDown: adminBootstrapLockedDown[\s\S]*enabled: bootstrapAdminEnabled[\s\S]*identityConfigured: bootstrapAdminIdentityConfigured/);
+  assert.match(source, /BOOTSTRAP_ADMIN_EXPIRES_AT/);
+  assert.match(source, /isAdminBootstrapWindowOpen\(\)/);
+  assert.match(source, /adminBootstrapLockedDown = !bootstrapAdminEnabled[\s\S]*&& !bootstrapAdminIdentityConfigured[\s\S]*&& !bootstrapAdminExpiryConfigured/);
+  assert.match(source, /adminBootstrap: \{[\s\S]*lockedDown: adminBootstrapLockedDown[\s\S]*enabled: bootstrapAdminEnabled[\s\S]*identityConfigured: bootstrapAdminIdentityConfigured[\s\S]*expiryConfigured: bootstrapAdminExpiryConfigured[\s\S]*windowOpen: bootstrapAdminWindowOpen/);
 });
 
 test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {

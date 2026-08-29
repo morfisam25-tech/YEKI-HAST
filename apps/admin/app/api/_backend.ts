@@ -1,5 +1,6 @@
 export const ADMIN_SESSION_COOKIE = process.env.NODE_ENV === 'production' ? '__Host-yeki_admin_session' : 'yeki_admin_session';
 export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-theta.vercel.app';
+const BACKEND_REQUEST_TIMEOUT_MS = 15_000;
 
 export function backendBaseUrl(): string {
   const configured = process.env.ADMIN_API_BASE_URL?.trim();
@@ -34,6 +35,7 @@ export function browserMutationAllowed(request: Request): boolean {
 export async function backendRequest(path: string, init: RequestInit = {}) {
   return fetch(`${backendBaseUrl()}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(BACKEND_REQUEST_TIMEOUT_MS),
     headers: {
       accept: 'application/json',
       ...(init.body ? { 'content-type': 'application/json' } : {}),

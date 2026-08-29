@@ -118,7 +118,11 @@ setPlain('OTP_IP_LIMIT_PER_15M', '20');
 setPlain('OTP_GLOBAL_LIMIT_PER_15M', '1000');
 setPlain('DEV_EXPOSE_OTP', 'false');
 
+// A normal production sync always returns the one-time bootstrap surface to a locked state.
 setPlain('BOOTSTRAP_ADMIN_ENABLED', 'false');
+setPlain('BOOTSTRAP_ADMIN_PHONE_E164', '');
+setPlain('BOOTSTRAP_ADMIN_EMAIL', '');
+setPlain('BOOTSTRAP_ADMIN_EXPIRES_AT', '');
 setPlain('CALLER_CLOSED_BETA_ENABLED', 'false');
 setPlain('MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false');
 setPlain('DEFAULT_PRODUCT_CODE', 'yeki_hast');

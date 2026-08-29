@@ -4,6 +4,7 @@ import { requireAdmin } from '../lib/admin.ts';
 import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
 import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
+import { getPublicReleaseConfig } from '../lib/public-release.ts';
 import { validateEmailSecurityEnv, validateSecurityEnv } from '../lib/security.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { validateEmailProviderEnv } from '../providers/email.ts';
@@ -19,25 +20,6 @@ function ready(check: () => unknown): boolean {
 
 function configured(value: string | undefined): boolean {
   return Boolean(value?.trim());
-}
-
-function validPublicHttpsUrl(value: string | undefined): boolean {
-  const raw = value?.trim();
-  if (!raw) return false;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || !url.hostname) return false;
-    return !['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
-
-function validSupportEmail(value: string | undefined): boolean {
-  const raw = value?.trim().toLowerCase();
-  if (!raw || /\s|[\r\n]/.test(raw)) return false;
-  const parts = raw.split('@');
-  return parts.length === 2 && Boolean(parts[0]) && Boolean(parts[1]) && parts[1].includes('.');
 }
 
 export async function getAdminIntegrationReadiness(req: IncomingMessage, res: ServerResponse) {
@@ -65,14 +47,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const accountAuthReady = emailAuthReady || smsReady;
   const callPhoneVerificationReady = manualPhoneVerificationEnabled || smsReady;
 
-  const privacyPolicyReady = validPublicHttpsUrl(process.env.PRIVACY_POLICY_URL);
-  const termsOfServiceReady = validPublicHttpsUrl(process.env.TERMS_OF_SERVICE_URL);
-  const accountDeletionReady = validPublicHttpsUrl(process.env.ACCOUNT_DELETION_URL);
-  const supportReady = validSupportEmail(process.env.SUPPORT_EMAIL);
-  const publicReleasePolicyReady = privacyPolicyReady
-    && termsOfServiceReady
-    && accountDeletionReady
-    && supportReady;
+  const publicRelease = getPublicReleaseConfig();
 
   const bootstrapAdminEnabled = process.env.BOOTSTRAP_ADMIN_ENABLED?.trim().toLowerCase() === 'true';
   const bootstrapAdminIdentityConfigured = configured(process.env.BOOTSTRAP_ADMIN_EMAIL)
@@ -115,7 +90,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && telephonyReady
     && sensitiveDataReady
     && adminBootstrapLockedDown
-    && publicReleasePolicyReady;
+    && publicRelease.ready;
 
   sendJson(res, 200, {
     ok: true,
@@ -134,11 +109,11 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
       sensitiveData: { ready: sensitiveDataReady },
       publicReleasePolicy: {
-        ready: publicReleasePolicyReady,
-        privacyPolicyReady,
-        termsOfServiceReady,
-        accountDeletionReady,
-        supportReady,
+        ready: publicRelease.ready,
+        privacyPolicyReady: Boolean(publicRelease.privacyPolicyUrl),
+        termsOfServiceReady: Boolean(publicRelease.termsOfServiceUrl),
+        accountDeletionReady: Boolean(publicRelease.accountDeletionUrl),
+        supportReady: Boolean(publicRelease.supportEmail),
       },
       adminBootstrap: {
         lockedDown: adminBootstrapLockedDown,

@@ -13,7 +13,7 @@ function routeLine(fragment: string): string {
 test('starting a new caller wallet top-up requires the closed-beta launch gate', () => {
   const createLine = routeLine("url.pathname === '/v1/wallet/topups'");
   assert.match(createLine, /requireCallerClosedBetaEnabled\(\)/);
-  assert.match(createLine, /createWalletTopup/);
+  assert.match(createLine, /createCallerWalletTopup/);
 });
 
 test('payment recovery and provider callback stay reachable after beta is closed', () => {

@@ -10,11 +10,14 @@ const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mj
 
 test('pending account deletion blocks creation of new email and phone sessions', () => {
   for (const source of [emailAuth, phoneAuth]) {
-    assert.match(source, /account_deletion_requested/);
-    assert.match(source, /processingState'\]='pending'|processingState'='pending'|processingState'\)='pending'|processingState'='pending/);
-    assert.match(source, /kind: 'deletion_pending'/);
-    assert.match(source, /account_deletion_pending/);
-    assert.ok(source.indexOf("kind: 'deletion_pending'") < source.lastIndexOf('INSERT INTO private_data.auth_sessions'));
+    assert.ok(source.includes("action='account_deletion_requested'"));
+    assert.ok(source.includes("metadata->>'processingState'='pending'"));
+    assert.ok(source.includes("return { kind: 'deletion_pending' };"));
+    assert.ok(source.includes("throw new HttpError(409, 'account_deletion_pending')"));
+
+    const pendingCheck = source.indexOf("metadata->>'processingState'='pending'");
+    const sessionInsert = source.lastIndexOf('INSERT INTO private_data.auth_sessions');
+    assert.ok(pendingCheck > -1 && sessionInsert > pendingCheck, 'deletion-pending check must happen before session creation');
   }
 });
 

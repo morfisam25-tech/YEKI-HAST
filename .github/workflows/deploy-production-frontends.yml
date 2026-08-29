@@ -136,30 +136,44 @@ jobs:
           test -f .vercel/output/config.json
 
       - name: Deploy prebuilt Web artifact to protected UNIQUE production
+        id: deploy_web
         working-directory: apps/web
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" deploy \
+          deployment_url="$("$VERCEL_BIN" deploy \
             --prebuilt \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+            --scope "$VERCEL_TEAM_SLUG")"
+          case "$deployment_url" in
+            https://*.vercel.app) ;;
+            *) echo '::error::Vercel did not return a valid Web deployment URL'; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo 'prebuilt Web production deployment created; exact URL captured'
 
       - name: Deploy prebuilt Admin artifact to UNIQUE production
+        id: deploy_admin
         working-directory: apps/admin
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" deploy \
+          deployment_url="$("$VERCEL_BIN" deploy \
             --prebuilt \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+            --scope "$VERCEL_TEAM_SLUG")"
+          case "$deployment_url" in
+            https://*.vercel.app) ;;
+            *) echo '::error::Vercel did not return a valid Admin deployment URL'; exit 1 ;;
+          esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo 'prebuilt Admin production deployment created; exact URL captured'
 
-      - name: Require Admin to remain protected from unauthenticated access
+      - name: Require Admin canonical alias to remain protected from unauthenticated access
         shell: bash
         run: |
           set -euo pipefail
@@ -182,8 +196,10 @@ jobs:
           throw new Error(`Admin protection failed: ${last}`);
           NODE
 
-      - name: Verify protected Admin production shell with authenticated Vercel CLI
+      - name: Verify exact protected Admin deployment shell with authenticated Vercel CLI
         working-directory: apps/admin
+        env:
+          ADMIN_EXACT_DEPLOYMENT_URL: ${{ steps.deploy_admin.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -193,23 +209,25 @@ jobs:
 
           for attempt in $(seq 1 12); do
             if "$VERCEL_BIN" curl / \
-              --deployment "$ADMIN_PRODUCTION_URL" \
+              --deployment "$ADMIN_EXACT_DEPLOYMENT_URL" \
               --token "$VERCEL_TOKEN" \
               --scope "$VERCEL_TEAM_SLUG" \
               >"$tmp" 2>/dev/null; then
               if grep -Fq 'یکی هست / عملیات' "$tmp" && grep -Fq 'داشبورد' "$tmp"; then
-                echo 'production protected Admin smoke PASS'
+                echo 'production exact protected Admin smoke PASS'
                 exit 0
               fi
             fi
             sleep 5
           done
 
-          echo '::error::Protected Admin production smoke failed'
+          echo '::error::Exact protected Admin deployment smoke failed'
           exit 1
 
-      - name: Verify protected Web release before public cutover
+      - name: Verify exact protected Web release before public cutover
         working-directory: apps/web
+        env:
+          WEB_EXACT_DEPLOYMENT_URL: ${{ steps.deploy_web.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -220,7 +238,7 @@ jobs:
             tmp="$(mktemp)"
             for attempt in $(seq 1 12); do
               if "$VERCEL_BIN" curl "$path" \
-                --deployment "$WEB_PRODUCTION_URL" \
+                --deployment "$WEB_EXACT_DEPLOYMENT_URL" \
                 --token "$VERCEL_TOKEN" \
                 --scope "$VERCEL_TEAM_SLUG" \
                 >"$tmp" 2>/dev/null && grep -Fq "$needle" "$tmp"; then
@@ -236,7 +254,7 @@ jobs:
           check_path /privacy 'حریم خصوصی'
           check_path /terms 'قوانین استفاده'
           check_path /account/delete 'تأیید مالک حساب'
-          echo 'production protected Web pre-cutover smoke PASS'
+          echo 'production exact protected Web pre-cutover smoke PASS'
 
       - name: Make only verified Web release public
         shell: bash
@@ -247,7 +265,7 @@ jobs:
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
 
-      - name: Verify Web production public surfaces
+      - name: Verify Web canonical production alias public surfaces
         shell: bash
         run: |
           set -euo pipefail

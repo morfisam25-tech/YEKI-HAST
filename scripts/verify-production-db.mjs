@@ -27,6 +27,76 @@ try {
     if (migrationMap.get(filename) !== expectedSha) throw new Error(`migration tracking mismatch: ${filename}`);
   }
 
+  // Migration history alone is not enough: a table or trigger can be removed after
+  // a migration was recorded. Verify the runtime-critical surface read-only before deploy.
+  const criticalRelations = [
+    'public.yeki_hast_schema_migrations',
+    'app.users',
+    'app.admin_users',
+    'app.user_roles',
+    'app.products',
+    'app.service_catalog',
+    'app.markets',
+    'app.languages',
+    'app.pricing_plans',
+    'app.caller_profiles',
+    'app.caller_age_assertions',
+    'app.waitlist_entries',
+    'app.listener_applications',
+    'app.listener_profiles',
+    'app.listener_service_profiles',
+    'app.listener_languages',
+    'app.listener_presence',
+    'app.wallets',
+    'app.wallet_transactions',
+    'app.payment_attempts',
+    'app.call_sessions',
+    'app.call_events',
+    'app.telephony_legs',
+    'app.listener_earnings',
+    'app.listener_guarantee_programs',
+    'app.listener_guarantee_assignments',
+    'app.payouts',
+    'app.payout_items',
+    'app.blocks',
+    'app.reports',
+    'app.safety_events',
+    'private_data.auth_sessions',
+    'private_data.user_contacts',
+    'private_data.listener_kyc',
+    'private_data.user_emails',
+    'private_data.email_otp_challenges',
+    'private_data.report_details',
+    'private_data.safety_event_details',
+  ];
+  const relations = await pool.query(`
+    SELECT relation_name, to_regclass(relation_name)::text AS resolved
+    FROM unnest($1::text[]) AS relation_name
+  `, [criticalRelations]);
+  for (const row of relations.rows) {
+    if (row.resolved !== row.relation_name) throw new Error(`critical relation missing: ${row.relation_name}`);
+  }
+
+  const criticalTriggers = [
+    'listener_presence_set_updated_at',
+    'payout_items_guard_mutation',
+    'payouts_validate_total_before_processing',
+    'payouts_guard_status_transition',
+  ];
+  const triggers = await pool.query(`
+    SELECT t.tgname
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid=t.tgrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE NOT t.tgisinternal
+      AND n.nspname='app'
+      AND t.tgname = ANY($1::text[])
+  `, [criticalTriggers]);
+  const triggerNames = new Set(triggers.rows.map((row) => row.tgname));
+  for (const triggerName of criticalTriggers) {
+    if (!triggerNames.has(triggerName)) throw new Error(`critical trigger missing: ${triggerName}`);
+  }
+
   const emailSchema = await pool.query(`
     SELECT
       to_regclass('private_data.user_emails')::text AS user_emails,

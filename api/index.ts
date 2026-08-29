@@ -15,6 +15,11 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+function releaseSha(): string | null {
+  const value = process.env.YEKI_HAST_RELEASE_SHA?.trim().toLowerCase() ?? '';
+  return /^[0-9a-f]{40}$/.test(value) ? value : null;
+}
+
 export function normalizedDatabaseUrl(connectionString: string): string {
   const url = new URL(connectionString);
   const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
@@ -37,10 +42,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const url = new URL(req.url ?? '/', 'http://localhost');
 
   if (method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
+    const sha = releaseSha();
     sendJson(res, 200, {
       ok: true,
       service: 'yeki-hast-api',
       version: '0.0.10',
+      ...(sha ? { releaseSha: sha } : {}),
       ...(url.pathname === '/' ? { endpoints: ['/health', '/ready', '/v1/bootstrap'] } : {}),
     });
     return;

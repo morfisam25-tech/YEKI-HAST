@@ -4,13 +4,13 @@ import test from 'node:test';
 
 const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 
-test('Web is not made public until both frontend deployments and protected smoke checks pass', () => {
+test('Web is not made public until both exact frontend deployments and protected smoke checks pass', () => {
   const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
   const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
-  const adminSmoke = workflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
-  const webProtectedSmoke = workflow.indexOf('Verify protected Web release before public cutover');
+  const adminSmoke = workflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
+  const webProtectedSmoke = workflow.indexOf('Verify exact protected Web release before public cutover');
   const publicCutover = workflow.indexOf('Make only verified Web release public');
-  const publicSmoke = workflow.indexOf('Verify Web production public surfaces');
+  const publicSmoke = workflow.indexOf('Verify Web canonical production alias public surfaces');
 
   assert.ok(webDeploy >= 0);
   assert.ok(adminDeploy > webDeploy);
@@ -20,8 +20,18 @@ test('Web is not made public until both frontend deployments and protected smoke
   assert.ok(publicSmoke > publicCutover);
 });
 
-test('protected Web pre-cutover smoke verifies every required public surface through authenticated Vercel access', () => {
-  assert.match(workflow, /production protected Web pre-cutover smoke PASS/);
+test('deploy commands capture exact deployment URLs instead of trusting aliases for pre-cutover smoke', () => {
+  assert.match(workflow, /id: deploy_web/);
+  assert.match(workflow, /id: deploy_admin/);
+  assert.match(workflow, /echo "url=\$deployment_url" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /WEB_EXACT_DEPLOYMENT_URL: \$\{\{ steps\.deploy_web\.outputs\.url \}\}/);
+  assert.match(workflow, /ADMIN_EXACT_DEPLOYMENT_URL: \$\{\{ steps\.deploy_admin\.outputs\.url \}\}/);
+  assert.match(workflow, /--deployment "\$WEB_EXACT_DEPLOYMENT_URL"/);
+  assert.match(workflow, /--deployment "\$ADMIN_EXACT_DEPLOYMENT_URL"/);
+});
+
+test('exact protected Web pre-cutover smoke verifies every required public surface through authenticated Vercel access', () => {
+  assert.match(workflow, /production exact protected Web pre-cutover smoke PASS/);
   assert.match(workflow, /check_path \/ 'ورود با ایمیل'/);
   assert.match(workflow, /check_path \/privacy 'حریم خصوصی'/);
   assert.match(workflow, /check_path \/terms 'قوانین استفاده'/);

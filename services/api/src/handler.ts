@@ -60,7 +60,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && url.pathname === '/v1/account/call-phone') { ensureSensitiveDataReady(); const { setCallPhone } = await import('./routes/account-contact.ts'); return await setCallPhone(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet') { ensureDatabaseReady(); const { getWallet } = await import('./routes/payments.ts'); return await getWallet(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet/transactions') { ensureDatabaseReady(); const { getWalletTransactions } = await import('./routes/payments.ts'); return await getWalletTransactions(req, res); }
-    if (method === 'POST' && url.pathname === '/v1/wallet/topups') { ensureDatabaseReady(); const { createWalletTopup } = await import('./routes/payments.ts'); return await createWalletTopup(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/wallet/topups') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { createWalletTopup } = await import('./routes/payments.ts'); return await createWalletTopup(req, res); }
 
     const topupVerifyMatch = url.pathname.match(/^\/v1\/wallet\/topups\/([^/]+)\/verify$/);
     if (method === 'POST' && topupVerifyMatch) { ensureDatabaseReady(); const { verifyWalletTopup } = await import('./routes/payments.ts'); return await verifyWalletTopup(req, res, topupVerifyMatch[1]); }

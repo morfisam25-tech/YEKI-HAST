@@ -18,7 +18,10 @@
       "allowBackup": false
     },
     "ios": {
-      "bundleIdentifier": "app.yekihast.mobile"
+      "bundleIdentifier": "app.yekihast.mobile",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     }
   }
 }

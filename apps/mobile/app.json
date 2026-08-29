@@ -2,6 +2,7 @@
   "expo": {
     "name": "یکی هست",
     "slug": "yeki-hast",
+    "owner": "saimorfis-team",
     "version": "0.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -21,6 +22,11 @@
       "bundleIdentifier": "app.yekihast.mobile",
       "config": {
         "usesNonExemptEncryption": false
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "58b9f62d-db82-421a-ad59-edccac70c316"
       }
     }
   }

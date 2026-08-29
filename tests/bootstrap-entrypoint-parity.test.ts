@@ -6,9 +6,9 @@ const lightweight = await readFile(new URL('../api/index.ts', import.meta.url), 
 const canonical = await readFile(new URL('../services/api/src/routes/bootstrap.ts', import.meta.url), 'utf8');
 
 for (const [name, source] of [['lightweight', lightweight], ['canonical', canonical]] as const) {
-  test(`${name} bootstrap exposes the caller closed-beta flag`, () => {
-    assert.match(source, /callerClosedBetaEnabled/);
-    assert.match(source, /CALLER_CLOSED_BETA_ENABLED/);
+  test(`${name} bootstrap exposes the effective caller closed-beta flag`, () => {
+    assert.match(source, /isCallerClosedBetaEnabled/);
+    assert.match(source, /callerClosedBetaEnabled:\s*isCallerClosedBetaEnabled\(\)/);
   });
 
   test(`${name} bootstrap only exposes active launch catalog`, () => {

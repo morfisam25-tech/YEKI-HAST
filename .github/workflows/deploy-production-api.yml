@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
@@ -167,3 +167,9 @@ jobs:
           );
           console.log('production API smoke PASS');
           NODE
+
+      - name: Verify production Email OTP delivery session and logout E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/smoke-production-email-auth.mjs

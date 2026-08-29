@@ -110,6 +110,31 @@ jobs:
       - name: Typecheck all workspaces
         run: npm run typecheck
 
+  web-admin-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install workspace dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build Web production app
+        env:
+          NODE_ENV: production
+        run: npm --workspace @yeki-hast/web run build
+
+      - name: Build Admin production app
+        env:
+          NODE_ENV: production
+        run: npm --workspace @yeki-hast/admin run build
+
   mobile-bundle:
     runs-on: ubuntu-latest
     timeout-minutes: 10

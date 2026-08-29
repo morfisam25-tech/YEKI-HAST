@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     { "source": "/health", "destination": "/api/index" },
     { "source": "/ready", "destination": "/api/index" },

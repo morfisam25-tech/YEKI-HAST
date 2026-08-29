@@ -48,12 +48,8 @@ jobs:
           for name in \
             VERCEL_TOKEN \
             PRODUCTION_DATABASE_URL \
-            PRODUCTION_SMTP_HOST \
-            PRODUCTION_SMTP_PORT \
-            PRODUCTION_SMTP_SECURE \
             PRODUCTION_SMTP_USERNAME \
-            PRODUCTION_SMTP_PASSWORD \
-            PRODUCTION_SMTP_FROM_EMAIL
+            PRODUCTION_SMTP_PASSWORD
           do
             if [ -z "${!name:-}" ]; then
               echo "::error::${name} repository secret is required"

@@ -11,7 +11,8 @@ for (const name of [
   'PRODUCTION_SUPPORT_EMAIL',
 ]) {
   test(`production workflow passes optional ${name}`, () => {
-    assert.match(workflow, new RegExp(`${name}: \\\${\\{ secrets\\.${name} \\}\\}`));
+    const expected = name + ': ${{ secrets.' + name + ' }}';
+    assert.ok(workflow.includes(expected), `missing workflow env pass-through for ${name}`);
   });
 }
 

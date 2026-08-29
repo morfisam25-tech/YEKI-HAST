@@ -134,6 +134,8 @@ jobs:
           }
 
           await waitFor('/', (text) => text.includes('یکی هست') && text.includes('ورود با ایمیل'), 'production Web landing smoke');
+          await waitFor('/privacy', (text) => text.includes('حریم خصوصی') && text.includes('حذف حساب'), 'production Web privacy smoke');
+          await waitFor('/terms', (text) => text.includes('قوانین استفاده') && text.includes('ماهیت سرویس'), 'production Web terms smoke');
           await waitFor('/account/delete', (text) => text.includes('حذف حساب') && text.includes('تأیید مالک حساب'), 'production Web account deletion smoke');
           console.log('production Web public smoke PASS');
           NODE

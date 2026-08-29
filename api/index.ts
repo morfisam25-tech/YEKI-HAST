@@ -48,6 +48,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/ready') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
+      console.error('readiness_database_url_missing');
       sendJson(res, 503, { ok: false, error: 'service_not_ready' });
       return;
     }
@@ -85,6 +86,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.email_otp_ready
       );
       if (!schemaReady) {
+        console.error('readiness_schema_incomplete', {
+          users: Boolean(row?.users_ready),
+          sessions: Boolean(row?.sessions_ready),
+          pricing: Boolean(row?.pricing_ready),
+          audit: Boolean(row?.audit_ready),
+          emailOtp: Boolean(row?.email_otp_ready),
+        });
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;
       }
@@ -101,6 +109,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/v1/bootstrap') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
+      console.error('bootstrap_database_url_missing');
       sendJson(res, 503, { error: 'service_not_ready' });
       return;
     }
@@ -152,6 +161,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const row = pricing.rows[0];
       if (!row) {
+        console.error('bootstrap_active_market_pricing_missing', { productCode, serviceCode, marketCode });
         sendJson(res, 503, { error: 'active_market_pricing_missing' });
         return;
       }

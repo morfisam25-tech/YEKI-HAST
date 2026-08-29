@@ -1,0 +1,42 @@
+name: Generate Dependency Lock
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .launch/dependency-lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeki-hast-dependency-lock
+  cancel-in-progress: false
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+
+      - name: Generate npm lock from committed workspace manifests
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify the generated lock can drive a clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Upload lock for repository commit
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1

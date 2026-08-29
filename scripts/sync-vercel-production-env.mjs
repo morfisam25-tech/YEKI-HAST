@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 const TEAM_ID = 'team_GmseY3ibD05FWemVhLElL3hI';
 const PROJECT_ID = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
 const API_ORIGIN = 'https://api.vercel.com';
+const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -102,16 +103,17 @@ if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SE
 validateEmail(smtpFromEmail);
 if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
-// Public policy/support values are intentionally optional during infrastructure bring-up.
-// If supplied, validate and sync them. If omitted, leave any existing production values untouched;
-// caller launch readiness remains fail-closed until all four valid runtime values exist.
+// Public policy/support values remain optional during infrastructure bring-up.
+// The account-deletion surface is first-party and therefore has a safe canonical
+// default. Privacy, terms, and support stay explicit and caller launch readiness
+// remains fail-closed until all four valid runtime values exist.
 const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL');
 const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL');
-const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL');
+const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
 const supportEmail = provided('PRODUCTION_SUPPORT_EMAIL')?.toLowerCase() ?? null;
 if (privacyPolicyUrl) validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
 if (termsOfServiceUrl) validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
-if (accountDeletionUrl) validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
+validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
 if (supportEmail) validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
 
 const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
@@ -143,7 +145,7 @@ setPlain('SMTP_FROM_NAME', smtpFromName);
 
 if (privacyPolicyUrl) setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
 if (termsOfServiceUrl) setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
-if (accountDeletionUrl) setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
+setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
 if (supportEmail) setPlain('SUPPORT_EMAIL', supportEmail);
 
 setPlain('SESSION_TTL_HOURS', '720');

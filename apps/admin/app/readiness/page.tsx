@@ -15,6 +15,7 @@ type Readiness = {
     telephony: Integration;
     kycInquiry: Integration;
     sensitiveData: Integration;
+    commercialHosting: Integration;
     publicReleasePolicy: {
       ready: boolean;
       privacyPolicyReady: boolean;
@@ -31,7 +32,7 @@ type Readiness = {
     };
     callerCatalog: Integration;
     callerAgePolicy: Integration;
-    callerClosedBeta: { enabled: boolean };
+    callerClosedBeta: { configured: boolean; enabled: boolean };
     callerLaunch: { ready: boolean };
   };
 };
@@ -43,7 +44,7 @@ async function api<T>(path: string): Promise<T> {
   return body as T;
 }
 
-const labels: Array<[keyof Pick<Readiness['integrations'], 'emailAuth' | 'sms' | 'accountAuth' | 'callPhoneVerification' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'sensitiveData' | 'callerCatalog' | 'callerAgePolicy'>, string]> = [
+const labels: Array<[keyof Pick<Readiness['integrations'], 'emailAuth' | 'sms' | 'accountAuth' | 'callPhoneVerification' | 'payment' | 'payout' | 'telephony' | 'kycInquiry' | 'sensitiveData' | 'commercialHosting' | 'callerCatalog' | 'callerAgePolicy'>, string]> = [
   ['emailAuth', 'ورود با ایمیل'],
   ['accountAuth', 'ورود حساب'],
   ['callPhoneVerification', 'تأیید شماره تماس'],
@@ -53,6 +54,7 @@ const labels: Array<[keyof Pick<Readiness['integrations'], 'emailAuth' | 'sms' |
   ['telephony', 'اتصال تماس'],
   ['kycInquiry', 'استعلام KYC'],
   ['sensitiveData', 'امنیت داده حساس'],
+  ['commercialHosting', 'میزبانی تجاری'],
   ['callerCatalog', 'کاتالوگ و قیمت‌گذاری Caller'],
   ['callerAgePolicy', 'سیاست سن Caller'],
 ];
@@ -88,20 +90,29 @@ export default function ReadinessPage() {
                 <p className="kicker">CALLER CLOSED BETA</p>
                 <h2>{data.integrations.callerLaunch.ready ? 'READY TO OPEN' : 'BLOCKED'}</h2>
               </div>
-              <span className="statusPill">{data.integrations.callerClosedBeta.enabled ? 'BETA ENABLED' : 'BETA DISABLED'}</span>
+              <span className="statusPill">
+                {data.integrations.callerClosedBeta.enabled
+                  ? 'BETA ENABLED'
+                  : data.integrations.callerClosedBeta.configured
+                    ? 'BETA BLOCKED'
+                    : 'BETA DISABLED'}
+              </span>
             </div>
             <p className="muted">
-              Caller فقط وقتی READY می‌شود که Beta، سیاست سن، کاتالوگ و قیمت‌گذاری، ورود حساب، تأیید شماره تماس، پرداخت، Telephony، امنیت داده حساس، صفحات و پشتیبانی عمومی و قفل‌بودن کامل bootstrap ادمین آماده باشند. SMS به‌تنهایی الزام مستقل لانچ نیست؛ در بتای دستی می‌تواند با ورود ایمیلی و تأیید دستی شماره جایگزین شود.
+              Caller فقط وقتی READY می‌شود که Beta عمداً فعال باشد، میزبانی برای استفاده تجاری تأیید شده باشد، سیاست سن، کاتالوگ و قیمت‌گذاری، ورود حساب، تأیید شماره تماس، پرداخت، Telephony، امنیت داده حساس، صفحات و پشتیبانی عمومی و قفل‌بودن کامل bootstrap ادمین آماده باشند. SMS به‌تنهایی الزام مستقل لانچ نیست؛ در بتای دستی می‌تواند با ورود ایمیلی و تأیید دستی شماره جایگزین شود.
             </p>
 
             <div className="grid">
               {labels.map(([key, label]) => {
                 const item = data.integrations[key];
+                const detail = key === 'commercialHosting'
+                  ? (item.ready ? 'تأیید استفاده تجاری' : 'تأیید نشده')
+                  : item.provider ?? (key === 'callPhoneVerification' && data.integrations.callPhoneVerification.manualBetaEnabled ? 'manual beta' : 'بدون provider');
                 return (
                   <article key={key}>
                     <small>{label}</small>
                     <strong>{item.ready ? 'READY' : 'BLOCKED'}</strong>
-                    <p className="muted">{item.provider ?? (key === 'callPhoneVerification' && data.integrations.callPhoneVerification.manualBetaEnabled ? 'manual beta' : 'بدون provider')}</p>
+                    <p className="muted">{detail}</p>
                   </article>
                 );
               })}

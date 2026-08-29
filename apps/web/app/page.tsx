@@ -203,6 +203,12 @@ export default function Page() {
           در سرویس به تأییدهای تعریف‌شده در محصول وابسته است.
         </p>
       </section>
+
+      <nav className="public-links" aria-label="اطلاعات عمومی سرویس">
+        <a href="/privacy">حریم خصوصی</a>
+        <a href="/terms">قوانین استفاده</a>
+        <a href="/account/delete">حذف حساب</a>
+      </nav>
     </main>
   );
 }

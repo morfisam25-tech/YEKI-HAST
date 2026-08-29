@@ -18,6 +18,7 @@ const apiProject = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
 const webProject = 'prj_afhSiMYpsCfIAxuOmotLAWBvTMDg';
 const adminProject = 'prj_l18v3f003ORfiN6hKxYwJbvVPzzC';
 const releaseNode = '22.23.1';
+const lockedInstall = 'npm ci --ignore-scripts --no-audit --no-fund';
 
 function escaped(value: string) {
   return new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -55,7 +56,7 @@ test('production workflows checkout source and require the validated dependency 
     assert.match(workflow, /actions\/checkout@v4/);
     assert.match(workflow, /package-lock\.json is required before production/);
     assert.match(workflow, /node-version: '22\.23\.1'/);
-    assert.match(workflow, /npm ci --ignore-scripts --no-audit --no-fund/);
+    assert.match(workflow, escaped(lockedInstall));
     assert.doesNotMatch(workflow, /npm install --ignore-scripts --no-audit --no-fund/);
   }
   assert.match(frontendWorkflow, /Checkout exact source/);
@@ -69,12 +70,29 @@ test('dependency lock generation hands the validated main branch to an explicit 
   assert.match(lockWorkflow, /actions: write/);
   assert.match(lockWorkflow, /node-version: '22\.23\.1'/);
   assert.match(lockWorkflow, /npm install --package-lock-only --ignore-scripts --no-audit --no-fund/);
-  assert.match(lockWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
+  assert.match(lockWorkflow, escaped(lockedInstall));
   assert.match(lockWorkflow, /git push origin HEAD:main/);
   assert.match(lockWorkflow, /gh workflow run foundation-qa\.yml --ref main/);
   assert.match(qaWorkflow, /workflow_dispatch:/);
   assert.match(qaWorkflow, /node-version: '22\.23\.1'/);
-  assert.match(qaWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
+  assert.match(qaWorkflow, escaped(lockedInstall));
+});
+
+test('production deploys build in CI from the lock and upload only prebuilt Vercel output', () => {
+  assert.equal(webVercel.installCommand, `cd ../.. && ${lockedInstall}`);
+  assert.equal(adminVercel.installCommand, `cd ../.. && ${lockedInstall}`);
+
+  for (const workflow of [apiWorkflow, frontendWorkflow]) {
+    assert.match(workflow, /vercel@59\.3\.0 pull/);
+    assert.match(workflow, /--environment=production/);
+    assert.match(workflow, /vercel@59\.3\.0 build/);
+    assert.match(workflow, /--prebuilt/);
+    assert.match(workflow, /test -f \.vercel\/output\/config\.json/);
+  }
+  assert.match(apiWorkflow, /"installCommand": "cd \.\. && npm ci --ignore-scripts --no-audit --no-fund"/);
+  assert.match(frontendWorkflow, /Build Web production artifact from locked workspace/);
+  assert.match(frontendWorkflow, /Build Admin production artifact from locked workspace/);
+  assert.match(apiWorkflow, /Build API production artifact from locked workspace/);
 });
 
 test('production deploys can be triggered later by narrow main-branch marker commits', () => {
@@ -156,7 +174,7 @@ test('Web stays publicly smoke-tested while protected Admin uses authenticated V
   assert.match(frontendWorkflow, /یکی هست \/ عملیات/);
   assert.match(frontendWorkflow, /production protected Admin smoke PASS/);
 
-  const adminDeploy = frontendWorkflow.indexOf('Deploy Admin to UNIQUE production');
+  const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
   const adminSmoke = frontendWorkflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
   assert.ok(adminDeploy >= 0 && adminSmoke > adminDeploy);
 });

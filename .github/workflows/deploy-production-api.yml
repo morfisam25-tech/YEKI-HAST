@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 24
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
@@ -66,7 +66,7 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
+      - name: Checkout exact source
         uses: actions/checkout@v4
 
       - name: Require validated workspace dependency lock
@@ -128,6 +128,7 @@ jobs:
           {
             "$schema": "https://openapi.vercel.sh/vercel.json",
             "framework": null,
+            "installCommand": "cd .. && npm ci --ignore-scripts --no-audit --no-fund",
             "rewrites": [
               { "source": "/health", "destination": "/api/index" },
               { "source": "/ready", "destination": "/api/index" },
@@ -140,12 +141,35 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > dist-api/.vercel/project.json
           sha256sum dist-api/api/index.mjs
 
-      - name: Deploy exact API project to UNIQUE production
+      - name: Pull API production settings
+        working-directory: dist-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 pull \
+            --yes \
+            --environment=production \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Build API production artifact from locked workspace
+        working-directory: dist-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 build \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/output/config.json
+
+      - name: Deploy prebuilt API artifact to UNIQUE production
         working-directory: dist-api
         shell: bash
         run: |
           set -euo pipefail
           npx --yes vercel@59.3.0 deploy \
+            --prebuilt \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \

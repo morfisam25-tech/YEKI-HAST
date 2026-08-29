@@ -15,6 +15,7 @@ const teamSlug = 'unique-6ff0';
 const apiProject = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
 const webProject = 'prj_afhSiMYpsCfIAxuOmotLAWBvTMDg';
 const adminProject = 'prj_l18v3f003ORfiN6hKxYwJbvVPzzC';
+const releaseNode = '22.23.1';
 
 function escaped(value: string) {
   return new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -45,6 +46,19 @@ test('production workflows refuse non-main refs and use a pinned Vercel CLI vers
     assert.match(workflow, /vercel@59\.3\.0/);
     assert.doesNotMatch(workflow, /vercel@latest/);
   }
+});
+
+test('production workflows checkout source and require the validated dependency lock before deploy', () => {
+  for (const workflow of [apiWorkflow, frontendWorkflow]) {
+    assert.match(workflow, /actions\/checkout@v4/);
+    assert.match(workflow, /package-lock\.json is required before production/);
+    assert.match(workflow, /node-version: '22\.23\.1'/);
+    assert.match(workflow, /npm ci --ignore-scripts --no-audit --no-fund/);
+    assert.doesNotMatch(workflow, /npm install --ignore-scripts --no-audit --no-fund/);
+  }
+  assert.match(frontendWorkflow, /Checkout exact source/);
+  assert.match(apiWorkflow, escaped(releaseNode));
+  assert.match(frontendWorkflow, escaped(releaseNode));
 });
 
 test('production deploys can be triggered later by narrow main-branch marker commits', () => {

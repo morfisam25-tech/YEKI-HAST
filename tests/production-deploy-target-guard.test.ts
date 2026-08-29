@@ -20,6 +20,9 @@ const webProject = 'prj_afhSiMYpsCfIAxuOmotLAWBvTMDg';
 const adminProject = 'prj_l18v3f003ORfiN6hKxYwJbvVPzzC';
 const releaseNode = '22.23.1';
 const lockedInstall = 'npm ci --ignore-scripts --no-audit --no-fund';
+const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
+const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
+const uploadArtifactAction = 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a';
 
 function escaped(value: string) {
   return new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -54,9 +57,19 @@ test('production workflows refuse non-main refs and release tooling versions liv
   assert.equal(packageJson.devDependencies?.esbuild, '0.25.9');
 });
 
+test('GitHub JavaScript actions are immutable current-generation pins', () => {
+  for (const workflow of [apiWorkflow, frontendWorkflow, qaWorkflow, lockWorkflow]) {
+    assert.ok(workflow.includes(checkoutAction), 'missing immutable checkout v7.0.1 pin');
+    assert.ok(workflow.includes(setupNodeAction), 'missing immutable setup-node v7.0.0 pin');
+    assert.doesNotMatch(workflow, /actions\/(?:checkout|setup-node|upload-artifact)@v4/);
+  }
+  assert.ok(qaWorkflow.includes(uploadArtifactAction));
+  assert.ok(lockWorkflow.includes(uploadArtifactAction));
+});
+
 test('production workflows checkout source and require the validated dependency lock before deploy', () => {
   for (const workflow of [apiWorkflow, frontendWorkflow]) {
-    assert.match(workflow, /actions\/checkout@v4/);
+    assert.ok(workflow.includes(checkoutAction));
     assert.match(workflow, /package-lock\.json is required before production/);
     assert.match(workflow, /node-version: '22\.23\.1'/);
     assert.match(workflow, escaped(lockedInstall));
@@ -71,12 +84,16 @@ test('dependency lock generation hands the validated main branch to an explicit 
   assert.match(lockWorkflow, /workflow_dispatch:/);
   assert.match(lockWorkflow, /contents: write/);
   assert.match(lockWorkflow, /actions: write/);
+  assert.ok(lockWorkflow.includes(checkoutAction));
+  assert.ok(lockWorkflow.includes(setupNodeAction));
+  assert.match(lockWorkflow, /package-manager-cache: false/);
   assert.match(lockWorkflow, /node-version: '22\.23\.1'/);
   assert.match(lockWorkflow, /npm install --package-lock-only --ignore-scripts --no-audit --no-fund/);
   assert.match(lockWorkflow, escaped(lockedInstall));
   assert.match(lockWorkflow, /git push origin HEAD:main/);
   assert.match(lockWorkflow, /gh workflow run foundation-qa\.yml --ref main/);
   assert.match(qaWorkflow, /workflow_dispatch:/);
+  assert.match(qaWorkflow, /package-lock\.json is required before Foundation QA/);
   assert.match(qaWorkflow, /node-version: '22\.23\.1'/);
   assert.match(qaWorkflow, escaped(lockedInstall));
 });

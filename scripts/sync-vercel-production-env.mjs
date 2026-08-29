@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 const TEAM_ID = 'team_GmseY3ibD05FWemVhLElL3hI';
 const PROJECT_ID = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
 const API_ORIGIN = 'https://api.vercel.com';
+const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
+const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
 
 function required(name) {
@@ -103,16 +105,15 @@ if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SE
 validateEmail(smtpFromEmail);
 if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
-// Public policy/support values remain optional during infrastructure bring-up.
-// The account-deletion surface is first-party and therefore has a safe canonical
-// default. Privacy, terms, and support stay explicit and caller launch readiness
-// remains fail-closed until all four valid runtime values exist.
-const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL');
-const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL');
+// Privacy, terms and account deletion are first-party Web surfaces checked into
+// this repository. Their canonical production URLs are therefore safe defaults.
+// Support stays explicit: the OTP sender is not assumed to be a support inbox.
+const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL') ?? DEFAULT_PRIVACY_POLICY_URL;
+const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL') ?? DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
 const supportEmail = provided('PRODUCTION_SUPPORT_EMAIL')?.toLowerCase() ?? null;
-if (privacyPolicyUrl) validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
-if (termsOfServiceUrl) validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
+validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
+validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
 if (supportEmail) validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
 
@@ -143,8 +144,8 @@ setSensitive('SMTP_PASSWORD', smtpPassword);
 setPlain('SMTP_FROM_EMAIL', smtpFromEmail);
 setPlain('SMTP_FROM_NAME', smtpFromName);
 
-if (privacyPolicyUrl) setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
-if (termsOfServiceUrl) setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
+setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
+setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
 setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
 if (supportEmail) setPlain('SUPPORT_EMAIL', supportEmail);
 

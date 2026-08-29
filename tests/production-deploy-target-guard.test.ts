@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const apiWorkflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 const frontendWorkflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
+const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 
 const teamId = 'team_GmseY3ibD05FWemVhLElL3hI';
 const teamSlug = 'unique-6ff0';
@@ -34,6 +35,35 @@ test('production workflows refuse non-main refs and use the tested Vercel CLI ve
     assert.match(workflow, /vercel@59\.3\.0/);
     assert.doesNotMatch(workflow, /vercel@latest/);
   }
+});
+
+test('API production deployment requires real DB and SMTP inputs before touching production', () => {
+  for (const name of [
+    'PRODUCTION_DATABASE_URL',
+    'PRODUCTION_SMTP_HOST',
+    'PRODUCTION_SMTP_PORT',
+    'PRODUCTION_SMTP_SECURE',
+    'PRODUCTION_SMTP_USERNAME',
+    'PRODUCTION_SMTP_PASSWORD',
+    'PRODUCTION_SMTP_FROM_EMAIL',
+  ]) {
+    assert.match(apiWorkflow, escaped(name));
+  }
+  assert.match(apiWorkflow, /Verify production database without migrations/);
+  assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
+});
+
+test('production environment sync is pinned to the API project and preserves closed launch gates', () => {
+  assert.match(envSync, escaped(teamId));
+  assert.match(envSync, escaped(apiProject));
+  assert.match(envSync, /type: 'sensitive'/);
+  assert.match(envSync, /CALLER_CLOSED_BETA_ENABLED', 'false'/);
+  assert.match(envSync, /MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false'/);
+  assert.match(envSync, /BOOTSTRAP_ADMIN_ENABLED', 'false'/);
+  assert.match(envSync, /DEV_EXPOSE_OTP', 'false'/);
+  assert.match(envSync, /EMAIL_PROVIDER', 'smtp'/);
+  assert.match(envSync, /partial; refusing to rotate or guess it/);
+  assert.doesNotMatch(envSync, /console\.log\([^\n]*(DATABASE_URL|SMTP_PASSWORD|DATA_ENCRYPTION_KEYS|HASH_PEPPER)/);
 });
 
 test('API production deployment must pass health readiness and bootstrap smoke checks', () => {

@@ -37,6 +37,13 @@ test('production workflows refuse non-main refs and use the tested Vercel CLI ve
   }
 });
 
+test('production deploys can be triggered later by narrow main-branch marker commits', () => {
+  assert.match(apiWorkflow, /\.launch\/production-api/);
+  assert.match(frontendWorkflow, /\.launch\/production-frontends/);
+  assert.match(apiWorkflow, /branches: \[main\]/);
+  assert.match(frontendWorkflow, /branches: \[main\]/);
+});
+
 test('API production deployment requires real DB and SMTP inputs before touching production', () => {
   for (const name of [
     'PRODUCTION_DATABASE_URL',

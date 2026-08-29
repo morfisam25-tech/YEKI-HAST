@@ -45,7 +45,7 @@ test('production deploys can be triggered later by narrow main-branch marker com
   assert.match(frontendWorkflow, /branches: \[main\]/);
 });
 
-test('API production deployment requires only the irreducible external launch secrets', () => {
+test('API production deployment requires only the irreducible external launch secrets and reports every missing name before mutation', () => {
   for (const name of [
     'VERCEL_TOKEN',
     'PRODUCTION_DATABASE_URL',
@@ -54,6 +54,13 @@ test('API production deployment requires only the irreducible external launch se
   ]) {
     assert.match(apiWorkflow, escaped(name));
   }
+  assert.match(apiWorkflow, /missing=\(\)/);
+  assert.match(apiWorkflow, /missing\+=\("\$name"\)/);
+  assert.match(apiWorkflow, /Missing required repository secret\(s\)/);
+  const credentialGuard = apiWorkflow.indexOf('missing=()');
+  const dbPreflight = apiWorkflow.indexOf('Verify production database without migrations');
+  const envSyncStep = apiWorkflow.indexOf('Sync exact API production environment to UNIQUE');
+  assert.ok(credentialGuard >= 0 && dbPreflight > credentialGuard && envSyncStep > credentialGuard);
   assert.match(apiWorkflow, /Verify production database without migrations/);
   assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
 });

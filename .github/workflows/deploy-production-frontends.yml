@@ -28,6 +28,7 @@ jobs:
       ADMIN_PROJECT_NAME: admin
       WEB_PRODUCTION_URL: https://web-unique-6ff0.vercel.app
       ADMIN_PRODUCTION_URL: https://admin-unique-6ff0.vercel.app
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
     steps:
       - name: Require main branch and authorized Vercel credential
         shell: bash
@@ -67,6 +68,13 @@ jobs:
       - name: Verify clean workspace install from lock
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Require lock-installed Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$VERCEL_BIN"
+          "$VERCEL_BIN" --version
+
       - name: Bind exact UNIQUE projects
         shell: bash
         run: |
@@ -79,7 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel project protection disable "$WEB_PROJECT_NAME" \
+          "$VERCEL_BIN" project protection disable "$WEB_PROJECT_NAME" \
             --sso \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -89,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel pull \
+          "$VERCEL_BIN" pull \
             --yes \
             --environment=production \
             --token "$VERCEL_TOKEN" \
@@ -100,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel build \
+          "$VERCEL_BIN" build \
             --prod \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -111,7 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel deploy \
+          "$VERCEL_BIN" deploy \
             --prebuilt \
             --prod \
             --yes \
@@ -156,7 +164,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel pull \
+          "$VERCEL_BIN" pull \
             --yes \
             --environment=production \
             --token "$VERCEL_TOKEN" \
@@ -167,7 +175,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel build \
+          "$VERCEL_BIN" build \
             --prod \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -178,7 +186,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vercel deploy \
+          "$VERCEL_BIN" deploy \
             --prebuilt \
             --prod \
             --yes \
@@ -218,7 +226,7 @@ jobs:
           trap cleanup EXIT
 
           for attempt in $(seq 1 12); do
-            if npx --no-install vercel curl / \
+            if "$VERCEL_BIN" curl / \
               --deployment "$ADMIN_PRODUCTION_URL" \
               --token "$VERCEL_TOKEN" \
               --scope "$VERCEL_TEAM_SLUG" \

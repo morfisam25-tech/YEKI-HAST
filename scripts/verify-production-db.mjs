@@ -43,13 +43,18 @@ try {
     'app.caller_age_assertions',
     'app.waitlist_entries',
     'app.listener_applications',
+    'app.listener_application_languages',
+    'app.listener_training_progress',
+    'app.listener_assessment_attempts',
     'app.listener_profiles',
     'app.listener_service_profiles',
     'app.listener_languages',
     'app.listener_presence',
+    'app.listener_work_sessions',
     'app.wallets',
     'app.wallet_transactions',
     'app.payment_attempts',
+    'app.reservations',
     'app.call_sessions',
     'app.call_events',
     'app.telephony_legs',
@@ -70,8 +75,8 @@ try {
     'private_data.safety_event_details',
   ];
   const relations = await pool.query(`
-    SELECT relation_name, to_regclass(relation_name)::text AS resolved
-    FROM unnest($1::text[]) AS relation_name
+    SELECT r.relation_name, to_regclass(r.relation_name)::text AS resolved
+    FROM unnest($1::text[]) AS r(relation_name)
   `, [criticalRelations]);
   for (const row of relations.rows) {
     if (row.resolved !== row.relation_name) throw new Error(`critical relation missing: ${row.relation_name}`);

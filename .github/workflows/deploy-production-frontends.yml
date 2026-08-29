@@ -91,15 +91,6 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > apps/web/.vercel/project.json
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$ADMIN_PROJECT_ID" > apps/admin/.vercel/project.json
 
-      - name: Make only Web public by disabling Vercel Authentication SSO
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$VERCEL_BIN" project protection disable "$WEB_PROJECT_NAME" \
-            --sso \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
-
       - name: Pull Web production settings
         working-directory: apps/web
         shell: bash
@@ -122,51 +113,6 @@ jobs:
             --scope "$VERCEL_TEAM_SLUG"
           test -f .vercel/output/config.json
 
-      - name: Deploy prebuilt Web artifact to UNIQUE production
-        working-directory: apps/web
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$VERCEL_BIN" deploy \
-            --prebuilt \
-            --prod \
-            --yes \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
-
-      - name: Verify Web production public surfaces
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const base = process.env.WEB_PRODUCTION_URL;
-
-          async function waitFor(path, validate, label) {
-            let last = 'no response';
-            for (let attempt = 1; attempt <= 12; attempt += 1) {
-              try {
-                const response = await fetch(`${base}${path}`, { cache: 'no-store', redirect: 'manual' });
-                const text = await response.text();
-                if (response.ok && validate(text)) {
-                  console.log(`${label} PASS`);
-                  return;
-                }
-                last = `${response.status} ${text.slice(0, 200)}`;
-              } catch (error) {
-                last = error instanceof Error ? error.message : String(error);
-              }
-              await new Promise((resolve) => setTimeout(resolve, 5000));
-            }
-            throw new Error(`${label} failed: ${last}`);
-          }
-
-          await waitFor('/', (text) => text.includes('یکی هست') && text.includes('ورود با ایمیل'), 'production Web landing smoke');
-          await waitFor('/privacy', (text) => text.includes('حریم خصوصی') && text.includes('حذف حساب'), 'production Web privacy smoke');
-          await waitFor('/terms', (text) => text.includes('قوانین استفاده') && text.includes('ماهیت سرویس'), 'production Web terms smoke');
-          await waitFor('/account/delete', (text) => text.includes('حذف حساب') && text.includes('تأیید مالک حساب'), 'production Web account deletion smoke');
-          console.log('production Web public smoke PASS');
-          NODE
-
       - name: Pull Admin production settings
         working-directory: apps/admin
         shell: bash
@@ -188,6 +134,18 @@ jobs:
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
           test -f .vercel/output/config.json
+
+      - name: Deploy prebuilt Web artifact to protected UNIQUE production
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" deploy \
+            --prebuilt \
+            --prod \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
 
       - name: Deploy prebuilt Admin artifact to UNIQUE production
         working-directory: apps/admin
@@ -249,3 +207,88 @@ jobs:
 
           echo '::error::Protected Admin production smoke failed'
           exit 1
+
+      - name: Verify protected Web release before public cutover
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_path() {
+            local path="$1"
+            local needle="$2"
+            local tmp
+            tmp="$(mktemp)"
+            for attempt in $(seq 1 12); do
+              if "$VERCEL_BIN" curl "$path" \
+                --deployment "$WEB_PRODUCTION_URL" \
+                --token "$VERCEL_TOKEN" \
+                --scope "$VERCEL_TEAM_SLUG" \
+                >"$tmp" 2>/dev/null && grep -Fq "$needle" "$tmp"; then
+                rm -f "$tmp"
+                return 0
+              fi
+              sleep 5
+            done
+            rm -f "$tmp"
+            return 1
+          }
+          check_path / 'ورود با ایمیل'
+          check_path /privacy 'حریم خصوصی'
+          check_path /terms 'قوانین استفاده'
+          check_path /account/delete 'تأیید مالک حساب'
+          echo 'production protected Web pre-cutover smoke PASS'
+
+      - name: Make only verified Web release public
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" project protection disable "$WEB_PROJECT_NAME" \
+            --sso \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Verify Web production public surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = process.env.WEB_PRODUCTION_URL;
+
+          async function waitFor(path, validate, label) {
+            let last = 'no response';
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(`${base}${path}`, { cache: 'no-store', redirect: 'manual' });
+                const text = await response.text();
+                if (response.ok && validate(text)) {
+                  console.log(`${label} PASS`);
+                  return;
+                }
+                last = `${response.status} ${text.slice(0, 200)}`;
+              } catch (error) {
+                last = error instanceof Error ? error.message : String(error);
+              }
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+            throw new Error(`${label} failed: ${last}`);
+          }
+
+          await waitFor('/', (text) => text.includes('یکی هست') && text.includes('ورود با ایمیل'), 'production Web landing smoke');
+          await waitFor('/privacy', (text) => text.includes('حریم خصوصی') && text.includes('حذف حساب'), 'production Web privacy smoke');
+          await waitFor('/terms', (text) => text.includes('قوانین استفاده') && text.includes('ماهیت سرویس'), 'production Web terms smoke');
+          await waitFor('/account/delete', (text) => text.includes('حذف حساب') && text.includes('تأیید مالک حساب'), 'production Web account deletion smoke');
+          console.log('production Web public smoke PASS');
+          NODE
+
+      - name: Re-protect Web if public cutover fails
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -x "$VERCEL_BIN" ]; then
+            "$VERCEL_BIN" project protection enable "$WEB_PROJECT_NAME" \
+              --sso \
+              --token "$VERCEL_TOKEN" \
+              --scope "$VERCEL_TEAM_SLUG"
+            echo 'production Web re-protection requested after failed release'
+          fi

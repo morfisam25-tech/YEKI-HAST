@@ -8,6 +8,7 @@ const qaWorkflow = await readFile(new URL('../.github/workflows/foundation-qa.ym
 const lockWorkflow = await readFile(new URL('../.github/workflows/generate-dependency-lock.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
+const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const apiVercel = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
 const webVercel = JSON.parse(await readFile(new URL('../apps/web/vercel.json', import.meta.url), 'utf8'));
 const adminVercel = JSON.parse(await readFile(new URL('../apps/admin/vercel.json', import.meta.url), 'utf8'));
@@ -42,13 +43,15 @@ test('automatic Vercel Git deploys stay disabled so production changes use the c
   }
 });
 
-test('production workflows refuse non-main refs and use a pinned Vercel CLI version', () => {
+test('production workflows refuse non-main refs and release tooling versions live in the workspace lock manifest', () => {
   for (const workflow of [apiWorkflow, frontendWorkflow]) {
     assert.match(workflow, /refs\/heads\/main/);
     assert.match(workflow, /morfisam25-tech\/YEKI-HAST/);
-    assert.match(workflow, /vercel@59\.3\.0/);
     assert.doesNotMatch(workflow, /vercel@latest/);
+    assert.doesNotMatch(workflow, /npx --yes vercel@/);
   }
+  assert.equal(packageJson.devDependencies?.vercel, '59.3.0');
+  assert.equal(packageJson.devDependencies?.esbuild, '0.25.9');
 });
 
 test('production workflows checkout source and require the validated dependency lock before deploy', () => {
@@ -78,14 +81,29 @@ test('dependency lock generation hands the validated main branch to an explicit 
   assert.match(qaWorkflow, escaped(lockedInstall));
 });
 
+test('production deploys use only lock-installed Vercel and esbuild binaries', () => {
+  assert.match(apiWorkflow, /VERCEL_BIN: \$\{\{ github\.workspace \}\}\/node_modules\/\.bin\/vercel/);
+  assert.match(apiWorkflow, /ESBUILD_BIN: \$\{\{ github\.workspace \}\}\/node_modules\/\.bin\/esbuild/);
+  assert.match(frontendWorkflow, /VERCEL_BIN: \$\{\{ github\.workspace \}\}\/node_modules\/\.bin\/vercel/);
+  assert.match(apiWorkflow, /test -x "\$VERCEL_BIN"/);
+  assert.match(apiWorkflow, /test -x "\$ESBUILD_BIN"/);
+  assert.match(frontendWorkflow, /test -x "\$VERCEL_BIN"/);
+  assert.match(apiWorkflow, /"\$ESBUILD_BIN" api\/index\.ts/);
+  for (const workflow of [apiWorkflow, frontendWorkflow]) {
+    assert.doesNotMatch(workflow, /npx --yes/);
+    assert.doesNotMatch(workflow, /npx --no-install/);
+  }
+});
+
 test('production deploys build in CI from the lock and upload only prebuilt Vercel output', () => {
   assert.equal(webVercel.installCommand, `cd ../.. && ${lockedInstall}`);
   assert.equal(adminVercel.installCommand, `cd ../.. && ${lockedInstall}`);
 
   for (const workflow of [apiWorkflow, frontendWorkflow]) {
-    assert.match(workflow, /vercel@59\.3\.0 pull/);
+    assert.ok(workflow.includes('"$VERCEL_BIN" pull'));
     assert.match(workflow, /--environment=production/);
-    assert.match(workflow, /vercel@59\.3\.0 build/);
+    assert.ok(workflow.includes('"$VERCEL_BIN" build'));
+    assert.ok(workflow.includes('"$VERCEL_BIN" deploy'));
     assert.match(workflow, /--prebuilt/);
     assert.match(workflow, /test -f \.vercel\/output\/config\.json/);
   }
@@ -102,7 +120,7 @@ test('production deploys can be triggered later by narrow main-branch marker com
   assert.match(frontendWorkflow, /branches: \[main\]/);
 });
 
-test('API production deployment requires only the irreducible external launch secrets and reports every missing name before mutation', () => {
+test('API production deployment requires only irreducible external launch secrets and reports every missing name before mutation', () => {
   for (const name of [
     'VERCEL_TOKEN',
     'PRODUCTION_DATABASE_URL',
@@ -161,20 +179,30 @@ test('API production deployment must complete real Email OTP delivery verify ses
   assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password)/i);
 });
 
-test('Web stays publicly smoke-tested while protected Admin uses authenticated Vercel CLI access', () => {
+test('Web is made public in controlled release while Admin must remain protected', () => {
+  assert.match(frontendWorkflow, /WEB_PROJECT_NAME: web/);
+  assert.ok(frontendWorkflow.includes('"$VERCEL_BIN" project protection disable "$WEB_PROJECT_NAME"'));
+  assert.match(frontendWorkflow, /--sso/);
+  assert.doesNotMatch(frontendWorkflow, /project protection disable "\$ADMIN_PROJECT_NAME"/);
+
   assert.match(frontendWorkflow, /https:\/\/web-unique-6ff0\.vercel\.app/);
   assert.match(frontendWorkflow, /ورود با ایمیل/);
+  assert.match(frontendWorkflow, /\/privacy/);
+  assert.match(frontendWorkflow, /\/terms/);
+  assert.match(frontendWorkflow, /\/account\/delete/);
   assert.match(frontendWorkflow, /production Web public smoke PASS/);
   assert.match(frontendWorkflow, /redirect: 'manual'/);
 
   assert.match(frontendWorkflow, /https:\/\/admin-unique-6ff0\.vercel\.app/);
-  assert.match(frontendWorkflow, /vercel@59\.3\.0 curl \/ /);
-  assert.match(frontendWorkflow, /--deployment "\$ADMIN_PRODUCTION_URL"/);
-  assert.match(frontendWorkflow, /--token "\$VERCEL_TOKEN"/);
+  assert.match(frontendWorkflow, /Require Admin to remain protected from unauthenticated access/);
+  assert.match(frontendWorkflow, /response\.status >= 300 && response\.status < 400/);
+  assert.match(frontendWorkflow, /response\.status === 401 \|\| response\.status === 403/);
+  assert.ok(frontendWorkflow.includes('"$VERCEL_BIN" curl /'));
   assert.match(frontendWorkflow, /یکی هست \/ عملیات/);
   assert.match(frontendWorkflow, /production protected Admin smoke PASS/);
 
   const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
+  const adminProtection = frontendWorkflow.indexOf('Require Admin to remain protected from unauthenticated access');
   const adminSmoke = frontendWorkflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
-  assert.ok(adminDeploy >= 0 && adminSmoke > adminDeploy);
+  assert.ok(adminDeploy >= 0 && adminProtection > adminDeploy && adminSmoke > adminProtection);
 });

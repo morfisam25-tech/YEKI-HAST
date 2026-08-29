@@ -20,9 +20,9 @@ for (const [name, config] of [['admin', adminConfig], ['web', webConfig]] as con
   });
 }
 
-test('API Vercel routing remains enabled and production build never auto-migrates', () => {
+test('API automatic Git deployment stays disabled and routing never auto-migrates the database', () => {
   const root = JSON.parse(rootConfig) as { git?: { deploymentEnabled?: boolean }; rewrites?: Array<{ source?: string }> };
-  assert.notEqual(root.git?.deploymentEnabled, false);
+  assert.equal(root.git?.deploymentEnabled, false);
   assert.ok(root.rewrites?.some((entry) => entry.source === '/health'));
   assert.ok(root.rewrites?.some((entry) => entry.source === '/ready'));
   assert.ok(root.rewrites?.some((entry) => entry.source === '/v1/:path*'));

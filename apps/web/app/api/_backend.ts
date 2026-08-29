@@ -1,4 +1,4 @@
-export const WEB_SESSION_COOKIE = 'yeki_web_session';
+export const WEB_SESSION_COOKIE = process.env.NODE_ENV === 'production' ? '__Host-yeki_web_session' : 'yeki_web_session';
 export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-theta.vercel.app';
 
 export function backendBaseUrl(): string {

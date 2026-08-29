@@ -45,6 +45,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/routes/auth-email.ts
           node --experimental-strip-types --check services/api/src/routes/account-contact.ts
           node --experimental-strip-types --check services/api/src/routes/account-deletion.ts
+          node --experimental-strip-types --check services/api/src/routes/admin-account-deletion.ts
           node --experimental-strip-types --check services/api/src/routes/admin-contact.ts
           node --experimental-strip-types --check services/api/src/routes/payments.ts
           node --experimental-strip-types --check services/api/src/routes/listener.ts

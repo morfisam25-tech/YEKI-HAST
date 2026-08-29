@@ -44,11 +44,11 @@ export default function RootApp() {
   return (
     <View style={styles.root}>
       <View style={styles.app}><App /></View>
-      {hasAnyLink && (
-        <SafeAreaView style={styles.footer}>
-          <Text style={styles.boundary}>
-            یکی هست جایگزین درمان، مشاوره تخصصی یا خدمات اضطراری نیست. در خطر فوری از خدمات اضطراری محل زندگی خود کمک بگیر.
-          </Text>
+      <SafeAreaView style={styles.footer}>
+        <Text style={styles.boundary}>
+          یکی هست جایگزین درمان، مشاوره تخصصی یا خدمات اضطراری نیست. در خطر فوری از خدمات اضطراری محل زندگی خود کمک بگیر.
+        </Text>
+        {hasAnyLink && (
           <View style={styles.links}>
             {legal?.privacyPolicyUrl && (
               <TouchableOpacity onPress={() => openExternal(legal.privacyPolicyUrl!)}>
@@ -71,8 +71,8 @@ export default function RootApp() {
               </TouchableOpacity>
             )}
           </View>
-        </SafeAreaView>
-      )}
+        )}
+      </SafeAreaView>
     </View>
   );
 }

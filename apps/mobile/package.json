@@ -11,15 +11,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~57.0.1",
+    "expo": "~57.0.9",
     "expo-secure-store": "~57.0.2",
     "expo-status-bar": "~57.0.0",
     "react": "19.2.3",
-    "react-native": "0.86.0"
+    "react-native": "0.86.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
-    "typescript": "^5.9.0"
+    "typescript": "~6.0.3"
   },
   "engines": {
     "node": "22.x"

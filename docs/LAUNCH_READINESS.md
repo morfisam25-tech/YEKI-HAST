@@ -2,148 +2,125 @@
 
 Last reviewed: 2026-08-29
 
-This document is the source of truth for launch work. A component is not considered launch-ready merely because it builds; live production checks must pass.
+This document defines the stable launch gates. Live state, current HEAD, run IDs, infrastructure findings and the exact remaining blockers are maintained only in [`LAUNCH_STATUS.md`](./LAUNCH_STATUS.md). If the two files ever appear to disagree, `LAUNCH_STATUS.md` is authoritative for current state.
 
 ## Non-negotiable production rules
 
 - Production Vercel team: `UNIQUE` only.
-- Production API project: `yeki-hast` only.
-- No database migration/reset/role creation without explicit approval.
+- No database migration, reset or role creation without explicit approval.
 - No invented telephony semantics, provider references or fake production OTP behavior.
-- Production remains fail-closed when a required provider or policy is unavailable.
-- Secrets, bank details and provider credentials must never be committed or printed.
+- Production remains fail-closed when a required provider, credential or policy is unavailable.
+- Secrets, bank details, private identity data, OTPs and session material must never be committed or printed.
+- Caller remains closed until its full launch gate is genuinely ready.
+- A build, Vercel `READY` state or `/health` 200 alone is not evidence that the application is launch-ready.
 
-## Source implementation currently present
+## Release integrity gate
 
-- Email OTP auth and secure sessions.
-- Listener onboarding, training, assessment, KYC foundation and work/presence flows.
-- Wallet, payment foundation, payout foundation and operational Admin surfaces.
-- Caller marketplace, age gate, call lifecycle, safety report/block/exit flows.
-- Caller top-up creation is closed unless Caller beta is enabled and the current age policy has been accepted.
-- Existing payment verification/callback paths remain available so in-flight money cannot be stranded when Caller is closed.
-- Browser mutation proxies fail closed against cross-site requests in production.
-- API/Web/Admin production runtime is pinned to Node 22 source/build expectations.
-- Production database preflight is read-only and checks migration hashes, required relations, critical triggers, pricing and active language seed.
-- Public-release readiness requires valid Privacy Policy, Terms of Service, Account Deletion and Support surfaces before Caller can be considered launch-ready.
-- Mobile always displays the boundary that the service is not therapy, professional counselling or an emergency service.
-- Admin readiness shows public-release and one-time admin-bootstrap gates without exposing secret values.
+A production release requires all of the following:
 
-## Account deletion
+1. A real committed root `package-lock.json` generated from current `main` with Node `22.23.1` and npm `10.9.8`.
+2. Clean `npm ci --ignore-scripts --no-audit --no-fund` validation of that lock.
+3. A real Foundation QA execution on the resulting current `main`; a zero-step Actions failure does not count as either PASS or source failure.
+4. API/Web/Admin production builds must use the lock-installed release tooling pinned in root `package.json` and deploy only prebuilt Vercel output.
+5. Automatic Vercel Git deployment remains disabled; controlled workflows are the production path.
 
-Implemented self-service request flow:
+## API production gate
 
-1. User verifies ownership through Email OTP on the public Web deletion page.
-2. User explicitly confirms the destructive action.
-3. API records an idempotent `account_deletion_requested` audit event.
-4. All active sessions for the user are revoked immediately.
-5. New Email OTP or Phone OTP login sessions are blocked while the request remains in `pending` processing state.
-6. The product does **not** claim final deletion/anonymization has completed.
+Before API production is considered ready:
 
-Canonical first-party deletion page for the current Vercel surface:
+- The exact production database is verified read-only by `scripts/verify-production-db.mjs`.
+- No migration is run by the release workflow.
+- `/health` returns 200 for the deployed API.
+- `/ready` returns 200 and reports both database and schema ready.
+- `/v1/bootstrap` returns 200 with the expected market, languages, feature gates and public-release configuration.
+- Real Email OTP delivery, verify, authenticated session and logout/revocation E2E passes.
+- Production dev OTP and development telephony remain forbidden.
 
-`https://web-unique-6ff0.vercel.app/account/delete`
+## Public Web and Admin gate
 
-Final physical deletion/anonymization is intentionally not automated until retention requirements for financial, safety and other necessary records are defined and reviewed.
+The controlled frontend release must:
 
-## Live production state that must be re-verified at launch
+- Make only Vercel project `web` public by disabling Vercel Authentication SSO through the controlled release workflow.
+- Keep Vercel project `admin` protected.
+- Serve `/`, `/privacy`, `/terms` and `/account/delete` publicly without a Vercel-authentication redirect.
+- Require all four public Web smoke checks to pass.
+- Require unauthenticated Admin access to return an actual protection response: redirect, 401 or 403. A 404 or 5xx is not protection.
+- Then verify the real Admin shell through authenticated Vercel CLI access.
 
-Current production API alias:
+The checked-in first-party public URLs are:
 
-`https://yeki-hast-theta.vercel.app`
+- Privacy: `https://web-unique-6ff0.vercel.app/privacy`
+- Terms: `https://web-unique-6ff0.vercel.app/terms`
+- Account deletion: `https://web-unique-6ff0.vercel.app/account/delete`
 
-As of the latest review:
+A real support mailbox remains required. It must not be inferred from a no-reply or SMTP sender address.
 
-- `/health` returns HTTP 200.
-- `/ready` still returns HTTP 503 `service_not_ready`.
-- Production must not be declared ready until `/ready` and `/v1/bootstrap` both return successful, validated responses from the exact current release.
+## Account deletion gate
 
-## External / irreducible blockers
+The current source implements the safe request stage:
 
-### Infrastructure credentials
+1. Ownership is verified through Email OTP on the public Web deletion page.
+2. The user explicitly confirms the destructive request.
+3. The API records an idempotent pending `account_deletion_requested` audit event.
+4. Active sessions are revoked immediately.
+5. New Email OTP and Phone OTP sessions are blocked while deletion remains pending.
+6. The product does not claim deletion/anonymization has completed.
 
-- `VERCEL_TOKEN` with access to the exact UNIQUE team/projects.
-- `PRODUCTION_DATABASE_URL` for the exact Neon production project/branch/database.
-- `PRODUCTION_SMTP_USERNAME` for the intentionally selected Google Workspace mailbox.
-- `PRODUCTION_SMTP_PASSWORD` / App Password for that mailbox.
+Final destructive deletion/anonymization must not be implemented until retention rules are defined for financial ledger, payment/payout, safety, disputes and other open records.
 
-The connected Neon tool currently has a reproducible parameter-schema mismatch and cannot return/use the production connection string. A report has been sent to Neon through their product-team feedback channel. Do not invent a connection string.
+## Caller gate
 
-### Public policy/support
+Caller cannot open until every applicable dependency is real and verified:
 
-Before Caller can open, configure real values for:
+- explicit age-policy values;
+- real telephony provider contract, documented semantics and credentials;
+- real call-phone verification provider configuration and delivery verification;
+- real payment provider configuration and live verification;
+- public Privacy, Terms, Account Deletion and Support surfaces ready;
+- commercial hosting eligibility cleared;
+- production readiness checks green.
 
-- Privacy Policy URL.
-- Terms of Service URL.
-- Support email.
+The absence of any one of these keeps Caller closed. No mock or development provider may substitute for a production dependency.
 
-The Account Deletion URL has a first-party default. Privacy/Terms text, legal identity/jurisdiction, retention promises and support identity must not be fabricated.
+## Listener operational gates
 
-### Caller voice launch
+Listener onboarding, training, assessment and operational foundations exist in source, but production capabilities must be described according to what has actually been verified.
 
-A real telephony provider and its exact documented production semantics/credentials are still required before real calls can open. Do not implement a fake provider or infer undocumented behavior.
+Before the corresponding operation is treated as production-ready:
 
-Caller age policy values must also be intentionally configured before opening Caller.
+- KYC requires a real provider and live verification.
+- Payout requires real credentials and live verification.
+- Financial status must come from real provider and ledger records; ambiguous results remain unresolved rather than being marked successful.
 
-### Payments / listener operations
+## Mobile store gate
 
-Provider credentials must be verified for the production scope actually being opened. Caller readiness currently requires the payment provider. KYC/payout readiness remains separately visible in Admin and must be completed before corresponding listener operations are offered as production-ready.
+The mobile source has stable Android/iOS identifiers and EAS profiles, but Store-ready status requires all of the following external facts:
 
-### Mobile store release
+- real Expo/EAS project linkage (`extra.eas.projectId`);
+- approved production icon/adaptive-icon/splash artwork checked into source and referenced by app config;
+- real Android signing/store credentials;
+- real Apple signing/App Store credentials;
+- final store metadata and privacy declarations based on the actual production behavior;
+- an actual signed production build that is verified.
 
-The source has Android/iOS identifiers and EAS build profiles, but store release still requires:
+Do not invent an Expo project ID, signing credential or finished brand asset.
 
-- Expo/EAS project linkage (`projectId`) from a real Expo project.
-- Production app icon/splash assets.
-- Signing/store credentials and store accounts.
-- Final store listing/privacy metadata and a signed production build.
+## Commercial hosting gate
 
-Do not call the mobile app Store-ready until those are completed and an actual signed build is verified.
-
-## GitHub Actions status
-
-The account has exhausted the included GitHub Actions minutes for the current cycle. Recent runs fail before useful work begins, so those failures are not evidence of a source-code test failure.
-
-Last known fully green baseline before quota exhaustion:
-
-- Commit: `85d44618b932d0703c21f16f8d6de22ee8f336e1`
-- Run: `33226498053`
-
-All source/config changes after that baseline must receive a fresh full Foundation QA run before production launch. Do not label the current HEAD CI-green until that happens.
-
-A dependency lock still needs to be generated/validated in a networked runner. Once valid, production CI/deploy should prefer `npm ci` rather than an unlocked install.
-
-## Final activation sequence
-
-After GitHub Actions capacity and required credentials are available:
-
-1. Read latest `main` HEAD and ensure no concurrent changes were missed.
-2. Generate/validate the dependency lock and run the full Foundation QA on latest HEAD.
-3. Fix any real test/type/build failure; do not dismiss failures as quota once a runner actually starts.
-4. Read-only verify the exact production Neon database with `scripts/verify-production-db.mjs`.
-5. Sync production API environment to the exact UNIQUE API project without exposing values.
-6. Deploy the exact API bundle to UNIQUE.
-7. Require live `/health`, `/ready` and `/v1/bootstrap` smoke tests to pass.
-8. Run the real Email OTP delivery → verify → session → logout production E2E.
-9. Inspect production runtime errors/logs.
-10. Deploy Web and Admin to their exact UNIQUE projects.
-11. Smoke the Web landing page and `/account/delete` public page.
-12. Smoke protected Admin and inspect the readiness screen.
-13. Perform a real authenticated Web/mobile flow and first-admin bootstrap only through the guarded auth mechanism, then ensure bootstrap configuration is fully cleared.
-14. Configure and test the real provider set for the V1 scope.
-15. Enable Caller only after the Admin readiness endpoint reports all Caller launch gates ready.
+The production workload must be on a Vercel plan eligible for commercial use before paid traffic is opened. Current plan state and the current Vercel terms are recorded in `LAUNCH_STATUS.md` and must be re-verified before launch.
 
 ## Definition of launch-ready
 
-Do not mark the project launch-ready until all applicable items below are true in live production:
+Do not mark the project launch-ready until all gates applicable to the intended release scope are green in live production. In particular:
 
-- Latest HEAD passed Foundation QA.
-- Production database preflight passed read-only.
-- API `/ready` is HTTP 200.
-- API `/v1/bootstrap` is HTTP 200 with expected market/language/policy configuration.
-- Real Email OTP E2E passed.
-- Web and Admin exact production deployments passed smoke tests.
-- Admin bootstrap is locked down after initialization.
-- Public Privacy, Terms, Account Deletion and Support surfaces are valid.
-- Real provider integrations required for the chosen V1 scope passed production tests.
-- Caller remains closed until its complete launch-readiness gate is true.
-- Mobile is only called Store-ready after a verified signed store build exists.
+- current HEAD has a real full QA PASS;
+- dependency lock is real and validated;
+- production database preflight passed without migration;
+- API readiness/bootstrap passed;
+- real Email OTP E2E passed;
+- public Web and protected Admin smoke checks passed on the exact deployed source;
+- public policy/support surfaces are valid;
+- the hosting plan is eligible for the intended commercial use;
+- every provider required by the opened scope has passed real production verification;
+- Caller remains closed until its complete gate is green;
+- mobile is called Store-ready only after a verified signed store build exists.

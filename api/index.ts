@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { getPublicReleaseConfig } from '../services/api/src/lib/public-release.ts';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -145,6 +146,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         features: {
           callerClosedBetaEnabled: process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true',
         },
+        legal: getPublicReleaseConfig(),
         languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
       });
     } catch (error) {

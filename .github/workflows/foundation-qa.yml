@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - .launch/**
+      - docs/**
   pull_request:
     branches: [main]
 
@@ -146,7 +147,7 @@ jobs:
             "private": true,
             "type": "module",
             "dependencies": { "pg": "^8.23.0" },
-            "engines": { "node": ">=22.13.0" }
+            "engines": { "node": "22.x" }
           }
           JSON
           cat > dist-api/vercel.json <<'JSON'

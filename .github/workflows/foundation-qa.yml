@@ -21,6 +21,8 @@ jobs:
   qa:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ESBUILD_BIN: ${{ github.workspace }}/node_modules/.bin/esbuild
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +32,16 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
+
+      - name: Install workspace dependencies from lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Require lock-installed API bundler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$ESBUILD_BIN"
+          "$ESBUILD_BIN" --version
 
       - name: Runtime syntax checks
         run: |
@@ -107,9 +119,6 @@ jobs:
           SMTP_FROM_EMAIL: no-reply@example.test
         run: npm run verify:security-config
 
-      - name: Install workspace dependencies from lock
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
       - name: Typecheck all workspaces
         run: npm run typecheck
 
@@ -135,7 +144,7 @@ jobs:
 
       - name: Bundle production API runtime
         run: |
-          npx --yes esbuild@0.25.9 api/index.ts \
+          "$ESBUILD_BIN" api/index.ts \
             --bundle \
             --platform=node \
             --target=node22 \

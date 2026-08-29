@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 24
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
@@ -73,12 +73,35 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > apps/web/.vercel/project.json
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$ADMIN_PROJECT_ID" > apps/admin/.vercel/project.json
 
-      - name: Deploy Web to UNIQUE production
+      - name: Pull Web production settings
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 pull \
+            --yes \
+            --environment=production \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Build Web production artifact from locked workspace
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 build \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/output/config.json
+
+      - name: Deploy prebuilt Web artifact to UNIQUE production
         working-directory: apps/web
         shell: bash
         run: |
           set -euo pipefail
           npx --yes vercel@59.3.0 deploy \
+            --prebuilt \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \
@@ -115,12 +138,35 @@ jobs:
           console.log('production Web public smoke PASS');
           NODE
 
-      - name: Deploy Admin to UNIQUE production
+      - name: Pull Admin production settings
+        working-directory: apps/admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 pull \
+            --yes \
+            --environment=production \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Build Admin production artifact from locked workspace
+        working-directory: apps/admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 build \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/output/config.json
+
+      - name: Deploy prebuilt Admin artifact to UNIQUE production
         working-directory: apps/admin
         shell: bash
         run: |
           set -euo pipefail
           npx --yes vercel@59.3.0 deploy \
+            --prebuilt \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \

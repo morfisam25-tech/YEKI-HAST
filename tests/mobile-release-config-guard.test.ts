@@ -19,6 +19,12 @@ test('Android app-data backup stays disabled for sensitive account and session d
   assert.equal(appConfig.expo.plugins?.[0]?.[0], 'expo-secure-store');
 });
 
+test('iOS export-compliance declaration matches the current SecureStore-only mobile crypto surface', () => {
+  assert.equal(appConfig.expo.ios.config?.usesNonExemptEncryption, false);
+  assert.ok(packageJson.dependencies?.['expo-secure-store']);
+  assert.equal(packageJson.dependencies?.['expo-crypto'], undefined, 'adding expo-crypto requires export-compliance review');
+});
+
 test('mobile preview build is internally distributable, explicit and uses production API origin', () => {
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.environment, 'preview');

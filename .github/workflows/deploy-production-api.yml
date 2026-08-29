@@ -2,6 +2,10 @@ name: Deploy Production API
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .launch/production-api
 
 permissions:
   contents: read

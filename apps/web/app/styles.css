@@ -21,10 +21,13 @@ button,
 input { font: inherit; }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+a:focus-visible {
   outline: 3px solid #7f9278;
   outline-offset: 2px;
 }
+
+a { color: #4f5d4b; }
 
 main {
   width: min(1120px, 100%);
@@ -202,6 +205,52 @@ button:disabled {
 
 .listener-note p { margin: 0; }
 
+.public-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 30px 0 4px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.legal-page {
+  width: min(780px, 100%);
+  padding: 56px 0 72px;
+}
+
+.legal-page h1 {
+  font-size: clamp(42px, 7vw, 64px);
+}
+
+.legal-lead {
+  margin: 22px 0 0;
+  color: #3d3f3a;
+  font-size: 18px;
+  line-height: 2;
+}
+
+.legal-section {
+  padding-top: 28px;
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.legal-section h2 {
+  font-size: 21px;
+}
+
+.legal-section p,
+.legal-section li {
+  color: var(--muted);
+  line-height: 2;
+}
+
+.legal-section ul {
+  margin: 12px 0 0;
+  padding-right: 22px;
+}
+
 @media (max-width: 800px) {
   main { padding-top: 12px; }
   .site-header span { display: none; }
@@ -218,6 +267,7 @@ button:disabled {
     grid-template-columns: 1fr;
     gap: 12px;
   }
+  .legal-page { padding-top: 40px; }
 }
 
 @media (max-width: 420px) {

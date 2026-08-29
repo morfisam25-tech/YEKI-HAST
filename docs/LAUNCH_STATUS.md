@@ -9,10 +9,12 @@ This file is the repository source of truth for launch state. Future work should
 - Production deployment workflows are pinned to Vercel Team `UNIQUE` and the exact YEKI-HAST API/Web/Admin projects.
 - Automatic Vercel Git deployments are disabled; production deploys use the controlled workflows only.
 - Production release tooling in Foundation QA, API deploy, frontend deploy, dependency-lock generation and EAS production is pinned to Node `22.23.1`; package manifests remain compatible with Node `22.x`.
-- The frontend deployment workflow checks out the exact repository source before touching `apps/web` or `apps/admin`.
-- API and frontend production deployment workflows now fail closed when the repository has no validated `package-lock.json` and use `npm ci --ignore-scripts --no-audit --no-fund` before deployment.
-- Foundation QA also consumes the committed dependency lock with `npm ci`; the dedicated one-shot lock workflow remains responsible for generating and validating the repository's first real lockfile. Do not fabricate a lockfile.
-- `tests/production-deploy-target-guard.test.ts` guards the authorized team/projects, source checkout, exact Node release, dependency-lock requirement, `npm ci`, public Web smoke and protected Admin smoke.
+- API/Web/Admin production workflows fail closed when the repository has no validated `package-lock.json`.
+- Foundation QA and all production builds consume the committed workspace lock with `npm ci --ignore-scripts --no-audit --no-fund`.
+- Web/Admin `vercel.json` files force their Vercel build install step back to the monorepo root and use the validated root lock.
+- API/Web/Admin production delivery follows Vercel's CI prebuilt pattern: pull production project settings, build the artifact inside the GitHub runner, verify `.vercel/output/config.json`, then deploy with `--prebuilt --prod`. Production no longer depends on a second remote source install after CI validated the lock.
+- The dependency-lock workflow uses Node `22.23.1`, generates the repository's first real lock, verifies it with `npm ci`, commits it to `main`, then explicitly dispatches Foundation QA. `foundation-qa.yml` now supports `workflow_dispatch` because a push made by the workflow's `GITHUB_TOKEN` does not itself trigger another push workflow.
+- `tests/production-deploy-target-guard.test.ts` guards the authorized team/projects, source checkout, exact Node release, dependency-lock requirement, lock-to-QA handoff, `npm ci`, prebuilt production deploys, public Web smoke and protected Admin smoke.
 - Production API/Web/Admin builds and Android/iOS exports were proven green on an older source state before the GitHub Actions allowance was exhausted. Current HEAD is not considered green until a real current QA run executes and passes.
 - Mobile bootstrap is fail-closed: if the production bootstrap/catalog cannot be loaded, login and registration do not continue with stale fallback catalog data.
 - Browser production sessions use HttpOnly + Secure + SameSite=Strict cookies and production cookie names use the `__Host-` prefix.
@@ -36,6 +38,7 @@ This file is the repository source of truth for launch state. Future work should
 - The latest API production deployment inspected is READY at the Vercel deployment layer, but application readiness remains red because `/ready` is 503.
 - Web production currently redirects an unauthenticated visitor to Vercel Authentication. That is acceptable for Admin but is a blocker for the public Web surface; public login and `/account/delete` must be reachable without Vercel authentication before the Web smoke can pass.
 - The current Web/Admin production deployments predate the latest checked-in frontend source, including the new public account-deletion page.
+- The existing Web build log confirms the old deployment uploaded only the app subdirectory and performed its own remote `npm install`; the new controlled workflow removes that release path by building a locked prebuilt artifact in CI.
 - Admin production remains intentionally protected by Vercel Authentication; the controlled frontend workflow uses authenticated `vercel curl` for its Admin post-deploy smoke instead of weakening that protection.
 
 A healthy `/health` alone is never sufficient to declare production ready.
@@ -44,9 +47,9 @@ A healthy `/health` alone is never sufficient to declare production ready.
 
 ### 1. GitHub Actions execution
 
-The account reached the included Actions allowance on 2026-08-29. Current Foundation QA runs complete in roughly four seconds with a job record but zero executed steps. Do not interpret those runs as source failures or source success.
+The account reached the included Actions allowance on 2026-08-29. Current runs complete in roughly four seconds with a job record but zero executed steps. Do not interpret those runs as source failures or source success.
 
-When Actions execution is available again, run the dedicated dependency-lock workflow first. It must generate `package-lock.json`, validate it with `npm ci`, and commit the real lock. The resulting current `main` must then receive a true Foundation QA green run. CI/deploy source is already configured to consume the lock with `npm ci`; no later install-command conversion is required.
+The dependency-lock marker was committed and created `Generate Dependency Lock` run `33263978605`. That run was recognized by GitHub but its `lock` job executed zero steps, so no lockfile was generated. When Actions execution becomes available, rerun this workflow/run; it will generate and validate the real lock and then dispatch Foundation QA automatically.
 
 ### 2. Production database credential
 
@@ -115,15 +118,15 @@ Until those dependencies are real, the corresponding production surfaces must re
 
 Once Actions execution and the required external credentials exist securely:
 
-1. Run the dedicated dependency-lock workflow. Require successful lock generation, `npm ci` validation and commit of the real `package-lock.json`.
-2. Require a true green Foundation QA run on the resulting current `main`.
+1. Rerun `Generate Dependency Lock` run `33263978605` (or dispatch the same workflow). Require successful lock generation, `npm ci` validation and commit of the real `package-lock.json`.
+2. Require the automatically dispatched Foundation QA to finish truly green on the resulting current `main`.
 3. Add only the required repository secrets through secure GitHub storage; never place credentials in source or chat.
-4. Trigger the controlled Production API workflow.
+4. Trigger the controlled Production API workflow. It must build locally from the lock and deploy only the prebuilt artifact.
 5. Require production DB verification without migrations.
 6. Require `/health` 200, `/ready` 200 with `database: "ready"` and `schema: "ready"`, and a valid `/v1/bootstrap` response.
 7. Require real Email OTP delivery, verification, authenticated session and logout/revocation E2E PASS.
 8. Make the canonical Web production surface public at the Vercel protection layer while keeping Admin protected.
-9. Deploy Web and Admin through the exact UNIQUE frontend workflow and require both live smoke gates, including public `/account/delete`.
+9. Deploy Web and Admin through the exact UNIQUE frontend workflow. Both must build locally from the root lock and deploy only prebuilt output; require both live smoke gates, including public `/account/delete`.
 10. Review Admin integration-readiness output with secrets excluded.
 11. Link the real Expo/EAS project and add approved production release artwork before calling the native app store-ready; then complete real signing/build/store verification.
 12. Clear the hosting plan for commercial use before opening any paid traffic.

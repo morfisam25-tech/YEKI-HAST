@@ -6,16 +6,18 @@ const env = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
 const adminBackend = await readFile(new URL('../apps/admin/app/api/_backend.ts', import.meta.url), 'utf8');
 const webBackend = await readFile(new URL('../apps/web/app/api/_backend.ts', import.meta.url), 'utf8');
 const paymentProvider = await readFile(new URL('../services/api/src/providers/payment.ts', import.meta.url), 'utf8');
+const canonicalApiOrigin = 'https://yeki-hast-theta.vercel.app';
+const staleApiOrigin = 'https://yeki-hast.vercel.app';
 
-test('web and admin Vercel projects require explicit production API origins', () => {
+test('web and admin Vercel projects keep override support and the canonical production API origin', () => {
   assert.match(env, /^WEB_API_BASE_URL=$/m);
   assert.match(env, /^ADMIN_API_BASE_URL=$/m);
   assert.match(webBackend, /WEB_API_BASE_URL/);
   assert.match(adminBackend, /ADMIN_API_BASE_URL/);
-  assert.match(webBackend, /WEB_API_BASE_URL is required in production/);
-  assert.match(adminBackend, /ADMIN_API_BASE_URL is required in production/);
-  assert.doesNotMatch(webBackend, /yeki-hast\.vercel\.app/);
-  assert.doesNotMatch(adminBackend, /yeki-hast\.vercel\.app/);
+  assert.match(webBackend, new RegExp(canonicalApiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(adminBackend, new RegExp(canonicalApiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(webBackend, new RegExp(staleApiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(adminBackend, new RegExp(staleApiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('NextPay readiness requires an explicit HTTPS callback origin in production', () => {

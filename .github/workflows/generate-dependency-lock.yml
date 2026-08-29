@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: yeki-hast-dependency-lock
@@ -56,3 +57,12 @@ jobs:
           git add package-lock.json
           git commit -m 'Lock workspace dependencies'
           git push origin HEAD:main
+
+      - name: Dispatch Foundation QA on current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run foundation-qa.yml --ref main
+          echo 'Foundation QA dispatch requested for current main'

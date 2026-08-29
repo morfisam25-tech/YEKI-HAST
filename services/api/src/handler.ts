@@ -90,6 +90,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
 
     if (method === 'GET' && url.pathname === '/v1/admin/operations/summary') { ensureDatabaseReady(); const { getAdminOperationsSummary } = await import('./routes/admin.ts'); return await getAdminOperationsSummary(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/integration-readiness') { ensureDatabaseReady(); const { getAdminIntegrationReadiness } = await import('./routes/admin-readiness.ts'); return await getAdminIntegrationReadiness(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/admin/account-deletion-requests') { ensureDatabaseReady(); const { listAdminAccountDeletionRequests } = await import('./routes/admin-account-deletion.ts'); return await listAdminAccountDeletionRequests(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/listener-applications') { ensureDatabaseReady(); const { listListenerApplications } = await import('./routes/admin.ts'); return await listListenerApplications(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/payouts') { ensureDatabaseReady(); const { listAdminPayouts } = await import('./routes/admin-payouts.ts'); return await listAdminPayouts(req, res); }
     if (method === 'POST' && url.pathname === '/v1/admin/payouts/prepare') { ensureDatabaseReady(); const { prepareAdminPayout } = await import('./routes/admin-payouts.ts'); return await prepareAdminPayout(req, res); }

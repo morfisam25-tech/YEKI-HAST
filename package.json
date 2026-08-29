@@ -25,6 +25,10 @@
   "dependencies": {
     "pg": "^8.23.0"
   },
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "vercel": "59.3.0"
+  },
   "engines": {
     "node": "22.x"
   },

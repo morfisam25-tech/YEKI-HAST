@@ -2,6 +2,7 @@
   "name": "yeki-hast",
   "private": true,
   "version": "0.0.8",
+  "packageManager": "npm@10.9.8",
   "workspaces": [
     "apps/*",
     "services/*",
@@ -30,7 +31,8 @@
     "vercel": "59.3.0"
   },
   "engines": {
-    "node": "22.x"
+    "node": "22.x",
+    "npm": "10.9.8"
   },
   "type": "module"
 }

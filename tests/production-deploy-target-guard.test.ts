@@ -113,14 +113,20 @@ test('API production deployment must complete real Email OTP delivery verify ses
   assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password)/i);
 });
 
-test('Web and Admin production deployments each have a live smoke gate', () => {
+test('Web stays publicly smoke-tested while protected Admin uses authenticated Vercel CLI access', () => {
   assert.match(frontendWorkflow, /https:\/\/web-unique-6ff0\.vercel\.app/);
   assert.match(frontendWorkflow, /ورود با ایمیل/);
-  assert.match(frontendWorkflow, /production Web smoke PASS/);
+  assert.match(frontendWorkflow, /production Web public smoke PASS/);
+  assert.match(frontendWorkflow, /redirect: 'manual'/);
+
   assert.match(frontendWorkflow, /https:\/\/admin-unique-6ff0\.vercel\.app/);
+  assert.match(frontendWorkflow, /vercel@59\.3\.0 curl \/ /);
+  assert.match(frontendWorkflow, /--deployment "\$ADMIN_PRODUCTION_URL"/);
+  assert.match(frontendWorkflow, /--token "\$VERCEL_TOKEN"/);
   assert.match(frontendWorkflow, /یکی هست \/ عملیات/);
-  assert.match(frontendWorkflow, /production Admin smoke PASS/);
+  assert.match(frontendWorkflow, /production protected Admin smoke PASS/);
+
   const adminDeploy = frontendWorkflow.indexOf('Deploy Admin to UNIQUE production');
-  const adminSmoke = frontendWorkflow.indexOf('Verify Admin production shell');
+  const adminSmoke = frontendWorkflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
   assert.ok(adminDeploy >= 0 && adminSmoke > adminDeploy);
 });

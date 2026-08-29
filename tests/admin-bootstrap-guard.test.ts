@@ -4,13 +4,17 @@ import { readFile } from 'node:fs/promises';
 
 const phoneSource = await readFile(new URL('../services/api/src/routes/auth.ts', import.meta.url), 'utf8');
 const emailSource = await readFile(new URL('../services/api/src/routes/auth-email.ts', import.meta.url), 'utf8');
+const bootstrapSource = await readFile(new URL('../services/api/src/lib/admin-bootstrap.ts', import.meta.url), 'utf8');
 const verifierSource = await readFile(new URL('../scripts/verify-production-security-config.mjs', import.meta.url), 'utf8');
+const envSyncSource = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 
-test('admin bootstrap is disabled unless explicitly enabled', () => {
-  assert.match(phoneSource, /BOOTSTRAP_ADMIN_ENABLED/);
-  assert.match(phoneSource, /!== 'true'/);
-  assert.match(emailSource, /BOOTSTRAP_ADMIN_ENABLED/);
-  assert.match(emailSource, /!== 'true'/);
+test('admin bootstrap is disabled unless an explicit unexpired short window is open', () => {
+  assert.match(bootstrapSource, /BOOTSTRAP_ADMIN_ENABLED/);
+  assert.match(bootstrapSource, /BOOTSTRAP_ADMIN_EXPIRES_AT/);
+  assert.match(bootstrapSource, /30 \* 60 \* 1000/);
+  assert.match(bootstrapSource, /remainingMs > 0/);
+  assert.match(phoneSource, /isAdminBootstrapWindowOpen\(\)/);
+  assert.match(emailSource, /isAdminBootstrapWindowOpen\(\)/);
 });
 
 test('phone admin bootstrap requires the configured verified phone', () => {
@@ -54,10 +58,19 @@ test('admin bootstrap writes an audit record and never bypasses OTP', () => {
   assert.doesNotMatch(emailSource, /DEV_EXPOSE_OTP.*BOOTSTRAP_ADMIN/s);
 });
 
-test('production verifier allows exactly one temporary bootstrap identity and requires cleanup after disable', () => {
+test('production verifier allows exactly one temporary identity and requires a near-term expiry', () => {
   assert.match(verifierSource, /configuredIdentityCount !== 1/);
   assert.match(verifierSource, /Exactly one bootstrap admin identity/);
-  assert.match(verifierSource, /Bootstrap admin identity must be removed/);
+  assert.match(verifierSource, /bootstrapExpiry\('BOOTSTRAP_ADMIN_EXPIRES_AT'\)/);
+  assert.match(verifierSource, /must be in the next 30 minutes/);
+  assert.match(verifierSource, /identity and expiry must be removed/);
   assert.match(verifierSource, /emailAddress\('BOOTSTRAP_ADMIN_EMAIL'\)/);
   assert.match(verifierSource, /e164\('BOOTSTRAP_ADMIN_PHONE_E164'\)/);
+});
+
+test('normal production environment sync clears every temporary bootstrap value', () => {
+  assert.match(envSyncSource, /BOOTSTRAP_ADMIN_ENABLED', 'false'/);
+  assert.match(envSyncSource, /BOOTSTRAP_ADMIN_PHONE_E164', ''/);
+  assert.match(envSyncSource, /BOOTSTRAP_ADMIN_EMAIL', ''/);
+  assert.match(envSyncSource, /BOOTSTRAP_ADMIN_EXPIRES_AT', ''/);
 });

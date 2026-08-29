@@ -48,7 +48,7 @@ function parseAmountMinor(value: unknown): bigint {
 
 function paymentCallbackUri(): string {
   const fallback = process.env.NODE_ENV === 'production'
-    ? 'https://yeki-hast.vercel.app'
+    ? 'https://yeki-hast-theta.vercel.app'
     : 'http://localhost:4000';
   const raw = process.env.PAYMENT_CALLBACK_BASE_URL?.trim() || fallback;
   let url: URL;

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
@@ -25,6 +25,7 @@ jobs:
       WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg
       ADMIN_PROJECT_ID: prj_l18v3f003ORfiN6hKxYwJbvVPzzC
       WEB_PRODUCTION_URL: https://web-unique-6ff0.vercel.app
+      ADMIN_PRODUCTION_URL: https://admin-unique-6ff0.vercel.app
     steps:
       - name: Require main branch and authorized Vercel credential
         shell: bash
@@ -104,3 +105,27 @@ jobs:
             --yes \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Verify Admin production shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const url = process.env.ADMIN_PRODUCTION_URL;
+          let last = 'no response';
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            try {
+              const response = await fetch(url, { cache: 'no-store' });
+              const text = await response.text();
+              if (response.ok && text.includes('یکی هست / عملیات') && text.includes('داشبورد')) {
+                console.log('production Admin smoke PASS');
+                process.exit(0);
+              }
+              last = `${response.status} ${text.slice(0, 200)}`;
+            } catch (error) {
+              last = error instanceof Error ? error.message : String(error);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+          throw new Error(`Admin production smoke failed: ${last}`);
+          NODE

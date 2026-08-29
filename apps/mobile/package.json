@@ -6,6 +6,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
+    "export:android": "expo export --platform android --output-dir dist-android --clear",
+    "export:ios": "expo export --platform ios --output-dir dist-ios --clear",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

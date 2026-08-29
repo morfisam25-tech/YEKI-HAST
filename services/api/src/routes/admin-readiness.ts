@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
+import { isCallerClosedBetaConfigured, isCallerClosedBetaEnabled, isCommercialHostingApproved } from '../lib/caller-beta.ts';
 import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { getPublicReleaseConfig } from '../lib/public-release.ts';
@@ -80,8 +81,11 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && Number.isInteger(Number(process.env.CALLER_MINIMUM_AGE))
     && Number(process.env.CALLER_MINIMUM_AGE) >= 13
     && Number(process.env.CALLER_MINIMUM_AGE) <= 99;
-  const callerClosedBetaEnabled = process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true';
-  const callerLaunchReady = callerClosedBetaEnabled
+  const callerClosedBetaConfigured = isCallerClosedBetaConfigured();
+  const callerClosedBetaEnabled = isCallerClosedBetaEnabled();
+  const commercialHostingApproved = isCommercialHostingApproved();
+  const callerLaunchReady = callerClosedBetaConfigured
+    && commercialHostingApproved
     && callerAgePolicyReady
     && callerCatalogReady
     && accountAuthReady
@@ -108,6 +112,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       telephony: { provider: telephonyProvider, ready: telephonyReady },
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
       sensitiveData: { ready: sensitiveDataReady },
+      commercialHosting: { ready: commercialHostingApproved },
       publicReleasePolicy: {
         ready: publicRelease.ready,
         privacyPolicyReady: Boolean(publicRelease.privacyPolicyUrl),
@@ -124,7 +129,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
       },
       callerCatalog: { ready: callerCatalogReady },
       callerAgePolicy: { ready: callerAgePolicyReady },
-      callerClosedBeta: { enabled: callerClosedBetaEnabled },
+      callerClosedBeta: { configured: callerClosedBetaConfigured, enabled: callerClosedBetaEnabled },
       callerLaunch: { ready: callerLaunchReady },
     },
     secretsIncluded: false,

@@ -11,7 +11,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 export function normalizedDatabaseUrl(connectionString: string): string {
   const url = new URL(connectionString);
-  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
   if (!isLocal) url.searchParams.set('sslmode', 'verify-full');
   return url.toString();
 }

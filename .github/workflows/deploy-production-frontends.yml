@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: yeki-hast-production-frontends
@@ -47,8 +48,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout exact source
+      - name: Checkout exact source and history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Require validated workspace dependency lock
         shell: bash
@@ -64,6 +67,11 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
+
+      - name: Require successful Foundation QA coverage for this source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/require-green-foundation-qa.mjs
 
       - name: Verify clean workspace install from lock
         run: npm ci --ignore-scripts --no-audit --no-fund

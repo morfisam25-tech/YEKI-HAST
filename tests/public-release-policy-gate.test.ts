@@ -27,11 +27,12 @@ const publicSecretInputs = [
 
 const canonicalWebOrigin = 'https://web-unique-6ff0.vercel.app';
 
-test('runtime public-release env remains explicit and has no placeholder sample values', () => {
+test('runtime public-release env remains explicit while documenting first-party production defaults', () => {
   for (const key of publicRuntimeKeys) {
     assert.match(envExample, new RegExp(`^${key}=$`, 'm'));
   }
-  assert.match(envExample, /Keep blank until real published HTTPS pages\/flows exist/);
+  assert.match(envExample, /defaults Privacy, Terms and Account Deletion to the/);
+  assert.match(envExample, /Support has no inferred default/);
 });
 
 test('shared public-release parser rejects non-public surfaces and only reports readiness when all exist', () => {

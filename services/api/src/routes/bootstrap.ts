@@ -2,6 +2,7 @@ import type { ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
+import { getPublicReleaseConfig } from '../lib/public-release.ts';
 
 export async function bootstrap(res: ServerResponse) {
   const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
@@ -51,6 +52,7 @@ export async function bootstrap(res: ServerResponse) {
     features: {
       callerClosedBetaEnabled: process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true',
     },
+    legal: getPublicReleaseConfig(),
     languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
   });
 }

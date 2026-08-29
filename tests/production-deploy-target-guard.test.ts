@@ -104,8 +104,14 @@ test('API production deployment must complete real Email OTP delivery verify ses
   assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password)/i);
 });
 
-test('Web production deployment checks the real login landing page before Admin deploy', () => {
+test('Web and Admin production deployments each have a live smoke gate', () => {
   assert.match(frontendWorkflow, /https:\/\/web-unique-6ff0\.vercel\.app/);
   assert.match(frontendWorkflow, /ورود با ایمیل/);
   assert.match(frontendWorkflow, /production Web smoke PASS/);
+  assert.match(frontendWorkflow, /https:\/\/admin-unique-6ff0\.vercel\.app/);
+  assert.match(frontendWorkflow, /یکی هست \/ عملیات/);
+  assert.match(frontendWorkflow, /production Admin smoke PASS/);
+  const adminDeploy = frontendWorkflow.indexOf('Deploy Admin to UNIQUE production');
+  const adminSmoke = frontendWorkflow.indexOf('Verify Admin production shell');
+  assert.ok(adminDeploy >= 0 && adminSmoke > adminDeploy);
 });

@@ -8,6 +8,30 @@ export function backendBaseUrl(): string {
   return PRODUCTION_API_BASE_URL;
 }
 
+export function browserMutationAllowed(request: Request): boolean {
+  let requestOrigin: string;
+  try { requestOrigin = new URL(request.url).origin; }
+  catch { return false; }
+
+  const origin = request.headers.get('origin');
+  if (origin) {
+    try {
+      if (new URL(origin).origin !== requestOrigin) return false;
+    } catch {
+      return false;
+    }
+  }
+
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite === 'cross-site' || fetchSite === 'same-site') return false;
+  if (origin) return true;
+  if (fetchSite === 'same-origin' || fetchSite === 'none') return true;
+
+  // Browser proxy mutations fail closed in production. Metadata-less synthetic
+  // requests remain usable in local development and unit tests only.
+  return process.env.NODE_ENV !== 'production';
+}
+
 export async function backendRequest(path: string, init: RequestInit = {}) {
   return fetch(`${backendBaseUrl()}${path}`, {
     ...init,

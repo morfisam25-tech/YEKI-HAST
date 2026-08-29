@@ -1,8 +1,12 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { ADMIN_SESSION_COOKIE, backendRequest } from '../../_backend';
+import { ADMIN_SESSION_COOKIE, backendRequest, browserMutationAllowed } from '../../_backend';
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!browserMutationAllowed(request)) {
+    return NextResponse.json({ error: 'forbidden_origin' }, { status: 403 });
+  }
+
   const store = await cookies();
   const token = store.get(ADMIN_SESSION_COOKIE)?.value ?? null;
   store.delete(ADMIN_SESSION_COOKIE);

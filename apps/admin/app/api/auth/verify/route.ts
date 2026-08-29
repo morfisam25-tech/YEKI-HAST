@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import {
   ADMIN_SESSION_COOKIE,
   backendRequest,
+  browserMutationAllowed,
   jsonOrNull,
   proxyError,
 } from '../../_backend';
@@ -13,6 +14,10 @@ type SessionPayload = {
 };
 
 export async function POST(request: Request) {
+  if (!browserMutationAllowed(request)) {
+    return NextResponse.json({ error: 'forbidden_origin' }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null) as { email?: unknown; code?: unknown } | null;
   const email = typeof body?.email === 'string' ? body.email.trim() : '';
   const code = typeof body?.code === 'string' ? body.code.trim() : '';

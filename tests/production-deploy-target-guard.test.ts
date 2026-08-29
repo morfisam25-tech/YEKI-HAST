@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const apiWorkflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 const frontendWorkflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
+const qaWorkflow = await readFile(new URL('../.github/workflows/foundation-qa.yml', import.meta.url), 'utf8');
+const lockWorkflow = await readFile(new URL('../.github/workflows/generate-dependency-lock.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
 const apiVercel = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
@@ -59,6 +61,20 @@ test('production workflows checkout source and require the validated dependency 
   assert.match(frontendWorkflow, /Checkout exact source/);
   assert.match(apiWorkflow, escaped(releaseNode));
   assert.match(frontendWorkflow, escaped(releaseNode));
+});
+
+test('dependency lock generation hands the validated main branch to an explicit QA dispatch', () => {
+  assert.match(lockWorkflow, /workflow_dispatch:/);
+  assert.match(lockWorkflow, /contents: write/);
+  assert.match(lockWorkflow, /actions: write/);
+  assert.match(lockWorkflow, /node-version: '22\.23\.1'/);
+  assert.match(lockWorkflow, /npm install --package-lock-only --ignore-scripts --no-audit --no-fund/);
+  assert.match(lockWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
+  assert.match(lockWorkflow, /git push origin HEAD:main/);
+  assert.match(lockWorkflow, /gh workflow run foundation-qa\.yml --ref main/);
+  assert.match(qaWorkflow, /workflow_dispatch:/);
+  assert.match(qaWorkflow, /node-version: '22\.23\.1'/);
+  assert.match(qaWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
 });
 
 test('production deploys can be triggered later by narrow main-branch marker commits', () => {

@@ -84,6 +84,9 @@ async function vercelJson(url, init = {}) {
   return response.json();
 }
 
+const releaseSha = required('GITHUB_SHA').toLowerCase();
+if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a full commit SHA');
+
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
@@ -138,6 +141,7 @@ function setSensitive(key, value) {
 
 setSensitive('DATABASE_URL', databaseUrl);
 setPlain('DB_POOL_MAX', '10');
+setPlain('YEKI_HAST_RELEASE_SHA', releaseSha);
 
 setPlain('EMAIL_PROVIDER', 'smtp');
 setPlain('SMTP_HOST', smtpHost);

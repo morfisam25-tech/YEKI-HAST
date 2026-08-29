@@ -13,17 +13,26 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_TEAM_SLUG: unique-6ff0
       VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+      API_PRODUCTION_URL: https://yeki-hast-theta.vercel.app
     steps:
-      - name: Require authorized Vercel credential
+      - name: Require main branch and authorized Vercel credential
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Production deploys are allowed only from main"
+            exit 1
+          fi
+          if [ "$GITHUB_REPOSITORY" != "morfisam25-tech/YEKI-HAST" ]; then
+            echo "::error::Unexpected repository"
+            exit 1
+          fi
           if [ -z "${VERCEL_TOKEN:-}" ]; then
             echo "::error::VERCEL_TOKEN repository secret is required"
             exit 1
@@ -74,14 +83,51 @@ jobs:
           mkdir -p dist-api/api dist-api/.vercel
           mv dist-api/index.mjs dist-api/api/index.mjs
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > dist-api/.vercel/project.json
+          sha256sum dist-api/api/index.mjs
 
       - name: Deploy exact API project to UNIQUE production
         working-directory: dist-api
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@latest deploy \
+          npx --yes vercel@59.3.0 deploy \
             --prod \
             --yes \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Verify production health readiness and bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = process.env.API_PRODUCTION_URL;
+
+          async function waitFor(path, validate) {
+            let last = 'no response';
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(`${base}${path}`, { cache: 'no-store' });
+                const text = await response.text();
+                let body = null;
+                try { body = JSON.parse(text); } catch {}
+                if (response.ok && validate(body)) return;
+                last = `${response.status} ${text.slice(0, 300)}`;
+              } catch (error) {
+                last = error instanceof Error ? error.message : String(error);
+              }
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+            throw new Error(`${path} failed production smoke test: ${last}`);
+          }
+
+          await waitFor('/health', (body) => body?.ok === true && body?.service === 'yeki-hast-api');
+          await waitFor('/ready', (body) => body?.ok === true && body?.database === 'ready');
+          await waitFor('/v1/bootstrap', (body) =>
+            typeof body?.brandName === 'string'
+            && body?.market?.code === 'ir'
+            && Array.isArray(body?.languages)
+            && body.languages.length > 0
+          );
+          console.log('production API smoke PASS');
+          NODE

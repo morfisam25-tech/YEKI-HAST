@@ -34,6 +34,7 @@ try {
     'app.users',
     'app.admin_users',
     'app.user_roles',
+    'app.audit_logs',
     'app.products',
     'app.service_catalog',
     'app.markets',

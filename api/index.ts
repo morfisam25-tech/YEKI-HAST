@@ -102,7 +102,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         JOIN app.products p ON p.id=pp.product_id
         JOIN app.service_catalog s ON s.id=pp.service_id
         JOIN app.markets m ON m.id=pp.market_id
-        WHERE p.code=$1 AND s.code=$2 AND m.code=$3 AND pp.is_active=true
+        WHERE p.code=$1
+          AND s.code=$2 AND s.status='active'
+          AND m.code=$3 AND m.is_active=true
+          AND pp.is_active=true
         LIMIT 1
       `, [productCode, serviceCode, marketCode]);
 

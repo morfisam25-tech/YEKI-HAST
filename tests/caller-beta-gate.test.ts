@@ -5,12 +5,20 @@ import { readFileSync } from 'node:fs';
 const gateSource = readFileSync(new URL('../services/api/src/lib/caller-beta.ts', import.meta.url), 'utf8');
 const handlerSource = readFileSync(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const bootstrapSource = readFileSync(new URL('../services/api/src/routes/bootstrap.ts', import.meta.url), 'utf8');
+const lightweightBootstrapSource = readFileSync(new URL('../api/index.ts', import.meta.url), 'utf8');
 
-test('Caller closed beta is fail-closed and opens only on explicit true', () => {
+test('Caller beta configuration and commercial hosting approval are explicit true-only switches', () => {
   assert.match(gateSource, /CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
-  assert.match(gateSource, /if \(!isCallerClosedBetaEnabled\(\)\)/);
-  assert.match(gateSource, /new HttpError\(403, 'caller_closed_beta_disabled'\)/);
+  assert.match(gateSource, /COMMERCIAL_HOSTING_APPROVED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
   assert.doesNotMatch(gateSource, /=== '1'|=== 'yes'/);
+});
+
+test('effective production Caller beta requires both configuration and commercial hosting approval', () => {
+  assert.match(gateSource, /if \(!isCallerClosedBetaConfigured\(\)\) return false/);
+  assert.match(gateSource, /if \(process\.env\.NODE_ENV !== 'production'\) return true/);
+  assert.match(gateSource, /return isCommercialHostingApproved\(\)/);
+  assert.match(gateSource, /commercial_hosting_not_approved/);
+  assert.match(gateSource, /caller_closed_beta_disabled/);
 });
 
 test('API boundary gates Caller entry and call-start routes but preserves escape routes', () => {
@@ -32,6 +40,9 @@ test('API boundary gates Caller entry and call-start routes but preserves escape
   assert.doesNotMatch(getLine, /requireCallerClosedBetaEnabled/);
 });
 
-test('bootstrap exposes the same fail-closed feature switch', () => {
-  assert.match(bootstrapSource, /callerClosedBetaEnabled:\s*process\.env\.CALLER_CLOSED_BETA_ENABLED\?\.trim\(\)\.toLowerCase\(\) === 'true'/);
+test('both bootstrap entrypoints expose only the effective Caller beta switch', () => {
+  for (const source of [bootstrapSource, lightweightBootstrapSource]) {
+    assert.match(source, /isCallerClosedBetaEnabled/);
+    assert.match(source, /callerClosedBetaEnabled:\s*isCallerClosedBetaEnabled\(\)/);
+  }
 });

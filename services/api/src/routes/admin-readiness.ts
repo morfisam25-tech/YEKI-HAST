@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
+import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
 import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { validateEmailSecurityEnv, validateSecurityEnv } from '../lib/security.ts';
@@ -48,9 +49,13 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const bootstrapAdminEnabled = process.env.BOOTSTRAP_ADMIN_ENABLED?.trim().toLowerCase() === 'true';
   const bootstrapAdminIdentityConfigured = configured(process.env.BOOTSTRAP_ADMIN_EMAIL)
     || configured(process.env.BOOTSTRAP_ADMIN_PHONE_E164);
+  const bootstrapAdminExpiryConfigured = configured(process.env.BOOTSTRAP_ADMIN_EXPIRES_AT);
+  const bootstrapAdminWindowOpen = isAdminBootstrapWindowOpen();
   // The bootstrap switch is a one-time recovery surface, not a steady-state launch dependency.
-  // Public/caller launch must stay closed until the switch is off and its allowlisted identity is removed.
-  const adminBootstrapLockedDown = !bootstrapAdminEnabled && !bootstrapAdminIdentityConfigured;
+  // Public/caller launch stays closed until the switch, identity and expiry are all removed.
+  const adminBootstrapLockedDown = !bootstrapAdminEnabled
+    && !bootstrapAdminIdentityConfigured
+    && !bootstrapAdminExpiryConfigured;
 
   const catalog = await query<{ pricing_ready: boolean; language_ready: boolean }>(`
     SELECT
@@ -103,6 +108,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
         lockedDown: adminBootstrapLockedDown,
         enabled: bootstrapAdminEnabled,
         identityConfigured: bootstrapAdminIdentityConfigured,
+        expiryConfigured: bootstrapAdminExpiryConfigured,
+        windowOpen: bootstrapAdminWindowOpen,
       },
       callerCatalog: { ready: callerCatalogReady },
       callerAgePolicy: { ready: callerAgePolicyReady },

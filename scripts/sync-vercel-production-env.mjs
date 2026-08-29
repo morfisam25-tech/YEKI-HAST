@@ -96,12 +96,16 @@ const smtpUsername = required('PRODUCTION_SMTP_USERNAME');
 const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
 const smtpFromEmail = optional('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername).toLowerCase();
 const smtpFromName = optional('PRODUCTION_SMTP_FROM_NAME', 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
+const commercialHostingApproved = optional('PRODUCTION_COMMERCIAL_HOSTING_APPROVED', 'false').toLowerCase();
 
 const portNumber = Number(smtpPort);
 if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
   throw new Error('PRODUCTION_SMTP_PORT is invalid');
 }
 if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SECURE must be true or false');
+if (!['true', 'false'].includes(commercialHostingApproved)) {
+  throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
+}
 validateEmail(smtpFromEmail);
 if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
@@ -157,12 +161,13 @@ setPlain('OTP_IP_LIMIT_PER_15M', '20');
 setPlain('OTP_GLOBAL_LIMIT_PER_15M', '1000');
 setPlain('DEV_EXPOSE_OTP', 'false');
 
-// A normal production sync always returns the one-time bootstrap surface to a locked state.
+// A normal production sync always returns one-time and provider-gated launch surfaces to safe defaults.
 setPlain('BOOTSTRAP_ADMIN_ENABLED', 'false');
 setPlain('BOOTSTRAP_ADMIN_PHONE_E164', '');
 setPlain('BOOTSTRAP_ADMIN_EMAIL', '');
 setPlain('BOOTSTRAP_ADMIN_EXPIRES_AT', '');
 setPlain('CALLER_CLOSED_BETA_ENABLED', 'false');
+setPlain('COMMERCIAL_HOSTING_APPROVED', commercialHostingApproved);
 setPlain('MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false');
 setPlain('DEFAULT_PRODUCT_CODE', 'yeki_hast');
 setPlain('DEFAULT_SERVICE_CODE', 'human_listening');

@@ -3,6 +3,7 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { getSmsProvider } from '../providers/sms.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { requireAuth, revokeCurrentSession } from '../lib/auth.ts';
+import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
 import {
   encryptPrivateText,
   generateOtp,
@@ -33,7 +34,7 @@ async function maybeBootstrapFirstAdmin(
   userId: string,
   verifiedPhoneE164: string,
 ): Promise<void> {
-  if (process.env.BOOTSTRAP_ADMIN_ENABLED?.trim() !== 'true') return;
+  if (!isAdminBootstrapWindowOpen()) return;
   const configuredRaw = process.env.BOOTSTRAP_ADMIN_PHONE_E164?.trim();
   if (!configuredRaw) return;
 

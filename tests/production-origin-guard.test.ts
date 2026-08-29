@@ -30,6 +30,7 @@ async function collectTextFiles(relativeDir: string): Promise<string[]> {
 
 test('runtime source contains no stale production API origin', async () => {
   const files = [
+    ...(await collectTextFiles('api/')),
     ...(await collectTextFiles('apps/')),
     ...(await collectTextFiles('services/')),
     ...(await collectTextFiles('packages/')),

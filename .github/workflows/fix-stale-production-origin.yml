@@ -1,0 +1,48 @@
+name: Fix Stale Production Origin
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Replace stale API origin if present
+        id: patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('services/api/src/routes/payments.ts')
+          text = path.read_text()
+          old = "https://yeki-hast.vercel.app"
+          new = "https://yeki-hast-theta.vercel.app"
+          count = text.count(old)
+          if count > 1:
+              raise SystemExit(f'expected at most one stale origin in payments.ts, found {count}')
+          if count == 1:
+              path.write_text(text.replace(old, new))
+              print('changed=true')
+          else:
+              print('changed=false')
+          PY
+          if git diff --quiet -- services/api/src/routes/payments.ts; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Commit targeted fix
+        if: steps.patch.outputs.changed == 'true'
+        run: |
+          git config user.name "morfisam25-tech"
+          git config user.email "morfisam25@gmail.com"
+          git add services/api/src/routes/payments.ts
+          git commit -m "Fix NextPay production callback origin"
+          git push origin HEAD:main

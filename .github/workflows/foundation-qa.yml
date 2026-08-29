@@ -67,6 +67,7 @@ jobs:
           node --check scripts/verify-production-security-config.mjs
           node --check scripts/verify-production-db.mjs
           node --check scripts/sync-vercel-production-env.mjs
+          node --check scripts/smoke-production-email-auth.mjs
 
       - name: Foundation tests
         run: npm test

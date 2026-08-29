@@ -143,6 +143,9 @@ if (smsProvider) {
 
 const callerClosedBetaEnabled = optionalBoolean('CALLER_CLOSED_BETA_ENABLED', false);
 if (callerClosedBetaEnabled) {
+  if (!boolean('COMMERCIAL_HOSTING_APPROVED')) {
+    throw new Error('COMMERCIAL_HOSTING_APPROVED must be true before production Caller can open');
+  }
   // Do not allow a caller-facing launch until the real public policy/support surfaces exist.
   publicHttpsUrl('PRIVACY_POLICY_URL');
   publicHttpsUrl('TERMS_OF_SERVICE_URL');

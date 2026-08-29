@@ -7,6 +7,9 @@ const publicRelease = await readFile(new URL('../services/api/src/lib/public-rel
 const readiness = await readFile(new URL('../services/api/src/routes/admin-readiness.ts', import.meta.url), 'utf8');
 const securityVerifier = await readFile(new URL('../scripts/verify-production-security-config.mjs', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
+const privacyPage = await readFile(new URL('../apps/web/app/privacy/page.tsx', import.meta.url), 'utf8');
+const termsPage = await readFile(new URL('../apps/web/app/terms/page.tsx', import.meta.url), 'utf8');
+const webLanding = await readFile(new URL('../apps/web/app/page.tsx', import.meta.url), 'utf8');
 
 const publicRuntimeKeys = [
   'PRIVACY_POLICY_URL',
@@ -22,7 +25,9 @@ const publicSecretInputs = [
   'PRODUCTION_SUPPORT_EMAIL',
 ];
 
-test('public release surfaces are explicit and have no placeholder defaults', () => {
+const canonicalWebOrigin = 'https://web-unique-6ff0.vercel.app';
+
+test('runtime public-release env remains explicit and has no placeholder sample values', () => {
   for (const key of publicRuntimeKeys) {
     assert.match(envExample, new RegExp(`^${key}=$`, 'm'));
   }
@@ -59,11 +64,28 @@ test('production security verifier requires real public surfaces when caller bet
   assert.match(securityVerifier, /emailAddress\('SUPPORT_EMAIL'\)/);
 });
 
-test('production env sync accepts policy inputs without inventing or clearing them', () => {
+test('privacy terms and account deletion are first-party canonical Web surfaces', () => {
+  assert.ok(envSync.includes(`const DEFAULT_PRIVACY_POLICY_URL = '${canonicalWebOrigin}/privacy'`));
+  assert.ok(envSync.includes(`const DEFAULT_TERMS_OF_SERVICE_URL = '${canonicalWebOrigin}/terms'`));
+  assert.ok(envSync.includes(`const DEFAULT_ACCOUNT_DELETION_URL = '${canonicalWebOrigin}/account/delete'`));
+  assert.match(envSync, /provided\('PRODUCTION_PRIVACY_POLICY_URL'\) \?\? DEFAULT_PRIVACY_POLICY_URL/);
+  assert.match(envSync, /provided\('PRODUCTION_TERMS_OF_SERVICE_URL'\) \?\? DEFAULT_TERMS_OF_SERVICE_URL/);
+  assert.match(envSync, /provided\('PRODUCTION_ACCOUNT_DELETION_URL'\) \?\? DEFAULT_ACCOUNT_DELETION_URL/);
+  assert.match(envSync, /setPlain\('PRIVACY_POLICY_URL', privacyPolicyUrl\)/);
+  assert.match(envSync, /setPlain\('TERMS_OF_SERVICE_URL', termsOfServiceUrl\)/);
+  assert.match(envSync, /setPlain\('ACCOUNT_DELETION_URL', accountDeletionUrl\)/);
+  assert.match(privacyPage, /حریم خصوصی/);
+  assert.match(privacyPage, /\/account\/delete/);
+  assert.match(termsPage, /قوانین استفاده/);
+  assert.match(termsPage, /\/account\/delete/);
+  assert.match(webLanding, /href="\/privacy"/);
+  assert.match(webLanding, /href="\/terms"/);
+  assert.match(webLanding, /href="\/account\/delete"/);
+});
+
+test('production env sync keeps support explicit and never clears public values with blanks', () => {
   for (const key of publicSecretInputs) assert.ok(envSync.includes(key), `missing ${key}`);
-  assert.match(envSync, /if \(privacyPolicyUrl\) setPlain\('PRIVACY_POLICY_URL', privacyPolicyUrl\)/);
-  assert.match(envSync, /if \(termsOfServiceUrl\) setPlain\('TERMS_OF_SERVICE_URL', termsOfServiceUrl\)/);
-  assert.match(envSync, /if \(accountDeletionUrl\) setPlain\('ACCOUNT_DELETION_URL', accountDeletionUrl\)/);
+  assert.match(envSync, /provided\('PRODUCTION_SUPPORT_EMAIL'\)/);
   assert.match(envSync, /if \(supportEmail\) setPlain\('SUPPORT_EMAIL', supportEmail\)/);
   assert.doesNotMatch(envSync, /setPlain\('PRIVACY_POLICY_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('TERMS_OF_SERVICE_URL',\s*''\)/);

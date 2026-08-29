@@ -62,8 +62,33 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     try {
-      await pool.query('SELECT 1');
-      sendJson(res, 200, { ok: true, database: 'ready' });
+      const critical = await pool.query<{
+        users_ready: boolean;
+        sessions_ready: boolean;
+        pricing_ready: boolean;
+        audit_ready: boolean;
+        email_otp_ready: boolean;
+      }>(`
+        SELECT
+          to_regclass('app.users') IS NOT NULL AS users_ready,
+          to_regclass('private_data.auth_sessions') IS NOT NULL AS sessions_ready,
+          to_regclass('app.pricing_plans') IS NOT NULL AS pricing_ready,
+          to_regclass('app.audit_logs') IS NOT NULL AS audit_ready,
+          to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready
+      `);
+      const row = critical.rows[0];
+      const schemaReady = Boolean(
+        row?.users_ready
+        && row?.sessions_ready
+        && row?.pricing_ready
+        && row?.audit_ready
+        && row?.email_otp_ready
+      );
+      if (!schemaReady) {
+        sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+        return;
+      }
+      sendJson(res, 200, { ok: true, database: 'ready', schema: 'ready' });
     } catch (error) {
       console.error('readiness_database_query_failed', error);
       sendJson(res, 503, { ok: false, error: 'service_not_ready' });

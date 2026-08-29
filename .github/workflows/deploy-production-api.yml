@@ -1,0 +1,87 @@
+name: Deploy Production API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeki-hast-production-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_TEAM_SLUG: unique-6ff0
+      VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+    steps:
+      - name: Require authorized Vercel credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::VERCEL_TOKEN repository secret is required"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bundle production API runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes esbuild@0.25.9 api/index.ts \
+            --bundle \
+            --platform=node \
+            --target=node22 \
+            --format=esm \
+            --external:pg \
+            --alias:@yeki-hast/types=./packages/types/src/index.ts \
+            --minify \
+            --outfile=dist-api/index.mjs
+          node --check dist-api/index.mjs
+          cat > dist-api/package.json <<'JSON'
+          {
+            "name": "yeki-hast-api-runtime",
+            "private": true,
+            "type": "module",
+            "dependencies": { "pg": "^8.23.0" },
+            "engines": { "node": ">=22.13.0" }
+          }
+          JSON
+          cat > dist-api/vercel.json <<'JSON'
+          {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "framework": null,
+            "rewrites": [
+              { "source": "/health", "destination": "/api/index" },
+              { "source": "/ready", "destination": "/api/index" },
+              { "source": "/v1/:path*", "destination": "/api/index" }
+            ]
+          }
+          JSON
+          mkdir -p dist-api/api dist-api/.vercel
+          mv dist-api/index.mjs dist-api/api/index.mjs
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > dist-api/.vercel/project.json
+
+      - name: Deploy exact API project to UNIQUE production
+        working-directory: dist-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest deploy \
+            --prod \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"

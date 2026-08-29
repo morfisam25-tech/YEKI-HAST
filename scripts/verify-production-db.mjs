@@ -1,7 +1,15 @@
 import pg from 'pg';
 
-const connectionString = process.env.DATABASE_URL?.trim();
-if (!connectionString) throw new Error('DATABASE_URL is required');
+function normalizedDatabaseUrl(connectionString) {
+  const url = new URL(connectionString);
+  const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
+  if (!isLocal) url.searchParams.set('sslmode', 'verify-full');
+  return url.toString();
+}
+
+const rawConnectionString = process.env.DATABASE_URL?.trim();
+if (!rawConnectionString) throw new Error('DATABASE_URL is required');
+const connectionString = normalizedDatabaseUrl(rawConnectionString);
 
 const pool = new pg.Pool({ connectionString, max: 1, connectionTimeoutMillis: 10000 });
 try {

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const envExample = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
+const publicRelease = await readFile(new URL('../services/api/src/lib/public-release.ts', import.meta.url), 'utf8');
 const readiness = await readFile(new URL('../services/api/src/routes/admin-readiness.ts', import.meta.url), 'utf8');
 const securityVerifier = await readFile(new URL('../scripts/verify-production-security-config.mjs', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
@@ -28,16 +29,25 @@ test('public release surfaces are explicit and have no placeholder defaults', ()
   assert.match(envExample, /Keep blank until real published HTTPS pages\/flows exist/);
 });
 
+test('shared public-release parser rejects non-public surfaces and only reports readiness when all exist', () => {
+  assert.match(publicRelease, /url\.protocol !== 'https:'/);
+  assert.match(publicRelease, /localhost/);
+  assert.match(publicRelease, /url\.username \|\| url\.password/);
+  assert.match(publicRelease, /privacyPolicyUrl: string \| null/);
+  assert.match(publicRelease, /accountDeletionUrl: string \| null/);
+  assert.match(publicRelease, /supportEmail: string \| null/);
+  assert.match(publicRelease, /ready: Boolean\(privacyPolicyUrl && termsOfServiceUrl && accountDeletionUrl && support\)/);
+});
+
 test('caller readiness fails closed until every public release surface is valid', () => {
-  assert.match(readiness, /function validPublicHttpsUrl/);
-  assert.match(readiness, /function validSupportEmail/);
-  assert.match(readiness, /const publicReleasePolicyReady = privacyPolicyReady/);
-  assert.match(readiness, /&& publicReleasePolicyReady;/);
+  assert.match(readiness, /getPublicReleaseConfig/);
+  assert.match(readiness, /const publicRelease = getPublicReleaseConfig\(\)/);
+  assert.match(readiness, /&& publicRelease\.ready;/);
   assert.match(readiness, /publicReleasePolicy:\s*\{/);
-  assert.match(readiness, /privacyPolicyReady,/);
-  assert.match(readiness, /termsOfServiceReady,/);
-  assert.match(readiness, /accountDeletionReady,/);
-  assert.match(readiness, /supportReady,/);
+  assert.match(readiness, /privacyPolicyReady: Boolean\(publicRelease\.privacyPolicyUrl\)/);
+  assert.match(readiness, /termsOfServiceReady: Boolean\(publicRelease\.termsOfServiceUrl\)/);
+  assert.match(readiness, /accountDeletionReady: Boolean\(publicRelease\.accountDeletionUrl\)/);
+  assert.match(readiness, /supportReady: Boolean\(publicRelease\.supportEmail\)/);
 });
 
 test('production security verifier requires real public surfaces when caller beta is enabled', () => {

@@ -47,6 +47,17 @@ function e164(name) {
   return value;
 }
 
+function bootstrapExpiry(name) {
+  const raw = required(name);
+  const expiresAt = Date.parse(raw);
+  if (!Number.isFinite(expiresAt)) throw new Error(`${name} must be a valid timestamp`);
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 0 || remainingMs > 30 * 60 * 1000) {
+    throw new Error(`${name} must be in the next 30 minutes`);
+  }
+  return raw;
+}
+
 if (process.env.NODE_ENV !== 'production') throw new Error('NODE_ENV must be production');
 if (process.env.DEV_EXPOSE_OTP === 'true') throw new Error('DEV_EXPOSE_OTP must not be enabled in production');
 
@@ -80,6 +91,7 @@ emailAddress('SMTP_FROM_EMAIL');
 const bootstrapEnabled = optionalBoolean('BOOTSTRAP_ADMIN_ENABLED', false);
 const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
 const bootstrapPhone = process.env.BOOTSTRAP_ADMIN_PHONE_E164?.trim();
+const bootstrapExpiresAt = process.env.BOOTSTRAP_ADMIN_EXPIRES_AT?.trim();
 if (bootstrapEnabled) {
   const configuredIdentityCount = Number(Boolean(bootstrapEmail)) + Number(Boolean(bootstrapPhone));
   if (configuredIdentityCount !== 1) {
@@ -87,8 +99,9 @@ if (bootstrapEnabled) {
   }
   if (bootstrapEmail) emailAddress('BOOTSTRAP_ADMIN_EMAIL');
   if (bootstrapPhone) e164('BOOTSTRAP_ADMIN_PHONE_E164');
-} else if (bootstrapEmail || bootstrapPhone) {
-  throw new Error('Bootstrap admin identity must be removed when BOOTSTRAP_ADMIN_ENABLED is false');
+  bootstrapExpiry('BOOTSTRAP_ADMIN_EXPIRES_AT');
+} else if (bootstrapEmail || bootstrapPhone || bootstrapExpiresAt) {
+  throw new Error('Bootstrap admin identity and expiry must be removed when BOOTSTRAP_ADMIN_ENABLED is false');
 }
 
 const smsProvider = process.env.SMS_PROVIDER?.trim();

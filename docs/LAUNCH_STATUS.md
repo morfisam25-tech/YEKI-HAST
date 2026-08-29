@@ -11,8 +11,11 @@ This file is the repository source of truth for launch state. Future work should
 - Production API/Web/Admin builds and Android/iOS exports were all proven green before the GitHub Actions allowance was exhausted.
 - Mobile bootstrap is fail-closed: if the production bootstrap/catalog cannot be loaded, login and registration do not continue with stale fallback catalog data.
 - Browser production sessions use HttpOnly + Secure + SameSite=Strict cookies and production cookie names use the `__Host-` prefix.
+- Browser POST proxy routes reject cross-site/same-site mutations and fail closed on missing browser request metadata in production.
+- Web/Admin backend proxy requests have a 15-second upstream timeout and never add automatic mutation retries.
 - Web/Admin declare CSP, anti-framing, no-sniff, referrer and browser-capability security headers in Vercel config.
 - API JSON response helpers explicitly use `no-store`, no-sniff, anti-framing, no-referrer and restrictive JSON CSP headers.
+- The payment callback HTML is non-cacheable, anti-framed, no-referrer, no-script and protected by a restrictive CSP; it does not render provider or internal payment identifiers.
 - Caller closed beta is disabled by default.
 - Manual phone verification beta is disabled by default.
 - Admin bootstrap is disabled by default and its one-time enablement requires an expiry window.
@@ -25,6 +28,7 @@ This file is the repository source of truth for launch state. Future work should
 
 - API `GET /health`: 200 / healthy.
 - API `GET /ready`: 503 / intentionally not ready until production database configuration is supplied.
+- API `GET /v1/bootstrap`: 503 / intentionally blocked by the same readiness gate.
 - Web production landing page: reachable and serving the real Persian Email OTP UI.
 - Admin production app: deployed and protected by Vercel Authentication; the controlled frontend workflow uses authenticated `vercel curl` for the Admin post-deploy smoke instead of weakening that protection.
 
@@ -34,7 +38,7 @@ A healthy `/health` alone is never sufficient to declare production ready.
 
 ### 1. GitHub Actions allowance
 
-The account reached 100% of the included Actions minutes on 2026-08-29. Runs currently fail before executing project steps. Do not interpret those quota failures as source failures. CI must be rerun after allowance resets or paid Actions usage is enabled.
+The account reached 100% of the included Actions minutes on 2026-08-29. Runs currently fail before executing project steps (the job has zero executed steps). Do not interpret those quota failures as source failures. CI must be rerun after allowance resets or paid Actions usage is enabled.
 
 After execution is available again, generate/verify/commit `package-lock.json`, switch install steps to `npm ci`, then rerun Foundation QA on the resulting current HEAD.
 
@@ -58,7 +62,17 @@ Required secure inputs:
 
 Do not fake OTP delivery in production.
 
-### 5. Vercel commercial plan before paid launch
+### 5. Mobile EAS project linkage and release artwork
+
+The checked-in mobile configuration is build-profile ready but not yet EAS/store-distribution ready:
+
+- `apps/mobile/app.json` does not currently contain `extra.eas.projectId`; do not invent an Expo project ID. EAS must be linked to the real Expo account/project before a non-interactive production EAS build.
+- The mobile project currently has no checked-in production app icon/adaptive-icon artwork and `app.json` does not point to release icon assets. Do not ship a default/placeholder Expo identity as a finished store release.
+- The production EAS profile already pins Node 22.23.1, uses the canonical production API, requires a committed source state and uses remote auto-incremented native build versions.
+
+These mobile-store items do not justify opening any unready backend surface; they can be completed independently once the real Expo project/account and approved artwork are available.
+
+### 6. Vercel commercial plan before paid launch
 
 Vercel Team `UNIQUE` is currently on Hobby. Vercel's current Terms of Service and Fair Use Guidelines restrict Hobby to personal/non-commercial use and classify deployments used for financial gain, including requesting or processing visitor payments, as commercial usage.
 
@@ -93,9 +107,10 @@ Once GitHub Actions execution and the required external credentials exist secure
 7. Require real Email OTP delivery, verification, authenticated session and logout/revocation E2E PASS.
 8. Deploy Web and Admin through the exact UNIQUE frontend workflow and require both live smoke gates; keep Admin deployment protection enabled.
 9. Review Admin integration-readiness output with secrets excluded.
-10. Before commercial/payment traffic, upgrade the intended Vercel commercial deployment from Hobby to an eligible paid plan.
-11. Keep Caller beta closed until telephony/payment/phone/age gates are all genuinely ready.
-12. Only then enable the smallest intended beta surface and monitor runtime errors.
+10. Link the real Expo/EAS project and add approved production icon assets before calling the native app store-ready.
+11. Before commercial/payment traffic, upgrade the intended Vercel commercial deployment from Hobby to an eligible paid plan.
+12. Keep Caller beta closed until telephony/payment/phone/age gates are all genuinely ready.
+13. Only then enable the smallest intended beta surface and monitor runtime errors.
 
 ## Non-negotiable rules
 

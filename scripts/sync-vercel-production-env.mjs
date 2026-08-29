@@ -11,6 +11,13 @@ function required(name) {
   return value;
 }
 
+function optional(name, fallback) {
+  const value = process.env[name]?.trim();
+  if (!value) return fallback;
+  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
+  return value;
+}
+
 function validateDatabaseUrl(value) {
   let url;
   try { url = new URL(value); }
@@ -58,13 +65,15 @@ async function vercelJson(url, init = {}) {
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
-const smtpHost = required('PRODUCTION_SMTP_HOST');
-const smtpPort = required('PRODUCTION_SMTP_PORT');
-const smtpSecure = required('PRODUCTION_SMTP_SECURE').toLowerCase();
+// The existing corporate mail domain is on Google Workspace. These submission
+// defaults can still be overridden later without changing product code.
+const smtpHost = optional('PRODUCTION_SMTP_HOST', 'smtp.gmail.com');
+const smtpPort = optional('PRODUCTION_SMTP_PORT', '465');
+const smtpSecure = optional('PRODUCTION_SMTP_SECURE', 'true').toLowerCase();
 const smtpUsername = required('PRODUCTION_SMTP_USERNAME');
 const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
-const smtpFromEmail = required('PRODUCTION_SMTP_FROM_EMAIL').toLowerCase();
-const smtpFromName = (process.env.PRODUCTION_SMTP_FROM_NAME?.trim() || 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
+const smtpFromEmail = optional('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername).toLowerCase();
+const smtpFromName = optional('PRODUCTION_SMTP_FROM_NAME', 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
 
 const portNumber = Number(smtpPort);
 if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {

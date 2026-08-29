@@ -14,7 +14,8 @@
       ]
     ],
     "android": {
-      "package": "app.yekihast.mobile"
+      "package": "app.yekihast.mobile",
+      "allowBackup": false
     },
     "ios": {
       "bundleIdentifier": "app.yekihast.mobile"

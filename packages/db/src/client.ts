@@ -4,7 +4,7 @@ let pool: Pool | undefined;
 
 function normalizedDatabaseUrl(connectionString: string): string {
   const url = new URL(connectionString);
-  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
 
   if (!isLocal) {
     // node-postgres treats sslmode=verify-full as certificate + hostname verification.
@@ -32,7 +32,7 @@ export async function query<T extends QueryResultRow = QueryResultRow>(text: str
   return getPool().query<T>(text, values);
 }
 
-export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>) {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');

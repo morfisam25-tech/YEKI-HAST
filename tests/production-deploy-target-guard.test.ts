@@ -28,7 +28,7 @@ test('production workflows are pinned to the authorized UNIQUE team and exact pr
   assert.doesNotMatch(frontendWorkflow, /evidence[-_ ]?axis/i);
 });
 
-test('production workflows refuse non-main refs and use the tested Vercel CLI version', () => {
+test('production workflows refuse non-main refs and use a pinned Vercel CLI version', () => {
   for (const workflow of [apiWorkflow, frontendWorkflow]) {
     assert.match(workflow, /refs\/heads\/main/);
     assert.match(workflow, /morfisam25-tech\/YEKI-HAST/);
@@ -44,20 +44,24 @@ test('production deploys can be triggered later by narrow main-branch marker com
   assert.match(frontendWorkflow, /branches: \[main\]/);
 });
 
-test('API production deployment requires real DB and SMTP inputs before touching production', () => {
+test('API production deployment requires only the irreducible external launch secrets', () => {
   for (const name of [
+    'VERCEL_TOKEN',
     'PRODUCTION_DATABASE_URL',
-    'PRODUCTION_SMTP_HOST',
-    'PRODUCTION_SMTP_PORT',
-    'PRODUCTION_SMTP_SECURE',
     'PRODUCTION_SMTP_USERNAME',
     'PRODUCTION_SMTP_PASSWORD',
-    'PRODUCTION_SMTP_FROM_EMAIL',
   ]) {
     assert.match(apiWorkflow, escaped(name));
   }
   assert.match(apiWorkflow, /Verify production database without migrations/);
   assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
+});
+
+test('production environment sync defaults to Google Workspace submission while allowing overrides', () => {
+  assert.match(envSync, /optional\('PRODUCTION_SMTP_HOST', 'smtp\.gmail\.com'\)/);
+  assert.match(envSync, /optional\('PRODUCTION_SMTP_PORT', '465'\)/);
+  assert.match(envSync, /optional\('PRODUCTION_SMTP_SECURE', 'true'\)/);
+  assert.match(envSync, /optional\('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername\)/);
 });
 
 test('production environment sync is pinned to the API project and preserves closed launch gates', () => {

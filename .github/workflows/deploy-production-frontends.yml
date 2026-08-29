@@ -2,6 +2,10 @@ name: Deploy Production Web and Admin
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .launch/production-frontends
 
 permissions:
   contents: read

@@ -25,3 +25,10 @@ test('shared DB client keeps the same verified-TLS and IPv6-loopback guards', ()
   assert.match(source, /sslmode', 'verify-full'/);
   assert.match(source, /'\[::1\]'/);
 });
+
+test('production DB verifier also forces verified TLS for remote URLs', () => {
+  const source = readFileSync(new URL('../scripts/verify-production-db.mjs', import.meta.url), 'utf8');
+  assert.match(source, /sslmode', 'verify-full'/);
+  assert.match(source, /'\[::1\]'/);
+  assert.match(source, /normalizedDatabaseUrl\(rawConnectionString\)/);
+});

@@ -29,6 +29,7 @@ function baseEnv(): NodeJS.ProcessEnv {
     BOOTSTRAP_ADMIN_EMAIL: '',
     BOOTSTRAP_ADMIN_EXPIRES_AT: '',
     CALLER_CLOSED_BETA_ENABLED: 'true',
+    COMMERCIAL_HOSTING_APPROVED: 'true',
     CALLER_MINIMUM_AGE: '18',
     CALLER_AGE_POLICY_VERSION: 'test-v1',
     PRIVACY_POLICY_URL: 'https://example.test/privacy',
@@ -46,10 +47,26 @@ function runVerifier(env: NodeJS.ProcessEnv) {
   });
 }
 
-test('caller-open production security config passes only with the complete public release surface', () => {
+test('caller-open production security config passes only with commercial hosting and complete public release surface', () => {
   const result = runVerifier(baseEnv());
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /production security config verified/);
+});
+
+test('caller-open production security config fails closed without commercial hosting approval', () => {
+  const env = baseEnv();
+  env.COMMERCIAL_HOSTING_APPROVED = 'false';
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /COMMERCIAL_HOSTING_APPROVED must be true/);
+});
+
+test('caller-open production security config fails closed when commercial hosting approval is absent', () => {
+  const env = baseEnv();
+  delete env.COMMERCIAL_HOSTING_APPROVED;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /COMMERCIAL_HOSTING_APPROVED is required/);
 });
 
 test('caller-open production security config fails closed when account deletion surface is absent', () => {

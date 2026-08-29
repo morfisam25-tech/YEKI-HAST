@@ -6,6 +6,9 @@ const apiWorkflow = await readFile(new URL('../.github/workflows/deploy-producti
 const frontendWorkflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
+const apiVercel = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
+const webVercel = JSON.parse(await readFile(new URL('../apps/web/vercel.json', import.meta.url), 'utf8'));
+const adminVercel = JSON.parse(await readFile(new URL('../apps/admin/vercel.json', import.meta.url), 'utf8'));
 
 const teamId = 'team_GmseY3ibD05FWemVhLElL3hI';
 const teamSlug = 'unique-6ff0';
@@ -27,6 +30,12 @@ test('production workflows are pinned to the authorized UNIQUE team and exact pr
   assert.match(frontendWorkflow, escaped(adminProject));
   assert.doesNotMatch(apiWorkflow, /evidence[-_ ]?axis/i);
   assert.doesNotMatch(frontendWorkflow, /evidence[-_ ]?axis/i);
+});
+
+test('automatic Vercel Git deploys stay disabled so production changes use the controlled Actions path', () => {
+  for (const config of [apiVercel, webVercel, adminVercel]) {
+    assert.equal(config?.git?.deploymentEnabled, false);
+  }
 });
 
 test('production workflows refuse non-main refs and use a pinned Vercel CLI version', () => {

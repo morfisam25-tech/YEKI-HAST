@@ -8,7 +8,7 @@ on:
       - .launch/dependency-lock
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: yeki-hast-dependency-lock
@@ -19,8 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout exact main HEAD
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup exact Node used by release tooling
         uses: actions/setup-node@v4
@@ -33,10 +35,16 @@ jobs:
       - name: Verify the generated lock can drive a clean install
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Upload lock for repository commit
-        uses: actions/upload-artifact@v4
-        with:
-          name: yeki-hast-package-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit validated lock to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo 'package-lock.json is already current'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'Lock workspace dependencies'
+          git push origin HEAD:main

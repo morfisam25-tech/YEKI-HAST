@@ -201,6 +201,8 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const base = process.env.API_PRODUCTION_URL;
+          const expectedSha = process.env.GITHUB_SHA?.toLowerCase();
+          if (!expectedSha || !/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('GITHUB_SHA is invalid');
 
           async function waitFor(path, validate) {
             let last = 'no response';
@@ -220,7 +222,7 @@ jobs:
             throw new Error(`${path} failed production smoke test: ${last}`);
           }
 
-          await waitFor('/health', (body) => body?.ok === true && body?.service === 'yeki-hast-api');
+          await waitFor('/health', (body) => body?.ok === true && body?.service === 'yeki-hast-api' && body?.releaseSha === expectedSha);
           await waitFor('/ready', (body) => body?.ok === true && body?.database === 'ready' && body?.schema === 'ready');
           await waitFor('/v1/bootstrap', (body) =>
             typeof body?.brandName === 'string'

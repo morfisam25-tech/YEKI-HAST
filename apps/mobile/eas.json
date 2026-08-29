@@ -1,13 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/eas.json",
+  "cli": {
+    "requireCommit": true,
+    "appVersionSource": "remote"
+  },
   "build": {
     "preview": {
       "distribution": "internal",
+      "node": "22.23.1",
+      "environment": "preview",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://yeki-hast-theta.vercel.app"
       }
     },
     "production": {
+      "node": "22.23.1",
+      "environment": "production",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://yeki-hast-theta.vercel.app"
       }

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
+import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import {
   emailHash,
@@ -37,7 +38,7 @@ async function maybeBootstrapFirstAdminByEmail(
   userId: string,
   verifiedEmail: string,
 ): Promise<void> {
-  if (process.env.BOOTSTRAP_ADMIN_ENABLED?.trim() !== 'true') return;
+  if (!isAdminBootstrapWindowOpen()) return;
   const configuredRaw = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
   if (!configuredRaw) return;
 

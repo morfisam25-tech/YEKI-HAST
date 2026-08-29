@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 project protection disable "$WEB_PROJECT_NAME" \
+          npx --no-install vercel project protection disable "$WEB_PROJECT_NAME" \
             --sso \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 pull \
+          npx --no-install vercel pull \
             --yes \
             --environment=production \
             --token "$VERCEL_TOKEN" \
@@ -100,7 +100,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 build \
+          npx --no-install vercel build \
             --prod \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -111,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 deploy \
+          npx --no-install vercel deploy \
             --prebuilt \
             --prod \
             --yes \
@@ -156,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 pull \
+          npx --no-install vercel pull \
             --yes \
             --environment=production \
             --token "$VERCEL_TOKEN" \
@@ -167,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 build \
+          npx --no-install vercel build \
             --prod \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG"
@@ -178,7 +178,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 deploy \
+          npx --no-install vercel deploy \
             --prebuilt \
             --prod \
             --yes \
@@ -195,11 +195,11 @@ jobs:
           for (let attempt = 1; attempt <= 12; attempt += 1) {
             try {
               const response = await fetch(url, { cache: 'no-store', redirect: 'manual' });
-              if (!response.ok) {
+              if ((response.status >= 300 && response.status < 400) || response.status === 401 || response.status === 403) {
                 console.log(`production Admin protection PASS (${response.status})`);
                 process.exit(0);
               }
-              last = `unexpected public 200 at ${url}`;
+              last = `unexpected status ${response.status} at ${url}`;
             } catch (error) {
               last = error instanceof Error ? error.message : String(error);
             }
@@ -218,7 +218,7 @@ jobs:
           trap cleanup EXIT
 
           for attempt in $(seq 1 12); do
-            if npx --yes vercel@59.3.0 curl / \
+            if npx --no-install vercel curl / \
               --deployment "$ADMIN_PRODUCTION_URL" \
               --token "$VERCEL_TOKEN" \
               --scope "$VERCEL_TEAM_SLUG" \

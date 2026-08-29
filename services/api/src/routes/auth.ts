@@ -129,7 +129,10 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });
 }
 
-type VerifyOutcome = { kind: 'invalid' } | { kind: 'ok'; userId: string };
+type VerifyOutcome =
+  | { kind: 'invalid' }
+  | { kind: 'deletion_pending' }
+  | { kind: 'ok'; userId: string };
 
 export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
   const body = await readJson<{ phone?: unknown; code?: unknown }>(req);
@@ -176,6 +179,18 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
       const activeUser = await client.query('SELECT 1 FROM app.users WHERE id=$1 AND status=\'active\'', [userId]);
       if (!activeUser.rowCount) return { kind: 'invalid' };
       await client.query('UPDATE private_data.user_contacts SET phone_verified_at=COALESCE(phone_verified_at, now()) WHERE user_id=$1', [userId]);
+
+      const deletionPending = await client.query(`
+        SELECT 1
+        FROM app.audit_logs
+        WHERE actor_user_id=$1
+          AND action='account_deletion_requested'
+          AND entity_type='user'
+          AND entity_id=$1
+          AND metadata->>'processingState'='pending'
+        LIMIT 1
+      `, [userId]);
+      if (deletionPending.rowCount) return { kind: 'deletion_pending' };
     }
 
     await maybeBootstrapFirstAdmin(client, userId, phoneE164);
@@ -187,6 +202,7 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
     return { kind: 'ok', userId };
   });
 
+  if (outcome.kind === 'deletion_pending') throw new HttpError(409, 'account_deletion_pending');
   if (outcome.kind !== 'ok') throw new HttpError(400, 'invalid_otp');
   sendJson(res, 200, { ok: true, userId: outcome.userId, token: rawSessionToken, expiresInHours: ttlHours });
 }

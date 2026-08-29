@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getPublicReleaseConfig } from '../services/api/src/lib/public-release.ts';
+import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.ts';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -179,7 +180,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           displayDivisor: row.currency_code === 'IRR' ? 10 : 1,
         },
         features: {
-          callerClosedBetaEnabled: process.env.CALLER_CLOSED_BETA_ENABLED?.trim().toLowerCase() === 'true',
+          callerClosedBetaEnabled: isCallerClosedBetaEnabled(),
         },
         legal: getPublicReleaseConfig(),
         languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),

@@ -18,6 +18,13 @@ function optional(name, fallback) {
   return value;
 }
 
+function provided(name) {
+  const value = process.env[name]?.trim();
+  if (!value) return null;
+  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
+  return value;
+}
+
 function validateDatabaseUrl(value) {
   let url;
   try { url = new URL(value); }
@@ -33,10 +40,22 @@ function validateDatabaseUrl(value) {
   }
 }
 
-function validateEmail(value) {
+function validateEmail(value, name = 'PRODUCTION_SMTP_FROM_EMAIL') {
   const parts = value.toLowerCase().split('@');
-  if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s/.test(value)) {
-    throw new Error('PRODUCTION_SMTP_FROM_EMAIL is invalid');
+  if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s|[\r\n]/.test(value)) {
+    throw new Error(`${name} is invalid`);
+  }
+}
+
+function validatePublicHttpsUrl(value, name) {
+  let url;
+  try { url = new URL(value); }
+  catch { throw new Error(`${name} is not a valid URL`); }
+  if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
+    throw new Error(`${name} must be a public HTTPS URL without embedded credentials`);
+  }
+  if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname)) {
+    throw new Error(`${name} must not point to localhost`);
   }
 }
 
@@ -83,6 +102,18 @@ if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SE
 validateEmail(smtpFromEmail);
 if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
+// Public policy/support values are intentionally optional during infrastructure bring-up.
+// If supplied, validate and sync them. If omitted, leave any existing production values untouched;
+// caller launch readiness remains fail-closed until all four valid runtime values exist.
+const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL');
+const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL');
+const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL');
+const supportEmail = provided('PRODUCTION_SUPPORT_EMAIL')?.toLowerCase() ?? null;
+if (privacyPolicyUrl) validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
+if (termsOfServiceUrl) validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
+if (accountDeletionUrl) validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
+if (supportEmail) validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
+
 const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
 const listed = await vercelJson(listUrl);
 const envs = Array.isArray(listed?.envs) ? listed.envs : [];
@@ -109,6 +140,11 @@ setSensitive('SMTP_USERNAME', smtpUsername);
 setSensitive('SMTP_PASSWORD', smtpPassword);
 setPlain('SMTP_FROM_EMAIL', smtpFromEmail);
 setPlain('SMTP_FROM_NAME', smtpFromName);
+
+if (privacyPolicyUrl) setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
+if (termsOfServiceUrl) setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
+if (accountDeletionUrl) setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
+if (supportEmail) setPlain('SUPPORT_EMAIL', supportEmail);
 
 setPlain('SESSION_TTL_HOURS', '720');
 setPlain('OTP_TTL_SECONDS', '300');

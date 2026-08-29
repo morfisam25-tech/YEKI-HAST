@@ -5,6 +5,7 @@ import test from 'node:test';
 const apiWorkflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 const frontendWorkflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
+const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
 
 const teamId = 'team_GmseY3ibD05FWemVhLElL3hI';
 const teamSlug = 'unique-6ff0';
@@ -82,6 +83,18 @@ test('API production deployment must pass health readiness and bootstrap smoke c
   assert.match(apiWorkflow, /\/ready/);
   assert.match(apiWorkflow, /\/v1\/bootstrap/);
   assert.match(apiWorkflow, /production API smoke PASS/);
+});
+
+test('API production deployment must complete real Email OTP delivery verify session and logout', () => {
+  assert.match(apiWorkflow, /smoke-production-email-auth\.mjs/);
+  assert.match(emailSmoke, /\/v1\/auth\/email\/request/);
+  assert.match(emailSmoke, /imap\.gmail\.com/);
+  assert.match(emailSmoke, /\/v1\/auth\/email\/verify/);
+  assert.match(emailSmoke, /\/v1\/auth\/session/);
+  assert.match(emailSmoke, /\/v1\/auth\/logout/);
+  assert.match(emailSmoke, /revoked\.status !== 401/);
+  assert.match(emailSmoke, /secrets hidden/);
+  assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password)/i);
 });
 
 test('Web production deployment checks the real login landing page before Admin deploy', () => {

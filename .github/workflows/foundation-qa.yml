@@ -109,3 +109,28 @@ jobs:
 
       - name: Typecheck all workspaces
         run: npm run typecheck
+
+  mobile-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install workspace dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Export Android bundle
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-theta.vercel.app
+        run: npm --workspace @yeki-hast/mobile run export:android
+
+      - name: Export iOS bundle
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-theta.vercel.app
+        run: npm --workspace @yeki-hast/mobile run export:ios

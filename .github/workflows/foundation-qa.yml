@@ -134,3 +134,57 @@ jobs:
         env:
           EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-theta.vercel.app
         run: npm --workspace @yeki-hast/mobile run export:ios
+
+  api-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bundle production API runtime
+        run: |
+          npx --yes esbuild@0.25.9 api/index.ts \
+            --bundle \
+            --platform=node \
+            --target=node22 \
+            --format=esm \
+            --external:pg \
+            --alias:@yeki-hast/types=./packages/types/src/index.ts \
+            --minify \
+            --outfile=dist-api/index.mjs
+          node --check dist-api/index.mjs
+          cat > dist-api/package.json <<'JSON'
+          {
+            "name": "yeki-hast-api-runtime",
+            "private": true,
+            "type": "module",
+            "dependencies": { "pg": "^8.23.0" },
+            "engines": { "node": ">=22.13.0" }
+          }
+          JSON
+          cat > dist-api/vercel.json <<'JSON'
+          {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "framework": null,
+            "rewrites": [
+              { "source": "/health", "destination": "/api/index" },
+              { "source": "/ready", "destination": "/api/index" },
+              { "source": "/v1/:path*", "destination": "/api/index" }
+            ]
+          }
+          JSON
+          mkdir -p dist-api/api
+          mv dist-api/index.mjs dist-api/api/index.mjs
+
+      - name: Upload production API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-api-bundle
+          path: dist-api
+          retention-days: 1

@@ -22,6 +22,7 @@ This file is the repository source of truth for launch state. Future work should
 - Web production smoke is intentionally unauthenticated with redirects disabled and requires `/`, `/privacy`, `/terms` and `/account/delete` all to return valid public content.
 - Admin production has two separate gates: an unauthenticated request must receive an actual protection status (3xx, 401 or 403; 404/5xx do not count), then authenticated Vercel CLI access must return the real Admin shell.
 - A real root `package-lock.json` is now committed. Expo SDK dependencies were aligned on current `main`, `expo-doctor` passed all 21 checks, and an Android Preview EAS build completed successfully. Full Foundation QA for current HEAD still requires a real runner execution; a zero-step Actions failure does not count.
+- Current source commit `7238ab6921462095e97f25fe20e1114a02a8367a` passed all 474 source tests, full workspace typecheck, foundation validation, Web production build, Admin production build, Android export and iOS export in the independent workspace reconstruction. The API also starts under Node's standard `--experimental-strip-types` execution path and serves `/health`; database-backed readiness remains correctly dependent on a real database connection.
 - Mobile bootstrap is fail-closed: if the production bootstrap/catalog cannot be loaded, login and registration do not continue with stale fallback catalog data.
 - Browser production sessions use HttpOnly + Secure + SameSite=Strict cookies and production cookie names use the `__Host-` prefix.
 - Browser POST proxy routes reject cross-site/same-site mutations and fail closed on missing browser request metadata in production.
@@ -57,7 +58,7 @@ A healthy `/health` alone is never sufficient to declare production ready.
 
 The repository now has a real root `package-lock.json`, committed by `544868b491403c482f04ee8caf4c7e168ca74fa4`. Expo dependency alignment followed in `2ee4cb19ad137230263a99d643a8ffcc9395eeac`.
 
-GitHub Actions is still blocked at the account level. Foundation QA run `33279831460` created job `99174115647`, then failed in roughly four seconds with zero executed steps. The account Actions budget was observed at `$0` with **Stop usage** enabled, and GitHub reported the spending/payment limit condition. This is not a source-code failure and it is not a QA PASS.
+GitHub Actions is still blocked at the account level. The latest Foundation QA run `33328256665` for commit `7238ab6921462095e97f25fe20e1114a02a8367a` created job `99302133682`, then failed in roughly four seconds with `steps: []`, no runner and no executed source step. The account Actions budget was observed at `$0` with **Stop usage** enabled, and GitHub reported the spending/payment limit condition. This is not a source-code failure and it is not a QA PASS.
 
 Required action: restore an Actions spending allowance/payment state, then rerun Foundation QA against the exact current `main`. Do not regenerate the lock unless manifests change, and do not mark current HEAD green until the real job executes all steps and passes.
 

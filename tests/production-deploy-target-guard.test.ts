@@ -216,10 +216,10 @@ test('Web is made public in controlled release while Admin must remain protected
   assert.match(frontendWorkflow, /response\.status === 401 \|\| response\.status === 403/);
   assert.ok(frontendWorkflow.includes('"$VERCEL_BIN" curl /'));
   assert.match(frontendWorkflow, /یکی هست \/ عملیات/);
-  assert.match(frontendWorkflow, /production protected Admin smoke PASS/);
+  assert.match(frontendWorkflow, /production exact protected Admin smoke PASS/);
 
   const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
   const adminProtection = frontendWorkflow.indexOf('Require Admin to remain protected from unauthenticated access');
-  const adminSmoke = frontendWorkflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
+  const adminSmoke = frontendWorkflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
   assert.ok(adminDeploy >= 0 && adminProtection > adminDeploy && adminSmoke > adminProtection);
 });

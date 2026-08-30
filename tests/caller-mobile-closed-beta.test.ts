@@ -29,7 +29,7 @@ test('public app navigation is driven by the fail-closed server bootstrap flag',
   assert.match(app, /import CallerClosedBetaScreen from '\.\/src\/CallerClosedBetaScreen'/);
   assert.match(app, /const \[callerBetaEnabled, setCallerBetaEnabled\] = useState\(false\)/);
   assert.match(app, /setCallerBetaEnabled\(bootstrap\.features\?\.callerClosedBetaEnabled === true\)/);
-  assert.match(app, /\.catch\(\(\) => \{\s*setCallerBetaEnabled\(false\)/);
+  assert.match(app, /\.catch\(\(\) => \{\s*if \(disposed\) return;\s*setCallerBetaEnabled\(false\)/);
   assert.match(app, /if \(!callerBetaEnabled\) \{\s*setScreen\('waitlist'\)/);
 });
 

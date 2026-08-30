@@ -173,7 +173,7 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo 'prebuilt Admin production deployment created; exact URL captured'
 
-      - name: Require Admin canonical alias to remain protected from unauthenticated access
+      - name: Require Admin to remain protected from unauthenticated access
         shell: bash
         run: |
           set -euo pipefail

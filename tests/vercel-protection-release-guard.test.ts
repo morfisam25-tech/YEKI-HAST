@@ -23,12 +23,12 @@ test('Admin remains fail-closed to unauthenticated visitors and is then checked 
   assert.match(workflow, /response\.status >= 300 && response\.status < 400/);
   assert.match(workflow, /response\.status === 401 \|\| response\.status === 403/);
   assert.match(workflow, /production Admin protection PASS/);
-  assert.match(workflow, /Verify protected Admin production shell with authenticated Vercel CLI/);
+  assert.match(workflow, /Verify exact protected Admin deployment shell with authenticated Vercel CLI/);
   assert.match(workflow, /"\$VERCEL_BIN" curl \/ /);
-  assert.match(workflow, /production protected Admin smoke PASS/);
+  assert.match(workflow, /production exact protected Admin smoke PASS/);
 
   const unauthenticatedGuard = workflow.indexOf('Require Admin to remain protected from unauthenticated access');
-  const authenticatedSmoke = workflow.indexOf('Verify protected Admin production shell with authenticated Vercel CLI');
+  const authenticatedSmoke = workflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
   assert.ok(unauthenticatedGuard >= 0 && authenticatedSmoke > unauthenticatedGuard);
 });
 

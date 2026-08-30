@@ -91,8 +91,10 @@ function waitForSocketEvent(socket: AnySocket): Promise<Buffer> {
 
 class SmtpConnection {
   private buffer = '';
+  private socket: AnySocket;
 
-  constructor(private socket: AnySocket) {
+  constructor(socket: AnySocket) {
+    this.socket = socket;
     this.socket.setTimeout(10_000);
   }
 
@@ -170,7 +172,11 @@ function dotStuff(value: string): string {
 }
 
 class SmtpEmailProvider implements EmailProvider {
-  constructor(private readonly config: SmtpConfig) {}
+  private readonly config: SmtpConfig;
+
+  constructor(config: SmtpConfig) {
+    this.config = config;
+  }
 
   async sendLoginCode(input: SendLoginCodeInput): Promise<void> {
     const recipient = normalizeEmailAddress(input.email);

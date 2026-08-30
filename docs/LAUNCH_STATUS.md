@@ -1,6 +1,6 @@
 # Launch Status — یکی هست
 
-Last reviewed: 2026-08-29
+Last reviewed: 2026-08-30
 
 This file is the repository source of truth for launch state. Future work should inspect the real repo, Vercel, Neon and provider state before trusting an older chat summary.
 
@@ -21,7 +21,7 @@ This file is the repository source of truth for launch state. Future work should
 - The frontend production workflow makes only the `web` Vercel project public by disabling Vercel Authentication SSO through the official Vercel CLI before deployment. It does not disable protection on `admin`.
 - Web production smoke is intentionally unauthenticated with redirects disabled and requires `/`, `/privacy`, `/terms` and `/account/delete` all to return valid public content.
 - Admin production has two separate gates: an unauthenticated request must receive an actual protection status (3xx, 401 or 403; 404/5xx do not count), then authenticated Vercel CLI access must return the real Admin shell.
-- Production API/Web/Admin builds and Android/iOS exports were proven green on an older source state before the GitHub Actions allowance was exhausted. Current HEAD is not considered green until a real current QA run executes and passes.
+- A real root `package-lock.json` is now committed. Expo SDK dependencies were aligned on current `main`, `expo-doctor` passed all 21 checks, and an Android Preview EAS build completed successfully. Full Foundation QA for current HEAD still requires a real runner execution; a zero-step Actions failure does not count.
 - Mobile bootstrap is fail-closed: if the production bootstrap/catalog cannot be loaded, login and registration do not continue with stale fallback catalog data.
 - Browser production sessions use HttpOnly + Secure + SameSite=Strict cookies and production cookie names use the `__Host-` prefix.
 - Browser POST proxy routes reject cross-site/same-site mutations and fail closed on missing browser request metadata in production.
@@ -53,15 +53,13 @@ A healthy `/health` alone is never sufficient to declare production ready.
 
 ## External blockers
 
-### 1. GitHub Actions execution / dependency lock
+### 1. GitHub Actions execution
 
-The account reached the included Actions allowance on 2026-08-29. Current runs complete in roughly four seconds with a job record but zero executed steps. Do not interpret those runs as source failures or source success.
+The repository now has a real root `package-lock.json`, committed by `544868b491403c482f04ee8caf4c7e168ca74fa4`. Expo dependency alignment followed in `2ee4cb19ad137230263a99d643a8ffcc9395eeac`.
 
-A current-main dependency-lock retry was triggered as `Generate Dependency Lock` run `33265834535`; it again failed before executing real steps. A later Foundation QA run `33266175612` also has a failed job with `steps: null`. No real current lock or QA execution has occurred.
+GitHub Actions is still blocked at the account level. Foundation QA run `33279831460` created job `99174115647`, then failed in roughly four seconds with zero executed steps. The account Actions budget was observed at `$0` with **Stop usage** enabled, and GitHub reported the spending/payment limit condition. This is not a source-code failure and it is not a QA PASS.
 
-Because root manifests changed after those attempts to pin Vercel/esbuild tooling, the next successful dependency-lock execution must run against the then-current `main`. The workflow checks out `main`, generates `package-lock.json`, validates it with a clean `npm ci`, commits it, then dispatches Foundation QA automatically.
-
-Do not fabricate a lockfile or mark current HEAD green before that happens.
+Required action: restore an Actions spending allowance/payment state, then rerun Foundation QA against the exact current `main`. Do not regenerate the lock unless manifests change, and do not mark current HEAD green until the real job executes all steps and passes.
 
 ### 2. Production database credential
 
@@ -87,11 +85,9 @@ Do not fake OTP delivery in production.
 
 ### 5. Support Email
 
-Privacy Policy, Terms of Service and Account Deletion now have first-party canonical Web URLs in source. The remaining public-release contact input is a real support mailbox:
+Privacy Policy, Terms of Service and Account Deletion now have first-party canonical Web URLs in source. `sales@uniqueholding.com.tr` is the intended public company contact on the active Google Workspace domain; `support@uniqueholding.com.tr` is not configured and must not be published.
 
-- `PRODUCTION_SUPPORT_EMAIL`
-
-Do not infer this from `SMTP_FROM_EMAIL` or a no-reply mailbox. Public-release readiness remains fail-closed until a valid support address exists.
+The controlled release still requires `PRODUCTION_SUPPORT_EMAIL` to be stored securely and verified in the deployed bootstrap/policy surfaces. Do not infer it from `SMTP_FROM_EMAIL` or a no-reply mailbox.
 
 ### 6. Account-deletion retention decision
 
@@ -99,14 +95,16 @@ The self-service request and Admin queue exist, but final deletion/anonymization
 
 No destructive database action should be added merely to make the deletion queue disappear.
 
-### 7. Mobile EAS project linkage and release artwork
+### 7. Mobile store release artwork and credentials
 
-The checked-in mobile configuration is build-profile ready but not yet EAS/store-distribution ready:
+The real Expo project is linked in `apps/mobile/app.json` under account `saimorfis-team` with project ID `58b9f62d-db82-421a-ad59-edccac70c316`. Android Preview build `c41865f7-7f2f-44e4-bc3a-3236d28fb302` completed successfully after the dependency lock and Expo SDK alignment work.
 
-- `apps/mobile/app.json` does not currently contain `extra.eas.projectId`; do not invent an Expo project ID. EAS must be linked to the real Expo account/project before a non-interactive production EAS build.
-- The mobile project currently has no checked-in production app icon/adaptive-icon artwork and `app.json` does not point to release icon assets. Do not ship a default/placeholder Expo identity as a finished store release.
-- The production EAS profile already pins Node `22.23.1`, uses the canonical production API, requires a committed source state and uses remote auto-incremented native build versions.
+The mobile project is installable for preview but is not yet store-ready:
+
+- No approved production icon/adaptive-icon/splash artwork is checked in and referenced by `app.json`; do not ship default/placeholder Expo identity as a finished store release.
+- The production EAS profile pins Node `22.23.1`, uses the canonical production API, requires a committed source state and uses remote auto-incremented native build versions.
 - Android signing/store credentials and Apple signing/App Store credentials still require real external account setup and verification.
+- A signed production build and store metadata/privacy declarations still require final verification.
 
 These mobile-store items do not justify opening any unready backend surface.
 
@@ -133,8 +131,8 @@ Until those dependencies are real, the corresponding production surfaces must re
 
 Once Actions execution and the required external credentials exist securely:
 
-1. Run `Generate Dependency Lock` against current `main`. Require successful lock generation, `npm ci` validation and commit of the real `package-lock.json`.
-2. Require the automatically dispatched Foundation QA to finish truly green on the resulting current `main`. QA itself installs from the lock before tests/builds and uses lock-installed esbuild.
+1. Restore GitHub Actions execution by fixing the account Actions spending/payment gate; do not change source to work around a zero-step runner failure.
+2. Rerun Foundation QA on the exact current `main` and require it to finish truly green. QA installs from the committed lock before tests/builds and uses lock-installed esbuild.
 3. Store only the required external credentials in secure GitHub secrets; never place credentials in source or chat.
 4. Trigger the controlled Production API workflow. It must use lock-installed Vercel/esbuild binaries, verify the production DB without migrations, build from the lock and deploy only prebuilt output.
 5. Require `/health` 200, `/ready` 200 with `database: "ready"` and `schema: "ready"`, and a valid `/v1/bootstrap` response.
@@ -143,7 +141,7 @@ Once Actions execution and the required external credentials exist securely:
 8. Require unauthenticated public PASS for `/`, `/privacy`, `/terms` and `/account/delete`.
 9. Require Admin to reject unauthenticated access with a real protection response and then PASS authenticated Admin shell smoke.
 10. Review Admin integration-readiness output with secrets excluded.
-11. Link the real Expo/EAS project and add approved production release artwork before calling the native app store-ready; then complete real signing/build/store verification.
+11. Keep the linked Expo/EAS project, add approved production release artwork, then complete real production signing/build/store verification before calling the native app store-ready.
 12. Upgrade Team `UNIQUE` from Hobby to an eligible commercial plan before opening paid traffic.
 13. Define account-deletion retention/anonymization policy before implementing any destructive deletion processor.
 14. Keep Caller beta closed until telephony/payment/phone/age/public-release/commercial-hosting gates are all genuinely ready.

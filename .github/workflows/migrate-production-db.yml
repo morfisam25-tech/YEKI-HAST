@@ -1,0 +1,84 @@
+name: Migrate Production Database
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .launch/production-db-migration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeki-hast-production-db-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DB_POOL_MAX: '1'
+    steps:
+      - name: Require exact approved target and credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo '::error::Production migration is allowed only from main'
+            exit 1
+          fi
+          if [ "$GITHUB_REPOSITORY" != "morfisam25-tech/YEKI-HAST" ]; then
+            echo '::error::Unexpected repository'
+            exit 1
+          fi
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo '::error::PRODUCTION_DATABASE_URL repository secret is required'
+            exit 1
+          fi
+          expected='approved=2026-08-30;project=royal-lab-98725266;region=aws-us-east-2'
+          actual="$(tr -d '\r\n' < .launch/production-db-migration 2>/dev/null || true)"
+          if [ "$actual" != "$expected" ]; then
+            echo '::error::Production DB migration approval marker is missing or changed'
+            exit 1
+          fi
+
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Require validated workspace dependency lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f package-lock.json || { echo '::error::package-lock.json is required before production migration'; exit 1; }
+
+      - name: Validate destination without exposing credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const raw = process.env.DATABASE_URL?.trim();
+          if (!raw) throw new Error('DATABASE_URL is required');
+          const url = new URL(raw);
+          if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('production DB URL must be PostgreSQL');
+          if (!url.hostname.endsWith('.us-east-2.aws.neon.tech')) throw new Error('production DB host is not the approved Neon us-east-2 target');
+          if (url.pathname !== '/neondb') throw new Error('production DB database must be neondb');
+          console.log('production DB destination guard PASS (credentials hidden)');
+          NODE
+
+      - name: Install workspace dependencies from lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Apply repository migrations exactly once
+        run: npm run db:migrate
+
+      - name: Verify migrated production schema read-only
+        run: node scripts/verify-production-db.mjs

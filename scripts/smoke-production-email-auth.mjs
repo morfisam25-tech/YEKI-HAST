@@ -1,8 +1,17 @@
 import tls from 'node:tls';
 
+const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
+
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
+  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
+  return value;
+}
+
+function optional(name, fallback) {
+  const value = process.env[name]?.trim();
+  if (!value) return fallback;
   if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
   return value;
 }
@@ -168,7 +177,7 @@ async function jsonRequest(url, init, expectedStatus) {
 
 const base = required('API_PRODUCTION_URL').replace(/\/$/, '');
 if (!base.startsWith('https://')) throw new Error('API_PRODUCTION_URL must use HTTPS');
-const email = normalizedEmail(required('PRODUCTION_SMTP_USERNAME'));
+const email = normalizedEmail(optional('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL));
 const mailboxPassword = required('PRODUCTION_SMTP_PASSWORD');
 const startedAt = Date.now();
 

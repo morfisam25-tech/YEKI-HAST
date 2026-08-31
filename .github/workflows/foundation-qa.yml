@@ -94,6 +94,7 @@ jobs:
           node --experimental-strip-types --check services/api/src/domain/call-authorization.ts
           node --experimental-strip-types --check services/api/src/domain/payment-status.ts
           node --experimental-strip-types --check services/api/src/handler.ts
+          node --check scripts/preflight-production-db-migration.mjs
           node --check scripts/verify-production-security-config.mjs
           node --check scripts/verify-production-db.mjs
           node --check scripts/sync-vercel-production-env.mjs
@@ -174,6 +175,7 @@ jobs:
           {
             "$schema": "https://openapi.vercel.sh/vercel.json",
             "framework": null,
+            "regions": ["iad1"],
             "rewrites": [
               { "source": "/health", "destination": "/api/index" },
               { "source": "/ready", "destination": "/api/index" },

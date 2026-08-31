@@ -33,13 +33,15 @@ test('production DB migration stays blocked until an exact aws-us-east-1 target 
   assert.doesNotMatch(migrationWorkflow, /evidence[-_ ]?axis/i);
 });
 
-test('manual production DB migration requires a deliberate confirmation phrase', () => {
+test('production DB migration is manual-only and requires a deliberate confirmation phrase', () => {
   assert.match(migrationWorkflow, /workflow_dispatch:/);
   assert.match(migrationWorkflow, /confirm:/);
   assert.match(migrationWorkflow, /required: true/);
   assert.match(migrationWorkflow, /MIGRATE_YEKI_HAST_PRODUCTION/);
-  assert.match(migrationWorkflow, /GITHUB_EVENT_NAME.*workflow_dispatch/);
-  assert.match(migrationWorkflow, /Manual production migration confirmation did not match/);
+  assert.match(migrationWorkflow, /GITHUB_EVENT_NAME.*!= 'workflow_dispatch'/);
+  assert.match(migrationWorkflow, /Production migration requires a manual dispatch with the exact confirmation phrase/);
+  assert.doesNotMatch(migrationWorkflow, /^\s*push:\s*$/m);
+  assert.doesNotMatch(migrationWorkflow, /branches:\s*\[main\]/);
 });
 
 test('production DB migration uses only the secure repository credential and locked source', () => {

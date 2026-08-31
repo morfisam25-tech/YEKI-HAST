@@ -58,7 +58,6 @@ jobs:
           for name in \
             VERCEL_TOKEN \
             PRODUCTION_DATABASE_URL \
-            PRODUCTION_SMTP_USERNAME \
             PRODUCTION_SMTP_PASSWORD
           do
             if [ -z "${!name:-}" ]; then

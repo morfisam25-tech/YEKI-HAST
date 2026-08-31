@@ -14,7 +14,7 @@ export default function TermsPage() {
       </header>
 
       <article className="legal-page" aria-labelledby="terms-title">
-        <p className="kicker">آخرین به‌روزرسانی: ۲۹ اوت ۲۰۲۶</p>
+        <p className="kicker">آخرین به‌روزرسانی: ۳۱ اوت ۲۰۲۶</p>
         <h1 id="terms-title">قوانین استفاده</h1>
         <p className="legal-lead">
           این قواعد برای استفاده از نسخه‌ای از «یکی هست» نوشته شده که واقعاً در production فعال است.
@@ -78,6 +78,15 @@ export default function TermsPage() {
             یا فرایند باز نگهداری شوند. ثبت درخواست با اعلام «حذف کامل» یکسان نیست.
           </p>
           <p><a href="/account/delete">صفحه حذف حساب</a></p>
+        </section>
+
+        <section className="legal-section">
+          <h2>پشتیبانی</h2>
+          <p>
+            برای پشتیبانی حساب یا پرسش درباره سرویس می‌توانید به
+            {' '}<a href="mailto:sales@uniqueholding.com.tr">sales@uniqueholding.com.tr</a>{' '}
+            ایمیل بزنید.
+          </p>
         </section>
 
         <section className="legal-section">

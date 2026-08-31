@@ -18,24 +18,24 @@ const publicRuntimeKeys = [
   'SUPPORT_EMAIL',
 ];
 
-const publicSecretInputs = [
+const legacyCompatiblePolicyInputs = [
   'PRODUCTION_PRIVACY_POLICY_URL',
   'PRODUCTION_TERMS_OF_SERVICE_URL',
   'PRODUCTION_ACCOUNT_DELETION_URL',
-  'PRODUCTION_SUPPORT_EMAIL',
 ];
 
 const canonicalWebOrigin = 'https://web-unique-6ff0.vercel.app';
+const betaMailbox = 'sales@uniqueholding.com.tr';
 
-test('runtime public-release env remains explicit while documenting first-party production defaults', () => {
+test('runtime public-release env stays explicit for local/other environments while controlled production is source-locked', () => {
   for (const key of publicRuntimeKeys) {
     assert.match(envExample, new RegExp(`^${key}=$`, 'm'));
   }
-  assert.match(envExample, /defaults Privacy, Terms and Account Deletion to the/);
-  assert.match(envExample, /Support has no inferred default/);
+  assert.match(envExample, /Controlled production env sync locks Privacy, Terms and Account Deletion/);
+  assert.match(envExample, /support to the verified Workspace mailbox/);
 });
 
-test('shared public-release parser rejects non-public surfaces and only reports readiness when all exist', () => {
+test('shared public-release parser rejects non-public surfaces and reports readiness only when all exist', () => {
   assert.match(publicRelease, /url\.protocol !== 'https:'/);
   assert.match(publicRelease, /localhost/);
   assert.match(publicRelease, /url\.username \|\| url\.password/);
@@ -65,13 +65,16 @@ test('production security verifier requires real public surfaces when caller bet
   assert.match(securityVerifier, /emailAddress\('SUPPORT_EMAIL'\)/);
 });
 
-test('privacy terms and account deletion are first-party canonical Web surfaces', () => {
+test('privacy terms and account deletion are source-locked first-party canonical Web surfaces', () => {
   assert.ok(envSync.includes(`const DEFAULT_PRIVACY_POLICY_URL = '${canonicalWebOrigin}/privacy'`));
   assert.ok(envSync.includes(`const DEFAULT_TERMS_OF_SERVICE_URL = '${canonicalWebOrigin}/terms'`));
   assert.ok(envSync.includes(`const DEFAULT_ACCOUNT_DELETION_URL = '${canonicalWebOrigin}/account/delete'`));
-  assert.match(envSync, /provided\('PRODUCTION_PRIVACY_POLICY_URL'\) \?\? DEFAULT_PRIVACY_POLICY_URL/);
-  assert.match(envSync, /provided\('PRODUCTION_TERMS_OF_SERVICE_URL'\) \?\? DEFAULT_TERMS_OF_SERVICE_URL/);
-  assert.match(envSync, /provided\('PRODUCTION_ACCOUNT_DELETION_URL'\) \?\? DEFAULT_ACCOUNT_DELETION_URL/);
+  for (const name of legacyCompatiblePolicyInputs) {
+    assert.match(envSync, new RegExp(`requireAbsentOrExact\\('${name}'`));
+  }
+  assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL/);
+  assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL/);
+  assert.match(envSync, /const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL/);
   assert.match(envSync, /setPlain\('PRIVACY_POLICY_URL', privacyPolicyUrl\)/);
   assert.match(envSync, /setPlain\('TERMS_OF_SERVICE_URL', termsOfServiceUrl\)/);
   assert.match(envSync, /setPlain\('ACCOUNT_DELETION_URL', accountDeletionUrl\)/);
@@ -84,10 +87,17 @@ test('privacy terms and account deletion are first-party canonical Web surfaces'
   assert.match(webLanding, /href="\/account\/delete"/);
 });
 
-test('production env sync keeps support explicit and never clears public values with blanks', () => {
-  for (const key of publicSecretInputs) assert.ok(envSync.includes(key), `missing ${key}`);
-  assert.match(envSync, /provided\('PRODUCTION_SUPPORT_EMAIL'\)/);
-  assert.match(envSync, /if \(supportEmail\) setPlain\('SUPPORT_EMAIL', supportEmail\)/);
+test('technical-beta support identity is source-locked and cannot be redirected by a repository secret', () => {
+  assert.ok(envSync.includes(`const DEFAULT_MAILBOX_EMAIL = '${betaMailbox}'`));
+  assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL/);
+  assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
+  assert.doesNotMatch(envSync, /PRODUCTION_SUPPORT_EMAIL/);
+  assert.match(webLanding, /mailto:sales@uniqueholding\.com\.tr/);
+  assert.match(privacyPage, /mailto:sales@uniqueholding\.com\.tr/);
+  assert.match(termsPage, /mailto:sales@uniqueholding\.com\.tr/);
+});
+
+test('production env sync never clears public values with blank writes', () => {
   assert.doesNotMatch(envSync, /setPlain\('PRIVACY_POLICY_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('TERMS_OF_SERVICE_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('ACCOUNT_DELETION_URL',\s*''\)/);

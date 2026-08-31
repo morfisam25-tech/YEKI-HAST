@@ -4,6 +4,22 @@ import test from 'node:test';
 
 const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 
+test('Web and Admin must already be protected before either production deployment begins', () => {
+  const protectionPreflight = workflow.indexOf('Require Web and Admin to be protected before any frontend deployment');
+  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
+  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
+
+  assert.ok(protectionPreflight >= 0);
+  assert.ok(webDeploy > protectionPreflight);
+  assert.ok(adminDeploy > webDeploy);
+  assert.match(workflow, /frontend pre-deploy protection PASS/);
+  assert.match(workflow, /\['Web', process\.env\.WEB_PRODUCTION_URL\]/);
+  assert.match(workflow, /\['Admin', process\.env\.ADMIN_PRODUCTION_URL\]/);
+  assert.match(workflow, /status >= 300 && status < 400/);
+  assert.match(workflow, /status === 401 \|\| status === 403/);
+  assert.match(workflow, /must be protected before deployment/);
+});
+
 test('Web is not made public until both exact frontend deployments and protected smoke checks pass', () => {
   const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
   const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');

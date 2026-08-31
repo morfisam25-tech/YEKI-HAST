@@ -92,7 +92,9 @@ const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
 // The existing corporate mail domain is on Google Workspace. The verified sales
-// mailbox is the production default and can still be overridden explicitly.
+// mailbox is the production SMTP default and may still be overridden explicitly
+// for SMTP delivery. Public support identity is separately locked below so API
+// bootstrap and checked-in Web policy surfaces cannot drift apart accidentally.
 const smtpHost = optional('PRODUCTION_SMTP_HOST', 'smtp.gmail.com');
 const smtpPort = optional('PRODUCTION_SMTP_PORT', '465');
 const smtpSecure = optional('PRODUCTION_SMTP_SECURE', 'true').toLowerCase();
@@ -115,16 +117,18 @@ validateEmail(smtpFromEmail);
 if (!smtpHost || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
 // Privacy, terms and account deletion are first-party Web surfaces checked into
-// this repository. Their canonical production URLs are therefore safe defaults.
-// The default support mailbox is the same verified bidirectional Workspace route.
+// this repository. Their canonical production URLs are safe defaults. Public
+// support is intentionally fixed to the same verified address rendered by the
+// Web source; changing it requires a coordinated source update, not a secret-only
+// override that could make API and Web disagree.
 const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL') ?? DEFAULT_PRIVACY_POLICY_URL;
 const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL') ?? DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
-const supportEmail = optional('PRODUCTION_SUPPORT_EMAIL', DEFAULT_MAILBOX_EMAIL).toLowerCase();
+const supportEmail = DEFAULT_MAILBOX_EMAIL;
 validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
 validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
-validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
+validateEmail(supportEmail, 'SUPPORT_EMAIL');
 
 const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
 const listed = await vercelJson(listUrl);

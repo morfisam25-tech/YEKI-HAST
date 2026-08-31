@@ -80,7 +80,11 @@ export async function requestEmailOtp(req: IncomingMessage, res: ServerResponse)
 
   const ttlSeconds = integerEnv('OTP_TTL_SECONDS', 300);
   const identityLimit = integerEnv('OTP_EMAIL_LIMIT_PER_15M', 5);
-  const ipLimit = integerEnv('OTP_IP_LIMIT_PER_15M', 20);
+  // Web/Admin email auth is intentionally proxied through server-side Vercel
+  // functions. Keep its IP bucket separate from direct phone/SMS OTP so a
+  // shared proxy egress cannot make unrelated browser users exhaust the
+  // stricter phone limit. Per-email and global limits still apply.
+  const ipLimit = integerEnv('OTP_EMAIL_IP_LIMIT_PER_15M', 200);
   const globalLimit = integerEnv('OTP_GLOBAL_LIMIT_PER_15M', 1000);
   const eHash = emailHash(email);
   const rIpHash = ipHash(requestIp(req));

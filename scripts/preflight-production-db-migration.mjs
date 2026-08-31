@@ -34,32 +34,31 @@ try {
       throw new Error('untracked application schema exists before first production migration');
     }
     console.log('production migration preflight PASS (fresh database; read-only)');
-    process.exit(0);
-  }
+  } else {
+    const migrations = await pool.query(`
+      SELECT filename, sha256
+      FROM public.yeki_hast_schema_migrations
+      ORDER BY filename
+    `);
+    const applied = new Map();
+    for (const migration of migrations.rows) {
+      const filename = String(migration.filename ?? '');
+      const sha256 = String(migration.sha256 ?? '');
+      const expectedSha = expectedMigrations.get(filename);
+      if (!expectedSha) throw new Error(`unexpected production migration record: ${filename || 'unknown'}`);
+      if (sha256 !== expectedSha) throw new Error(`production migration hash mismatch: ${filename}`);
+      applied.set(filename, sha256);
+    }
 
-  const migrations = await pool.query(`
-    SELECT filename, sha256
-    FROM public.yeki_hast_schema_migrations
-    ORDER BY filename
-  `);
-  const applied = new Map();
-  for (const migration of migrations.rows) {
-    const filename = String(migration.filename ?? '');
-    const sha256 = String(migration.sha256 ?? '');
-    const expectedSha = expectedMigrations.get(filename);
-    if (!expectedSha) throw new Error(`unexpected production migration record: ${filename || 'unknown'}`);
-    if (sha256 !== expectedSha) throw new Error(`production migration hash mismatch: ${filename}`);
-    applied.set(filename, sha256);
-  }
+    if (applied.has('0002_email_auth.sql') && !applied.has('0001_initial.sql')) {
+      throw new Error('production migration history is out of order');
+    }
+    if (applied.has('0001_initial.sql') && (!appSchema || !privateSchema)) {
+      throw new Error('tracked initial migration is missing required application schemas');
+    }
 
-  if (applied.has('0002_email_auth.sql') && !applied.has('0001_initial.sql')) {
-    throw new Error('production migration history is out of order');
+    console.log(`production migration preflight PASS (${applied.size} known migration(s); read-only)`);
   }
-  if (applied.has('0001_initial.sql') && (!appSchema || !privateSchema)) {
-    throw new Error('tracked initial migration is missing required application schemas');
-  }
-
-  console.log(`production migration preflight PASS (${applied.size} known migration(s); read-only)`);
 } finally {
   await pool.end();
 }

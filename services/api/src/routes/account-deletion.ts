@@ -19,6 +19,7 @@ export async function requestAccountDeletion(req: IncomingMessage, res: ServerRe
         AND action='account_deletion_requested'
         AND entity_type='user'
         AND entity_id=$1
+        AND metadata->>'processingState'='pending'
       LIMIT 1
     `, [userId]);
 

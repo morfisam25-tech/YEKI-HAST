@@ -208,6 +208,7 @@ export default function Page() {
         <a href="/privacy">حریم خصوصی</a>
         <a href="/terms">قوانین استفاده</a>
         <a href="/account/delete">حذف حساب</a>
+        <a href="mailto:sales@uniqueholding.com.tr">پشتیبانی</a>
       </nav>
     </main>
   );

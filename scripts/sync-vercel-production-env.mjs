@@ -177,6 +177,7 @@ setPlain('SESSION_TTL_HOURS', '720');
 setPlain('OTP_TTL_SECONDS', '300');
 setPlain('OTP_PHONE_LIMIT_PER_15M', '5');
 setPlain('OTP_EMAIL_LIMIT_PER_15M', '5');
+setPlain('OTP_EMAIL_IP_LIMIT_PER_15M', '200');
 setPlain('OTP_IP_LIMIT_PER_15M', '20');
 setPlain('OTP_GLOBAL_LIMIT_PER_15M', '1000');
 setPlain('DEV_EXPOSE_OTP', 'false');

@@ -7,10 +7,6 @@ on:
         description: 'Type DEPLOY-PRODUCTION-API to confirm manual release'
         required: true
         type: string
-  push:
-    branches: [main]
-    paths:
-      - .launch/production-api
 
 permissions:
   contents: read
@@ -59,8 +55,8 @@ jobs:
             echo "::error::Unexpected repository"
             exit 1
           fi
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${MANUAL_CONFIRM:-}" != "DEPLOY-PRODUCTION-API" ]; then
-            echo "::error::Manual production API deploy requires the exact confirmation phrase"
+          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "${MANUAL_CONFIRM:-}" != "DEPLOY-PRODUCTION-API" ]; then
+            echo "::error::Production API deploy requires a manual dispatch with the exact confirmation phrase"
             exit 1
           fi
           missing=()

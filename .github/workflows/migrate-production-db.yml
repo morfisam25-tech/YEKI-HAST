@@ -2,6 +2,11 @@ name: Migrate Production Database
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE_YEKI_HAST_PRODUCTION to run the production migration'
+        required: true
+        type: string
   push:
     branches: [main]
     paths:
@@ -21,6 +26,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
       DB_POOL_MAX: '1'
+      MIGRATION_CONFIRM: ${{ github.event.inputs.confirm }}
     steps:
       - name: Checkout exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +41,10 @@ jobs:
           fi
           if [ "$GITHUB_REPOSITORY" != "morfisam25-tech/YEKI-HAST" ]; then
             echo '::error::Unexpected repository'
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ] && [ "${MIGRATION_CONFIRM:-}" != 'MIGRATE_YEKI_HAST_PRODUCTION' ]; then
+            echo '::error::Manual production migration confirmation did not match the required phrase'
             exit 1
           fi
           if [ -z "${DATABASE_URL:-}" ]; then

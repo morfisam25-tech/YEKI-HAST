@@ -1,159 +1,131 @@
 # Launch Status — یکی هست
 
-Last reviewed: 2026-08-30
+Last reviewed: 2026-08-31
 
-This file is the repository source of truth for launch state. Future work should inspect the real repo, Vercel, Neon and provider state before trusting an older chat summary.
+This file is the current launch-state source of truth. Verify live systems before relying on older chat summaries.
+
+## Intended first release scope
+
+The first release is a **Web/API technical beta**, not the full paid voice product.
+
+In scope for this beta:
+- public Web landing page;
+- Email OTP login/session/logout;
+- listener application/training foundations that are genuinely enabled by production bootstrap;
+- public Privacy, Terms, Account Deletion and Support surfaces;
+- protected Admin shell and operational readiness views.
+
+Explicitly out of scope until their own external gates are complete:
+- Caller voice calls;
+- paid Caller flows;
+- telephony provider behavior;
+- call-phone verification;
+- production KYC completion;
+- listener payouts;
+- native App Store / Play Store release;
+- destructive final account deletion/anonymization.
+
+Those out-of-scope surfaces must remain closed/fail-closed. Their incompleteness does not make the narrower Web/API technical beta dishonest, but they must never be described as active.
 
 ## Current source state
 
-- Production deployment workflows are pinned to Vercel Team `UNIQUE` and the exact YEKI-HAST API/Web/Admin projects.
-- Automatic Vercel Git deployments are disabled; production deploys use the controlled workflows only.
-- Production release tooling in Foundation QA, API deploy, frontend deploy, dependency-lock generation and EAS production is pinned to Node `22.23.1`; package manifests remain compatible with Node `22.x`.
-- Root `package.json` pins release build tooling itself: `vercel` `59.3.0` and `esbuild` `0.25.9`. API/Web/Admin release workflows and Foundation QA execute the binaries from the lock-installed root `node_modules/.bin`; they do not fetch release tooling with runtime `npx --yes` calls.
-- API/Web/Admin production workflows fail closed when the repository has no validated `package-lock.json`.
-- Foundation QA and all production builds consume the committed workspace lock with `npm ci --ignore-scripts --no-audit --no-fund`. Foundation QA now installs from the lock before tests/builds and verifies its lock-installed API bundler before use.
-- Web/Admin `vercel.json` files force their Vercel build install step back to the monorepo root and use the validated root lock.
-- API/Web/Admin production delivery follows Vercel's CI prebuilt pattern: pull production project settings, build the artifact inside the GitHub runner, verify `.vercel/output/config.json`, then deploy with `--prebuilt --prod`. Production no longer depends on a second remote source install after CI validated the lock.
-- The dependency-lock workflow uses Node `22.23.1`, generates the repository's first real lock, verifies it with `npm ci`, commits it to `main`, then explicitly dispatches Foundation QA. `foundation-qa.yml` supports `workflow_dispatch` because a push made by the workflow's `GITHUB_TOKEN` does not itself trigger another push workflow.
-- `tests/production-deploy-target-guard.test.ts` guards the authorized team/projects, source checkout, exact Node release, exact lock-manifest tooling versions, dependency-lock requirement, lock-to-QA handoff, `npm ci`, prebuilt production deploys, public Web smoke and protected Admin smoke.
-- Public Web now has first-party source pages for `/privacy`, `/terms` and `/account/delete`. The landing page links all three.
-- API production env sync has canonical first-party defaults for Privacy, Terms and Account Deletion URLs on `https://web-unique-6ff0.vercel.app`; a real Support Email remains an explicit external input and is never inferred from an SMTP sender.
-- The frontend production workflow makes only the `web` Vercel project public by disabling Vercel Authentication SSO through the official Vercel CLI before deployment. It does not disable protection on `admin`.
-- Web production smoke is intentionally unauthenticated with redirects disabled and requires `/`, `/privacy`, `/terms` and `/account/delete` all to return valid public content.
-- Admin production has two separate gates: an unauthenticated request must receive an actual protection status (3xx, 401 or 403; 404/5xx do not count), then authenticated Vercel CLI access must return the real Admin shell.
-- A real root `package-lock.json` is now committed. Expo SDK dependencies were aligned on current `main`, `expo-doctor` passed all 21 checks, and an Android Preview EAS build completed successfully. Full Foundation QA for current HEAD still requires a real runner execution; a zero-step Actions failure does not count.
-- Current source commit `7238ab6921462095e97f25fe20e1114a02a8367a` passed all 474 source tests, full workspace typecheck, foundation validation, Web production build, Admin production build, Android export and iOS export in the independent workspace reconstruction. The API also starts under Node's standard `--experimental-strip-types` execution path and serves `/health`; database-backed readiness remains correctly dependent on a real database connection.
-- Mobile bootstrap is fail-closed: if the production bootstrap/catalog cannot be loaded, login and registration do not continue with stale fallback catalog data.
-- Browser production sessions use HttpOnly + Secure + SameSite=Strict cookies and production cookie names use the `__Host-` prefix.
-- Browser POST proxy routes reject cross-site/same-site mutations and fail closed on missing browser request metadata in production.
-- Web/Admin backend proxy requests have a 15-second upstream timeout and never add automatic mutation retries.
-- Web/Admin declare CSP, anti-framing, no-sniff, referrer and browser-capability security headers in Vercel config.
-- API JSON response helpers explicitly use `no-store`, no-sniff, anti-framing, no-referrer and restrictive JSON CSP headers.
-- The payment callback HTML is non-cacheable, anti-framed, no-referrer, no-script and protected by a restrictive CSP; it does not render provider or internal payment identifiers.
-- Account deletion is request-based and fail-closed: the request is written as pending, all active sessions are revoked immediately, re-login is blocked while pending, and the response explicitly says deletion is not yet complete. The Admin queue exposes internal user ID + processing state only and has no destructive final-delete action until retention rules for financial/safety/open records are defined.
-- Caller closed beta is disabled by default.
-- Manual phone verification beta is disabled by default.
-- Admin bootstrap is disabled by default and its one-time enablement requires an expiry window.
-- Production dev OTP and dev telephony are forbidden.
-- No database migration is authorized or required by the current launch workflow.
+- Production Vercel team is pinned to `UNIQUE` and exact API/Web/Admin projects.
+- Automatic Vercel Git deployment is disabled; controlled GitHub Actions workflows are the production path.
+- Release tooling is pinned to Node `22.23.1`, npm `10.9.8`, Vercel CLI `59.3.0` and esbuild `0.25.9` through the committed workspace lock.
+- Public Web source contains `/`, `/privacy`, `/terms` and `/account/delete`.
+- Public Home now states explicitly that voice calling is not open yet and that no development/test route substitutes for the missing real provider gates.
+- `sales@uniqueholding.com.tr` was verified through real Google Workspace mail history as a bidirectional mailbox. It is now the default production SMTP username/from address and public Support Email, while explicit overrides remain supported.
+- Public Home, Privacy and Terms expose `mailto:sales@uniqueholding.com.tr`.
+- Production Email OTP E2E still requires a real mailbox App Password; no fake production OTP is permitted.
+- Account deletion remains request-based and fail-closed: ownership is verified, a pending request is recorded, active sessions are revoked, and the product does not claim destructive deletion has completed.
+- Caller closed beta, manual phone verification beta and Admin bootstrap are disabled by default. Production dev OTP and dev telephony are forbidden.
+- Mobile EAS preview and production profiles both target the canonical API `https://yeki-hast-theta.vercel.app` with Node `22.23.1`; native store artwork/signing remain separate post-beta gates.
 
-## Live production state last verified
+## Production database
 
-- Vercel Team `UNIQUE` is the connected team and is currently on the Hobby plan.
-- Vercel Terms of Service last updated 2026-06-01 state that Hobby may only be used for personal or non-commercial use. Therefore an upgrade to an eligible paid/commercial plan is a hard gate before paid/commercial traffic, not an open interpretation.
-- API `GET /health`: 200 / healthy.
-- API `GET /ready`: 503 / not ready.
-- API `GET /v1/bootstrap`: 503 / blocked by the readiness gate.
-- The latest API production deployment inspected is READY at the Vercel deployment layer, but application readiness remains red because `/ready` is 503.
-- Web production currently redirects an unauthenticated visitor to Vercel Authentication. Source now contains an automated controlled step to disable SSO protection only for the Web project when the frontend production workflow is actually run with a valid `VERCEL_TOKEN`; the live setting has not changed yet because that workflow has not executed.
-- The current Web/Admin production deployments predate the latest checked-in frontend source, including the public account-deletion, Privacy and Terms pages.
-- The existing Web build log confirms the old deployment uploaded only the app subdirectory and performed its own remote `npm install`; the new controlled workflow removes that release path by building a locked prebuilt artifact in CI.
-- Admin production remains intentionally protected by Vercel Authentication; the controlled workflow refuses to count 404/5xx as protection and also verifies the real Admin shell through authenticated Vercel CLI access.
+Production Neon project:
+- project: `yeki-hast-production`
+- project ID: `royal-lab-98725266`
+- region: `aws-us-east-2` (Ohio)
+- PostgreSQL: 18
+- default branch: `main` (`br-cool-dawn-axzdy02h`)
+- database: `neondb`
 
-A healthy `/health` alone is never sufficient to declare production ready.
+The production DB was verified as fresh before migration. Latest Neon metadata on 2026-08-31 still reported `written_data_bytes: 0`; no application migration has successfully executed yet.
 
-## External blockers
+The connected Neon SQL/Migration MCP path has a client/backend schema mismatch (`projectId` versus backend `project_id`) and fails before SQL reaches the database. Do not keep retrying that broken write path.
 
-### 1. GitHub Actions execution
+The approved migration path is therefore the guarded GitHub workflow `.github/workflows/migrate-production-db.yml`, which:
+- accepts only `main` in this repository;
+- consumes only repository secret `PRODUCTION_DATABASE_URL`;
+- checks the approved Neon `us-east-2` host and `/neondb` database without printing credentials;
+- installs from the committed lock;
+- runs the repository migration runner (`0001_initial.sql`, then `0002_email_auth.sql`);
+- runs `scripts/verify-production-db.mjs` read-only after migration.
 
-The repository now has a real root `package-lock.json`, committed by `544868b491403c482f04ee8caf4c7e168ca74fa4`. Expo dependency alignment followed in `2ee4cb19ad137230263a99d643a8ffcc9395eeac`.
+Migration approval marker is committed at `.launch/production-db-migration` for project `royal-lab-98725266` / `aws-us-east-2`. The user explicitly authorized this migration. `PRODUCTION_DATABASE_URL` is now present as a GitHub Repository Actions secret; its value must remain hidden.
 
-GitHub Actions is still blocked at the account level. The latest Foundation QA run `33328256665` for commit `7238ab6921462095e97f25fe20e1114a02a8367a` created job `99302133682`, then failed in roughly four seconds with `steps: []`, no runner and no executed source step. The account Actions budget was observed at `$0` with **Stop usage** enabled, and GitHub reported the spending/payment limit condition. This is not a source-code failure and it is not a QA PASS.
+Migration hashes expected by the verifier:
+- `0001_initial.sql`: `f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09`
+- `0002_email_auth.sql`: `3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90`
 
-Required action: restore an Actions spending allowance/payment state, then rerun Foundation QA against the exact current `main`. Do not regenerate the lock unless manifests change, and do not mark current HEAD green until the real job executes all steps and passes.
+The migration workflow has not executed because GitHub Actions currently cannot acquire a runner.
 
-### 2. Production database credential
+## Region alignment
 
-The Neon project/branch/database are known, but the connected Neon tool still has a schema mismatch: the client exposes `projectId`/`branchId`/`databaseName` while the backend rejects those keys and requires snake_case fields. Both connection-string retrieval and a read-only `SELECT 1` fail at argument validation before reaching the database.
+Neon is in AWS `us-east-2`. The controlled API release now generates Vercel config with `regions: ["cle1"]` so the next API production deployment is aligned with the Ohio database rather than inheriting the old `iad1` placement.
 
-Do not invent or reconstruct the database password. Required secure input for automated production deployment: `PRODUCTION_DATABASE_URL`.
+The currently live API deployment predates this change and remains the old deployment until controlled release succeeds.
 
-### 3. Vercel production write credential
+## Live state last verified 2026-08-31
 
-The controlled release can now automate the Web protection change and deploy all three Vercel projects, but it still needs a real Vercel credential stored securely as repository secret `VERCEL_TOKEN`.
+- API `/health`: **200**.
+- API `/ready`: **503 `service_not_ready`**, expected until migrated DB + production env are deployed.
+- No API production error/fatal runtime logs were found in the last one-hour Hobby retention window during the check.
+- Public Web canonical URL still redirects to Vercel Authentication (302); the current live deployment is old and predates the latest public/legal/support source.
+- Admin canonical URL still redirects to Vercel Authentication (302), which is the intended protection state.
+- Team `UNIQUE` remains on Vercel Hobby. No paid/commercial traffic may be opened until an eligible commercial plan is explicitly approved and purchased.
 
-Do not paste the token into chat or source.
+## GitHub Actions blocker
 
-### 4. Production Email OTP mailbox
+Actions still fails before source execution: jobs show zero steps / no assigned runner. Account billing showed an Actions budget of `$0` with Stop Usage enabled, and GitHub requires a valid payment method before raising that budget.
 
-The deployment workflow defaults to Google Workspace SMTP (`smtp.gmail.com`, port 465, TLS) and performs a real delivery/verify/session/logout E2E test.
+The user authorized a maximum Actions budget of **$5/month with Stop Usage enabled**. Payment-method verification is currently blocked because the bank verification SMS is not arriving. Do not exceed that authorization and do not change unrelated Codespaces/Packages/LFS/AI budgets.
 
-Required secure inputs:
-- `PRODUCTION_SMTP_USERNAME`
-- `PRODUCTION_SMTP_PASSWORD` (Google Workspace App Password or another valid mailbox credential)
+Until payment is fixed:
+- do not call zero-step Actions failures source failures;
+- do not mark current HEAD QA-green;
+- do not claim the production DB migration ran.
 
-Do not fake OTP delivery in production.
+## Remaining irreducible secure inputs for the Web/API beta
 
-### 5. Support Email
+Already configured:
+- `PRODUCTION_DATABASE_URL` — repository Actions secret exists.
 
-Privacy Policy, Terms of Service and Account Deletion now have first-party canonical Web URLs in source. `sales@uniqueholding.com.tr` is the intended public company contact on the active Google Workspace domain; `support@uniqueholding.com.tr` is not configured and must not be published.
+Still required before controlled API release:
+- `VERCEL_TOKEN` — repository secret; never paste into chat/source.
+- `PRODUCTION_SMTP_PASSWORD` — Google Workspace App Password (or equivalent valid mailbox credential) for the verified default mailbox; never paste into chat/source.
 
-The controlled release still requires `PRODUCTION_SUPPORT_EMAIL` to be stored securely and verified in the deployed bootstrap/policy surfaces. Do not infer it from `SMTP_FROM_EMAIL` or a no-reply mailbox.
+No separate `PRODUCTION_SMTP_USERNAME` or `PRODUCTION_SUPPORT_EMAIL` is required for the default path anymore; both default to the verified `sales@uniqueholding.com.tr` mailbox. Privacy, Terms and Account Deletion URLs also have first-party defaults.
 
-### 6. Account-deletion retention decision
+## Controlled completion sequence after GitHub billing is fixed
 
-The self-service request and Admin queue exist, but final deletion/anonymization is intentionally not implemented yet. Before a destructive processor is added, define which financial ledger, payment/payout, safety, dispute and other open records must be retained or anonymized and for how long.
-
-No destructive database action should be added merely to make the deletion queue disappear.
-
-### 7. Mobile store release artwork and credentials
-
-The real Expo project is linked in `apps/mobile/app.json` under account `saimorfis-team` with project ID `58b9f62d-db82-421a-ad59-edccac70c316`. Android Preview build `c41865f7-7f2f-44e4-bc3a-3236d28fb302` completed successfully after the dependency lock and Expo SDK alignment work.
-
-The mobile project is installable for preview but is not yet store-ready:
-
-- No approved production icon/adaptive-icon/splash artwork is checked in and referenced by `app.json`; do not ship default/placeholder Expo identity as a finished store release.
-- The production EAS profile pins Node `22.23.1`, uses the canonical production API, requires a committed source state and uses remote auto-incremented native build versions.
-- Android signing/store credentials and Apple signing/App Store credentials still require real external account setup and verification.
-- A signed production build and store metadata/privacy declarations still require final verification.
-
-These mobile-store items do not justify opening any unready backend surface.
-
-### 8. Vercel commercial plan before paid launch
-
-Team `UNIQUE` is currently Hobby. Vercel Terms of Service dated 2026-06-01 explicitly restrict Hobby to personal/non-commercial use. Before any paid/commercial YEKI-HAST traffic is opened, move the workload to an eligible Vercel commercial plan and verify the resulting project state.
-
-Caller paid flows must remain closed while this gate is red.
-
-## Provider-gated product surfaces
-
-These are external integration gates, not missing behavior to guess around:
-
-- Caller voice launch: production telephony contract, documented semantics and verified credentials. The source telephony provider currently has only the development implementation; production unknown providers fail closed.
-- Caller payments: real NextPay production credentials and callback configuration plus live verification.
-- Listener payout: real payout credentials plus live verification.
-- Listener KYC completion: real KYC inquiry provider configuration plus live verification.
-- Call-phone verification: the source has real Kavenegar, IPPanel and SMS.ir adapters, but launch still requires real provider credentials/template approval and delivery verification. Dev SMS remains forbidden in production.
-- Caller launch: explicit age-policy values plus all readiness dependencies.
-
-Until those dependencies are real, the corresponding production surfaces must remain closed/fail-closed.
-
-## Controlled launch sequence
-
-Once Actions execution and the required external credentials exist securely:
-
-1. Restore GitHub Actions execution by fixing the account Actions spending/payment gate; do not change source to work around a zero-step runner failure.
-2. Rerun Foundation QA on the exact current `main` and require it to finish truly green. QA installs from the committed lock before tests/builds and uses lock-installed esbuild.
-3. Store only the required external credentials in secure GitHub secrets; never place credentials in source or chat.
-4. Trigger the controlled Production API workflow. It must use lock-installed Vercel/esbuild binaries, verify the production DB without migrations, build from the lock and deploy only prebuilt output.
-5. Require `/health` 200, `/ready` 200 with `database: "ready"` and `schema: "ready"`, and a valid `/v1/bootstrap` response.
-6. Require real Email OTP delivery, verification, authenticated session and logout/revocation E2E PASS.
-7. Trigger the controlled frontend workflow. It disables Vercel Authentication SSO only for project `web`, leaves `admin` protected, builds Web/Admin from the root lock and deploys only prebuilt output.
-8. Require unauthenticated public PASS for `/`, `/privacy`, `/terms` and `/account/delete`.
-9. Require Admin to reject unauthenticated access with a real protection response and then PASS authenticated Admin shell smoke.
-10. Review Admin integration-readiness output with secrets excluded.
-11. Keep the linked Expo/EAS project, add approved production release artwork, then complete real production signing/build/store verification before calling the native app store-ready.
-12. Upgrade Team `UNIQUE` from Hobby to an eligible commercial plan before opening paid traffic.
-13. Define account-deletion retention/anonymization policy before implementing any destructive deletion processor.
-14. Keep Caller beta closed until telephony/payment/phone/age/public-release/commercial-hosting gates are all genuinely ready.
-15. Only then enable the smallest intended beta surface and monitor runtime errors.
+1. Run Foundation QA on the exact current `main`; require real runner steps and a full PASS.
+2. Run the guarded production DB migration workflow and require its post-migration read-only verifier to PASS.
+3. Re-run Foundation QA if source changed after the green run; production deployment requires QA coverage for the exact release SHA.
+4. Securely add `VERCEL_TOKEN` and `PRODUCTION_SMTP_PASSWORD` as repository Actions secrets if they are not already present.
+5. Run controlled Production API workflow.
+6. Require `/health` 200, `/ready` 200 with DB/schema ready, valid `/v1/bootstrap`, and real Email OTP delivery + verify + session + logout E2E PASS.
+7. Run controlled frontend workflow: make only Web public, keep Admin protected, deploy current source.
+8. Require unauthenticated public PASS for `/`, `/privacy`, `/terms`, `/account/delete` and authenticated Admin shell PASS.
+9. Treat this as a technical beta only. Keep Caller/payment/KYC/payout/store-release surfaces closed until each real external gate is independently verified.
+10. Before any commercial/paid traffic, separately approve and move Vercel off Hobby to a commercial-eligible plan.
 
 ## Non-negotiable rules
 
-- No Codex for this project.
+- No Codex/Work/Codespaces for this project.
 - Do not touch Evidence Axis.
-- No DB migration without explicit user approval.
-- Never guess provider behavior or provider references.
-- Never expose secrets, bank details, private identity data or OTP/session material.
+- No provider semantics may be guessed.
+- Never expose secrets, bank details, private identity data, OTPs or session material.
 - Production must fail closed.
-- Never mark a launch gate green unless it was actually tested.
+- Never mark a gate green unless it was actually tested.

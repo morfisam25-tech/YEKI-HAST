@@ -15,6 +15,7 @@ const approvalMarker = (
 ).trim();
 
 const expectedMarker = 'approved=2026-08-30;project=royal-lab-98725266;region=aws-us-east-2';
+const endpointFingerprint = '4c067ec8bb706bf10e3cddbdd554aebe90fc7a69cf0d3e6ecbcd0165f662e9cd';
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 
@@ -38,9 +39,18 @@ test('production DB migration uses only the secure repository credential and loc
   assert.doesNotMatch(migrationWorkflow, /console\.log\([^\n]*(password|DATABASE_URL)/i);
 });
 
-test('production DB migration is region-guarded, idempotent and followed by read-only verification', () => {
+test('production DB migration pins the exact endpoint fingerprint and transport requirements before mutation', () => {
   assert.match(migrationWorkflow, /\.us-east-2\.aws\.neon\.tech/);
   assert.match(migrationWorkflow, /url\.pathname !== '\/neondb'/);
+  assert.match(migrationWorkflow, /sslmode'\) !== 'require'/);
+  assert.match(migrationWorkflow, /channel_binding'\) !== 'require'/);
+  assert.match(migrationWorkflow, new RegExp(endpointFingerprint));
+  assert.match(migrationWorkflow, /createHash\('sha256'\)\.update\(url\.hostname\)/);
+  assert.match(migrationWorkflow, /endpoint fingerprint does not match the approved target/);
+  assert.doesNotMatch(migrationWorkflow, /ep-[a-z0-9-]+\.c-[0-9]+\.us-east-2\.aws\.neon\.tech/);
+});
+
+test('production DB migration is idempotent and followed by read-only verification', () => {
   assert.match(migrationWorkflow, /npm run db:migrate/);
   assert.match(migrationWorkflow, /verify-production-db\.mjs/);
 });

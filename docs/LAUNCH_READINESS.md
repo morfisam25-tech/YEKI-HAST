@@ -1,6 +1,6 @@
 # Listener APP / «یکی هست» — Launch Readiness
 
-Last reviewed: 2026-08-29
+Last reviewed: 2026-08-31
 
 This document defines the stable launch gates. Live state, current HEAD, run IDs, infrastructure findings and the exact remaining blockers are maintained only in [`LAUNCH_STATUS.md`](./LAUNCH_STATUS.md). If the two files ever appear to disagree, `LAUNCH_STATUS.md` is authoritative for current state.
 
@@ -29,7 +29,7 @@ A production release requires all of the following:
 Before API production is considered ready:
 
 - The exact production database is verified read-only by `scripts/verify-production-db.mjs`.
-- No migration is run by the release workflow.
+- The API release workflow itself never runs a migration. If the approved production database has not yet been initialized, schema changes may occur only through the separately approved, exact-target guarded migration workflow and must be followed by the read-only verifier before API deployment.
 - `/health` returns 200 for the deployed API.
 - `/ready` returns 200 and reports both database and schema ready.
 - `/v1/bootstrap` returns 200 with the expected market, languages, feature gates and public-release configuration.
@@ -53,7 +53,7 @@ The checked-in first-party public URLs are:
 - Terms: `https://web-unique-6ff0.vercel.app/terms`
 - Account deletion: `https://web-unique-6ff0.vercel.app/account/delete`
 
-A real support mailbox remains required. It must not be inferred from a no-reply or SMTP sender address.
+A real support mailbox remains required. The currently selected default is the verified bidirectional Google Workspace mailbox `sales@uniqueholding.com.tr`; it may be overridden only with another real verified support route. A no-reply or unverified address must not be inferred as support.
 
 ## Account deletion gate
 
@@ -115,7 +115,7 @@ Do not mark the project launch-ready until all gates applicable to the intended 
 
 - current HEAD has a real full QA PASS;
 - dependency lock is real and validated;
-- production database preflight passed without migration;
+- production database migration, if required for the approved empty target, completed only through the guarded workflow and the post-migration read-only verifier passed;
 - API readiness/bootstrap passed;
 - real Email OTP E2E passed;
 - public Web and protected Admin smoke checks passed on the exact deployed source;

@@ -128,7 +128,7 @@ test('production deploys build in CI from the lock and upload only prebuilt Verc
   assert.match(apiWorkflow, /"installCommand": "cd \.\. && npm ci --ignore-scripts --no-audit --no-fund"/);
   assert.match(frontendWorkflow, /Build Web production artifact from locked workspace/);
   assert.match(frontendWorkflow, /Build Admin production artifact from locked workspace/);
-  assert.match(apiWorkflow, /Build API production artifact from locked workspace/);
+  assert.match(apiWorkflow, /Bundle production API runtime/);
 });
 
 test('production deploys can be triggered later by narrow main-branch marker commits', () => {
@@ -157,14 +157,15 @@ test('API production deployment requires only irreducible external launch secret
   assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
 });
 
-test('production environment sync defaults to the verified Google Workspace mailbox while allowing overrides', () => {
+test('production environment sync uses verified Workspace defaults and locks public support to the checked-in route', () => {
   assert.match(envSync, escaped(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox}'`));
   assert.match(envSync, /optional\('PRODUCTION_SMTP_HOST', 'smtp\.gmail\.com'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_PORT', '465'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_SECURE', 'true'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername\)/);
-  assert.match(envSync, /optional\('PRODUCTION_SUPPORT_EMAIL', DEFAULT_MAILBOX_EMAIL\)/);
+  assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL;/);
+  assert.doesNotMatch(envSync, /PRODUCTION_SUPPORT_EMAIL/);
   assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
 });
 
@@ -181,10 +182,13 @@ test('production environment sync is pinned to the API project and preserves clo
   assert.doesNotMatch(envSync, /console\.log\([^\n]*(DATABASE_URL|SMTP_PASSWORD|DATA_ENCRYPTION_KEYS|HASH_PEPPER)/);
 });
 
-test('API production deployment must pass health readiness and bootstrap smoke checks', () => {
+test('API production deployment must require ready legal bootstrap and exact public support identity', () => {
   assert.match(apiWorkflow, /\/health/);
   assert.match(apiWorkflow, /\/ready/);
   assert.match(apiWorkflow, /\/v1\/bootstrap/);
+  assert.match(apiWorkflow, /body\?\.legal\?\.ready === true/);
+  assert.match(apiWorkflow, escaped(defaultMailbox));
+  assert.match(apiWorkflow, /body\?\.legal\?\.supportEmail === expectedLegal\.supportEmail/);
   assert.match(apiWorkflow, /production API smoke PASS/);
 });
 
@@ -210,6 +214,7 @@ test('Web is made public in controlled release while Admin must remain protected
 
   assert.match(frontendWorkflow, /https:\/\/web-unique-6ff0\.vercel\.app/);
   assert.match(frontendWorkflow, /ورود با ایمیل/);
+  assert.match(frontendWorkflow, /mailto:sales@uniqueholding\.com\.tr/);
   assert.match(frontendWorkflow, /\/privacy/);
   assert.match(frontendWorkflow, /\/terms/);
   assert.match(frontendWorkflow, /\/account\/delete/);

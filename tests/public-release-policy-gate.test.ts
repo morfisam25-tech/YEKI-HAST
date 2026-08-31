@@ -32,7 +32,8 @@ test('runtime public-release env stays explicit for local/other environments whi
     assert.match(envExample, new RegExp(`^${key}=$`, 'm'));
   }
   assert.match(envExample, /Controlled production env sync locks Privacy, Terms and Account Deletion/);
-  assert.match(envExample, /support to the verified Workspace mailbox/);
+  assert.match(envExample, /support to the selected Workspace mailbox/);
+  assert.match(envExample, /Real mailbox delivery\/login must still pass the production SMTP\/IMAP E2E gate/);
 });
 
 test('shared public-release parser rejects non-public surfaces and reports readiness only when all exist', () => {

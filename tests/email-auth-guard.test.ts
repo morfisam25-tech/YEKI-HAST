@@ -8,6 +8,7 @@ const migrate = await readFile(new URL('../packages/db/src/migrate.ts', import.m
 const route = await readFile(new URL('../services/api/src/routes/auth-email.ts', import.meta.url), 'utf8');
 const smsRoute = await readFile(new URL('../services/api/src/routes/auth.ts', import.meta.url), 'utf8');
 const provider = await readFile(new URL('../services/api/src/providers/email.ts', import.meta.url), 'utf8');
+const smoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
 const security = await readFile(new URL('../services/api/src/lib/security.ts', import.meta.url), 'utf8');
 const handler = await readFile(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../apps/mobile/App.tsx', import.meta.url), 'utf8');
@@ -65,6 +66,15 @@ test('production email provider fails closed and supports encrypted SMTP transpo
   assert.match(provider, /rejectUnauthorized: true/);
   assert.match(provider, /AUTH LOGIN/);
   assert.doesNotMatch(provider, /console\.log\([^)]*(password|SMTP_PASSWORD)/i);
+});
+
+test('production Email OTP smoke parser stays in parity with the exact provider message format', () => {
+  assert.match(provider, /`کد ورود شما: \$\{input\.code\}`/);
+  assert.match(provider, /`To: <\$\{recipient\}>`/);
+  assert.match(smoke, /rawMessage\.match\(\/کد ورود شما:\\s\*\(\\d\{6\}\)\//);
+  assert.match(smoke, /lower\.includes\(`to: <\$\{email\}>`\)/);
+  assert.match(smoke, /revoked\.status !== 401/);
+  assert.doesNotMatch(smoke, /console\.log\([^\n]*(code|token|password)/i);
 });
 
 test('email routes are separate from legacy SMS OTP and primary mobile UI uses email', () => {

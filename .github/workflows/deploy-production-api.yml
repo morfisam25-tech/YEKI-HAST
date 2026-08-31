@@ -215,6 +215,13 @@ jobs:
           const expectedSha = process.env.GITHUB_SHA?.toLowerCase();
           if (!expectedSha || !/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('GITHUB_SHA is invalid');
 
+          const expectedLegal = {
+            privacyPolicyUrl: process.env.PRODUCTION_PRIVACY_POLICY_URL?.trim() || 'https://web-unique-6ff0.vercel.app/privacy',
+            termsOfServiceUrl: process.env.PRODUCTION_TERMS_OF_SERVICE_URL?.trim() || 'https://web-unique-6ff0.vercel.app/terms',
+            accountDeletionUrl: process.env.PRODUCTION_ACCOUNT_DELETION_URL?.trim() || 'https://web-unique-6ff0.vercel.app/account/delete',
+            supportEmail: (process.env.PRODUCTION_SUPPORT_EMAIL?.trim() || 'sales@uniqueholding.com.tr').toLowerCase(),
+          };
+
           async function waitFor(path, validate) {
             let last = 'no response';
             for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -241,7 +248,11 @@ jobs:
             && Array.isArray(body?.languages)
             && body.languages.length > 0
             && body?.features?.callerClosedBetaEnabled === false
-            && typeof body?.legal?.ready === 'boolean'
+            && body?.legal?.ready === true
+            && body?.legal?.privacyPolicyUrl === expectedLegal.privacyPolicyUrl
+            && body?.legal?.termsOfServiceUrl === expectedLegal.termsOfServiceUrl
+            && body?.legal?.accountDeletionUrl === expectedLegal.accountDeletionUrl
+            && body?.legal?.supportEmail === expectedLegal.supportEmail
           );
           console.log('production API smoke PASS');
           NODE

@@ -2,6 +2,11 @@ name: Deploy Production Web and Admin
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PRODUCTION-FRONTENDS to confirm manual release'
+        required: true
+        type: string
   push:
     branches: [main]
     paths:
@@ -33,6 +38,8 @@ jobs:
     steps:
       - name: Require main branch and authorized Vercel credential
         shell: bash
+        env:
+          MANUAL_CONFIRM: ${{ github.event.inputs.confirm }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
@@ -41,6 +48,10 @@ jobs:
           fi
           if [ "$GITHUB_REPOSITORY" != "morfisam25-tech/YEKI-HAST" ]; then
             echo "::error::Unexpected repository"
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${MANUAL_CONFIRM:-}" != "DEPLOY-PRODUCTION-FRONTENDS" ]; then
+            echo "::error::Manual production frontend deploy requires the exact confirmation phrase"
             exit 1
           fi
           if [ -z "${VERCEL_TOKEN:-}" ]; then

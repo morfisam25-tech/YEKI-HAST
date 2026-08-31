@@ -94,10 +94,14 @@ jobs:
           if (!raw) throw new Error('DATABASE_URL is required');
           const url = new URL(raw);
           if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('production DB URL must be PostgreSQL');
+          if (!url.username || !url.password) throw new Error('production DB URL credential is incomplete');
           if (!url.hostname.endsWith('.us-east-1.aws.neon.tech')) throw new Error('production DB host is not Neon aws-us-east-1');
+          if (url.pathname !== '/neondb') throw new Error('production DB database must be neondb');
+          if (url.searchParams.get('sslmode') !== 'require') throw new Error('production DB must require TLS');
+          if (url.searchParams.get('channel_binding') !== 'require') throw new Error('production DB must require channel binding');
           const actualHostSha256 = createHash('sha256').update(url.hostname).digest('hex');
           if (actualHostSha256 !== match[2]) throw new Error('production DB endpoint fingerprint does not match approved target');
-          console.log('production DB deployment target guard PASS (endpoint hidden)');
+          console.log('production DB deployment target guard PASS (credentials and endpoint hidden)');
           NODE
 
       - name: Require validated workspace dependency lock

@@ -181,6 +181,36 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > dist-api/.vercel/project.json
           sha256sum dist-api/api/index.mjs
 
+      - name: Capture current API production deployment for rollback
+        id: previous_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { appendFileSync } = require('node:fs');
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.VERCEL_PROJECT_ID?.trim();
+          const output = process.env.GITHUB_OUTPUT;
+          if (!token || !teamId || !projectId || !output) throw new Error('rollback capture environment is incomplete');
+          const url = new URL('https://api.vercel.com/v6/deployments');
+          url.searchParams.set('projectId', projectId);
+          url.searchParams.set('target', 'production');
+          url.searchParams.set('state', 'READY');
+          url.searchParams.set('limit', '1');
+          url.searchParams.set('teamId', teamId);
+          const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+          if (!response.ok) throw new Error(`unable to capture previous production deployment (${response.status})`);
+          const body = await response.json();
+          const deployment = Array.isArray(body?.deployments) ? body.deployments[0] : null;
+          const deploymentId = deployment?.uid || deployment?.id;
+          if (typeof deploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) {
+            throw new Error('no valid previous production deployment available for rollback');
+          }
+          appendFileSync(output, `deployment_id=${deploymentId}\n`);
+          console.log('previous production deployment captured for rollback');
+          NODE
+
       - name: Sync exact API production environment to UNIQUE
         shell: bash
         run: |
@@ -203,6 +233,7 @@ jobs:
           test -f .vercel/output/config.json
 
       - name: Deploy prebuilt API artifact to UNIQUE production
+        id: deploy_api
         working-directory: dist-api
         shell: bash
         run: |
@@ -249,3 +280,27 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/smoke-production-email-auth.mjs
+
+      - name: Roll back API production if post-deploy verification fails
+        if: ${{ failure() && steps.deploy_api.outcome == 'success' }}
+        shell: bash
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous_api.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.VERCEL_PROJECT_ID?.trim();
+          const deploymentId = process.env.PREVIOUS_DEPLOYMENT_ID?.trim();
+          if (!token || !teamId || !projectId || !deploymentId) throw new Error('rollback environment is incomplete');
+          if (!/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) throw new Error('rollback deployment id is invalid');
+          const url = new URL(`https://api.vercel.com/v1/projects/${encodeURIComponent(projectId)}/rollback/${encodeURIComponent(deploymentId)}`);
+          url.searchParams.set('teamId', teamId);
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          });
+          if (!response.ok) throw new Error(`production rollback request failed (${response.status})`);
+          console.log('production rollback requested to previous verified deployment');
+          NODE

@@ -14,7 +14,7 @@ export default function PrivacyPage() {
       </header>
 
       <article className="legal-page" aria-labelledby="privacy-title">
-        <p className="kicker">آخرین به‌روزرسانی: ۲۹ اوت ۲۰۲۶</p>
+        <p className="kicker">آخرین به‌روزرسانی: ۳۱ اوت ۲۰۲۶</p>
         <h1 id="privacy-title">حریم خصوصی</h1>
         <p className="legal-lead">
           این صفحه توضیح می‌دهد «یکی هست» در نسخه فعلی سرویس چه نوع داده‌ای را برای راه‌اندازی حساب،
@@ -82,8 +82,9 @@ export default function PrivacyPage() {
         <section className="legal-section">
           <h2>پشتیبانی و تغییر این صفحه</h2>
           <p>
-            آدرس پشتیبانی فقط وقتی در production منتشر می‌شود که یک ایمیل واقعی برای آن پیکربندی شده باشد.
-            اگر دامنه داده، providerها یا قابلیت‌های عمومی تغییر کند، این صفحه باید پیش از باز شدن همان قابلیت به‌روز شود.
+            برای پرسش‌های مرتبط با حریم خصوصی، حساب یا پشتیبانی می‌توانید به
+            {' '}<a href="mailto:sales@uniqueholding.com.tr">sales@uniqueholding.com.tr</a>{' '}
+            ایمیل بزنید. اگر دامنه داده، providerها یا قابلیت‌های عمومی تغییر کند، این صفحه باید پیش از باز شدن همان قابلیت به‌روز شود.
           </p>
         </section>
       </article>

@@ -8,11 +8,15 @@ const requestProxy = await readFile(new URL('../apps/web/app/api/auth/request/ro
 const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/route.ts', import.meta.url), 'utf8');
 const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
-test('web landing explains the product and primary email OTP purpose in Persian', () => {
-  assert.match(page, /سرویسی برای گفت‌وگوی صوتی با شنونده‌های انسانی تأییدشده/);
+test('web landing states the exact technical-beta scope and primary email OTP purpose in Persian', () => {
+  assert.match(page, /در انتشار عمومی فعلی Web/);
+  assert.match(page, /فقط ورود امن با ایمیل و صفحات عمومی حساب و سیاست‌ها باز می‌شوند/);
+  assert.match(page, /تماس صوتی هنوز فعال نیست/);
+  assert.match(page, /این انتشار Web آن را به‌عنوان قابلیت عمومی باز اعلام نمی‌کند/);
   assert.match(page, /ورود با ایمیل/);
   assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
-  assert.match(page, /شماره تماس برای تماس صوتی جداگانه ثبت و/);
+  assert.match(page, /شماره تماس صوتی فقط پس از باز شدن قابلیت تماس/);
+  assert.doesNotMatch(page, /سرویسی برای گفت‌وگوی صوتی با شنونده‌های انسانی تأییدشده/);
   assert.doesNotMatch(page, /ورود با شماره موبایل|پیامک‌شده/);
 });
 

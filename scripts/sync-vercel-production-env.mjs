@@ -6,7 +6,7 @@ const API_ORIGIN = 'https://api.vercel.com';
 const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
 const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
-const DEFAULT_SUPPORT_EMAIL = 'sales@uniqueholding.com.tr';
+const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -91,12 +91,12 @@ if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a fu
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
-// The existing corporate mail domain is on Google Workspace. These submission
-// defaults can still be overridden later without changing product code.
+// The existing corporate mail domain is on Google Workspace. The verified sales
+// mailbox is the production default and can still be overridden explicitly.
 const smtpHost = optional('PRODUCTION_SMTP_HOST', 'smtp.gmail.com');
 const smtpPort = optional('PRODUCTION_SMTP_PORT', '465');
 const smtpSecure = optional('PRODUCTION_SMTP_SECURE', 'true').toLowerCase();
-const smtpUsername = required('PRODUCTION_SMTP_USERNAME');
+const smtpUsername = optional('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL).toLowerCase();
 const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
 const smtpFromEmail = optional('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername).toLowerCase();
 const smtpFromName = optional('PRODUCTION_SMTP_FROM_NAME', 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
@@ -110,17 +110,17 @@ if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SE
 if (!['true', 'false'].includes(commercialHostingApproved)) {
   throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
 }
+validateEmail(smtpUsername, 'PRODUCTION_SMTP_USERNAME');
 validateEmail(smtpFromEmail);
-if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configuration is incomplete');
+if (!smtpHost || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
 // Privacy, terms and account deletion are first-party Web surfaces checked into
 // this repository. Their canonical production URLs are therefore safe defaults.
-// The default support mailbox has been verified as a live bidirectional Google
-// Workspace route and can still be overridden explicitly at release time.
+// The default support mailbox is the same verified bidirectional Workspace route.
 const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL') ?? DEFAULT_PRIVACY_POLICY_URL;
 const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL') ?? DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
-const supportEmail = optional('PRODUCTION_SUPPORT_EMAIL', DEFAULT_SUPPORT_EMAIL).toLowerCase();
+const supportEmail = optional('PRODUCTION_SUPPORT_EMAIL', DEFAULT_MAILBOX_EMAIL).toLowerCase();
 validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
 validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');

@@ -24,6 +24,7 @@ A production release requires all of the following:
 4. API/Web/Admin production builds must use the lock-installed release tooling pinned in root `package.json` and deploy only prebuilt Vercel output.
 5. Automatic Vercel Git deployment remains disabled; controlled workflows are the production path.
 6. Every production mutation workflow, including DB migration, must require a successful Foundation QA ancestor for the source it operates on.
+7. API deployment, frontend deployment and DB migration are manual-only workflow dispatches with exact confirmation phrases. A push/marker commit must never directly mutate production.
 
 ## API production gate
 
@@ -31,10 +32,12 @@ Before API production is considered ready:
 
 - The exact production database is verified read-only by `scripts/verify-production-db.mjs`.
 - The API release workflow itself never runs a migration. If the approved production database has not yet been initialized, schema changes may occur only through the separately approved, exact-target guarded migration workflow and must be followed by the read-only verifier before API deployment.
-- `/health` returns 200 for the deployed API.
+- Before production mutation, the workflow captures the current READY API production deployment as a rollback target.
+- `/health` returns 200 for the exact deployed release SHA.
 - `/ready` returns 200 and reports both database and schema ready.
 - `/v1/bootstrap` returns 200 with the expected market, languages, feature gates and public-release configuration.
 - Real Email OTP delivery, verify, authenticated session and logout/revocation E2E passes.
+- If a new API deployment was created but readiness/bootstrap or Email E2E fails, the release workflow must request rollback to the captured previous production deployment.
 - Production dev OTP and development telephony remain forbidden.
 
 ## Public Web and Admin gate
@@ -66,7 +69,8 @@ The current source implements the safe request stage:
 3. The API records an idempotent pending `account_deletion_requested` audit event.
 4. Active sessions are revoked immediately.
 5. New Email OTP and Phone OTP sessions are blocked while deletion remains pending.
-6. The product does not claim deletion/anonymization has completed.
+6. The Admin queue is authenticated/read-only and does not expose email, phone, identity or banking payloads.
+7. The product and Admin UI do not claim deletion/anonymization has completed or expose a final-delete action.
 
 Final destructive deletion/anonymization must not be implemented until retention rules are defined for financial ledger, payment/payout, safety, disputes and other open records.
 

@@ -13,3 +13,9 @@ test('verified support mailbox is reachable from all public policy surfaces', ()
     assert.match(source, new RegExp(supportEmail.replace(/\./g, '\\.')));
   }
 });
+
+test('public home does not imply voice calling is open before provider readiness', () => {
+  assert.match(home, /تماس صوتی هنوز باز نشده است/);
+  assert.match(home, /تماس صوتی تا تکمیل provider واقعی، پرداخت و کنترل‌های/);
+  assert.match(home, /هیچ مسیر آزمایشی جایگزین آن نمی‌شود/);
+});

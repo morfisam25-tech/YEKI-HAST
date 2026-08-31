@@ -77,6 +77,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require explicitly approved aws-us-east-1 database target
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
+          const approval = readFileSync('.launch/production-db-migration', 'utf8').trim();
+          if (approval.startsWith('blocked=')) throw new Error('production DB target is still blocked pending correct aws-us-east-1 project');
+          const match = /^approved=\d{4}-\d{2}-\d{2};project=([a-z0-9-]+);region=aws-us-east-1;host_sha256=([0-9a-f]{64})$/.exec(approval);
+          if (!match) throw new Error('production DB target approval is missing or malformed');
+          const raw = process.env.DATABASE_URL?.trim();
+          if (!raw) throw new Error('DATABASE_URL is required');
+          const url = new URL(raw);
+          if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('production DB URL must be PostgreSQL');
+          if (!url.hostname.endsWith('.us-east-1.aws.neon.tech')) throw new Error('production DB host is not Neon aws-us-east-1');
+          const actualHostSha256 = createHash('sha256').update(url.hostname).digest('hex');
+          if (actualHostSha256 !== match[2]) throw new Error('production DB endpoint fingerprint does not match approved target');
+          console.log('production DB deployment target guard PASS (endpoint hidden)');
+          NODE
+
       - name: Require validated workspace dependency lock
         shell: bash
         run: |

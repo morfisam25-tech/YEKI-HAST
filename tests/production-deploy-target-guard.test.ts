@@ -157,15 +157,24 @@ test('API production deployment requires only irreducible external launch secret
   assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
 });
 
-test('production environment sync uses verified Workspace defaults and locks public support to the checked-in route', () => {
+test('production environment sync locks beta mailbox and legal routes against stale optional overrides', () => {
   assert.match(envSync, escaped(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox}'`));
   assert.match(envSync, /optional\('PRODUCTION_SMTP_HOST', 'smtp\.gmail\.com'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_PORT', '465'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_SECURE', 'true'\)/);
-  assert.match(envSync, /optional\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL\)/);
-  assert.match(envSync, /optional\('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_SMTP_FROM_EMAIL', DEFAULT_MAILBOX_EMAIL/);
+  assert.match(envSync, /const smtpUsername = DEFAULT_MAILBOX_EMAIL;/);
+  assert.match(envSync, /const smtpFromEmail = DEFAULT_MAILBOX_EMAIL;/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL\)/);
+  assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL;/);
+  assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL;/);
+  assert.match(envSync, /const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL;/);
   assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL;/);
   assert.doesNotMatch(envSync, /PRODUCTION_SUPPORT_EMAIL/);
+  assert.match(envSync, /conflicts with the locked technical-beta configuration/);
   assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
 });
 

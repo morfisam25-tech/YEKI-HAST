@@ -97,6 +97,9 @@ jobs:
       - name: Install workspace dependencies from lock
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Verify production DB migration state read-only
+        run: node scripts/preflight-production-db-migration.mjs
+
       - name: Apply repository migrations exactly once
         run: npm run db:migrate
 

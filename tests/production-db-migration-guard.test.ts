@@ -29,6 +29,15 @@ test('production DB migration is explicitly approved for the exact Neon target',
   assert.doesNotMatch(migrationWorkflow, /evidence[-_ ]?axis/i);
 });
 
+test('manual production DB migration requires a deliberate confirmation phrase', () => {
+  assert.match(migrationWorkflow, /workflow_dispatch:/);
+  assert.match(migrationWorkflow, /confirm:/);
+  assert.match(migrationWorkflow, /required: true/);
+  assert.match(migrationWorkflow, /MIGRATE_YEKI_HAST_PRODUCTION/);
+  assert.match(migrationWorkflow, /GITHUB_EVENT_NAME.*workflow_dispatch/);
+  assert.match(migrationWorkflow, /Manual production migration confirmation did not match/);
+});
+
 test('production DB migration uses only the secure repository credential and locked source', () => {
   assert.match(migrationWorkflow, /secrets\.PRODUCTION_DATABASE_URL/);
   assert.ok(migrationWorkflow.includes(checkoutAction));

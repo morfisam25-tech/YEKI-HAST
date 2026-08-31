@@ -17,18 +17,19 @@ const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
 
-const expectedMarker = 'approved=2026-08-30;project=royal-lab-98725266;region=aws-us-east-2';
-const endpointFingerprint = '4c067ec8bb706bf10e3cddbdd554aebe90fc7a69cf0d3e6ecbcd0165f662e9cd';
+const blockedMarker = 'blocked=pending-correct-aws-us-east-1-production-db';
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 
-test('production DB migration is explicitly approved for the exact Neon target', () => {
-  assert.equal(approvalMarker, expectedMarker);
-  assert.match(migrationWorkflow, /\.launch\/production-db-migration/);
+test('production DB migration stays blocked until an exact aws-us-east-1 target is explicitly approved', () => {
+  assert.equal(approvalMarker, blockedMarker);
+  assert.match(migrationWorkflow, /Production migration is blocked until the correct Neon aws-us-east-1 project is created and explicitly approved/);
+  assert.match(migrationWorkflow, /region=aws-us-east-1/);
+  assert.match(migrationWorkflow, /host_sha256=\[0-9a-f\]\{64\}/);
   assert.match(migrationWorkflow, /refs\/heads\/main/);
   assert.match(migrationWorkflow, /morfisam25-tech\/YEKI-HAST/);
-  assert.match(migrationWorkflow, /royal-lab-98725266/);
-  assert.match(migrationWorkflow, /aws-us-east-2/);
+  assert.doesNotMatch(migrationWorkflow, /royal-lab-98725266/);
+  assert.doesNotMatch(migrationWorkflow, /aws-us-east-2/);
   assert.doesNotMatch(migrationWorkflow, /evidence[-_ ]?axis/i);
 });
 
@@ -51,23 +52,24 @@ test('production DB migration uses only the secure repository credential and loc
   assert.doesNotMatch(migrationWorkflow, /console\.log\([^\n]*(password|DATABASE_URL)/i);
 });
 
-test('production DB migration pins the exact endpoint fingerprint and transport requirements before mutation', () => {
-  assert.match(migrationWorkflow, /\.us-east-2\.aws\.neon\.tech/);
+test('future production DB approval must pin us-east-1 endpoint fingerprint and transport before mutation', () => {
+  assert.match(migrationWorkflow, /\.us-east-1\.aws\.neon\.tech/);
   assert.match(migrationWorkflow, /url\.pathname !== '\/neondb'/);
   assert.match(migrationWorkflow, /sslmode'\) !== 'require'/);
   assert.match(migrationWorkflow, /channel_binding'\) !== 'require'/);
-  assert.match(migrationWorkflow, new RegExp(endpointFingerprint));
   assert.match(migrationWorkflow, /createHash\('sha256'\)\.update\(url\.hostname\)/);
   assert.match(migrationWorkflow, /endpoint fingerprint does not match the approved target/);
-  assert.doesNotMatch(migrationWorkflow, /ep-[a-z0-9-]+\.c-[0-9]+\.us-east-2\.aws\.neon\.tech/);
+  assert.doesNotMatch(migrationWorkflow, /\.us-east-2\.aws\.neon\.tech/);
 });
 
 test('production DB migration is idempotent and followed by read-only verification', () => {
+  assert.match(migrationWorkflow, /preflight-production-db-migration\.mjs/);
   assert.match(migrationWorkflow, /npm run db:migrate/);
   assert.match(migrationWorkflow, /verify-production-db\.mjs/);
 });
 
-test('all API production configuration paths align with the Neon Ohio region', () => {
-  assert.deepEqual(apiVercel.regions, ['cle1']);
-  assert.match(apiWorkflow, /"regions": \["cle1"\]/);
+test('all API production configuration paths stay aligned with Vercel iad1 while DB target remains us-east-1', () => {
+  assert.deepEqual(apiVercel.regions, ['iad1']);
+  assert.match(apiWorkflow, /"regions": \["iad1"\]/);
+  assert.doesNotMatch(apiWorkflow, /"regions": \["cle1"\]/);
 });

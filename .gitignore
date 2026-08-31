@@ -2,6 +2,8 @@ node_modules
 .expo
 .next
 dist
+dist-api
+.vercel
 .env
 .env.*
 !.env.example

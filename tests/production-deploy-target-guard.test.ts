@@ -23,6 +23,7 @@ const lockedInstall = 'npm ci --ignore-scripts --no-audit --no-fund';
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 const uploadArtifactAction = 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a';
+const defaultMailbox = 'sales@uniqueholding.com.tr';
 
 function escaped(value: string) {
   return new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -141,7 +142,6 @@ test('API production deployment requires only irreducible external launch secret
   for (const name of [
     'VERCEL_TOKEN',
     'PRODUCTION_DATABASE_URL',
-    'PRODUCTION_SMTP_USERNAME',
     'PRODUCTION_SMTP_PASSWORD',
   ]) {
     assert.match(apiWorkflow, escaped(name));
@@ -157,16 +157,14 @@ test('API production deployment requires only irreducible external launch secret
   assert.match(apiWorkflow, /sync-vercel-production-env\.mjs/);
 });
 
-test('production environment sync defaults to Google Workspace submission while allowing overrides', () => {
+test('production environment sync defaults to the verified Google Workspace mailbox while allowing overrides', () => {
+  assert.match(envSync, new RegExp(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox.replace('.', '\\.').replace('.', '\\.')}'`));
   assert.match(envSync, /optional\('PRODUCTION_SMTP_HOST', 'smtp\.gmail\.com'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_PORT', '465'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_SECURE', 'true'\)/);
+  assert.match(envSync, /optional\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername\)/);
-});
-
-test('production environment sync uses the verified corporate support mailbox while allowing an explicit override', () => {
-  assert.match(envSync, /const DEFAULT_SUPPORT_EMAIL = 'sales@uniqueholding\.com\.tr'/);
-  assert.match(envSync, /optional\('PRODUCTION_SUPPORT_EMAIL', DEFAULT_SUPPORT_EMAIL\)/);
+  assert.match(envSync, /optional\('PRODUCTION_SUPPORT_EMAIL', DEFAULT_MAILBOX_EMAIL\)/);
   assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
 });
 
@@ -192,6 +190,8 @@ test('API production deployment must pass health readiness and bootstrap smoke c
 
 test('API production deployment must complete real Email OTP delivery verify session and logout', () => {
   assert.match(apiWorkflow, /smoke-production-email-auth\.mjs/);
+  assert.match(emailSmoke, new RegExp(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox.replace('.', '\\.').replace('.', '\\.')}'`));
+  assert.match(emailSmoke, /optional\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL\)/);
   assert.match(emailSmoke, /\/v1\/auth\/email\/request/);
   assert.match(emailSmoke, /imap\.gmail\.com/);
   assert.match(emailSmoke, /\/v1\/auth\/email\/verify/);

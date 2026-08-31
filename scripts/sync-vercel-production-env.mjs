@@ -6,6 +6,7 @@ const API_ORIGIN = 'https://api.vercel.com';
 const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
 const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
+const DEFAULT_SUPPORT_EMAIL = 'sales@uniqueholding.com.tr';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -114,15 +115,16 @@ if (!smtpHost || !smtpUsername || !smtpPassword) throw new Error('SMTP configura
 
 // Privacy, terms and account deletion are first-party Web surfaces checked into
 // this repository. Their canonical production URLs are therefore safe defaults.
-// Support stays explicit: the OTP sender is not assumed to be a support inbox.
+// The default support mailbox has been verified as a live bidirectional Google
+// Workspace route and can still be overridden explicitly at release time.
 const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL') ?? DEFAULT_PRIVACY_POLICY_URL;
 const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL') ?? DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
-const supportEmail = provided('PRODUCTION_SUPPORT_EMAIL')?.toLowerCase() ?? null;
+const supportEmail = optional('PRODUCTION_SUPPORT_EMAIL', DEFAULT_SUPPORT_EMAIL).toLowerCase();
 validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
 validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
-if (supportEmail) validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
+validateEmail(supportEmail, 'PRODUCTION_SUPPORT_EMAIL');
 
 const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
 const listed = await vercelJson(listUrl);
@@ -155,7 +157,7 @@ setPlain('SMTP_FROM_NAME', smtpFromName);
 setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
 setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
 setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
-if (supportEmail) setPlain('SUPPORT_EMAIL', supportEmail);
+setPlain('SUPPORT_EMAIL', supportEmail);
 
 setPlain('SESSION_TTL_HOURS', '720');
 setPlain('OTP_TTL_SECONDS', '300');

@@ -31,7 +31,7 @@ jobs:
       - name: Checkout exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Require exact approved target and credential
+      - name: Require explicit approved production target and credential
         shell: bash
         run: |
           set -euo pipefail
@@ -51,10 +51,14 @@ jobs:
             echo '::error::PRODUCTION_DATABASE_URL repository secret is required'
             exit 1
           fi
-          expected='approved=2026-08-30;project=royal-lab-98725266;region=aws-us-east-2'
-          actual="$(tr -d '\r\n' < .launch/production-db-migration 2>/dev/null || true)"
-          if [ "$actual" != "$expected" ]; then
-            echo '::error::Production DB migration approval marker is missing or changed'
+
+          approval="$(tr -d '\r\n' < .launch/production-db-migration 2>/dev/null || true)"
+          if [[ "$approval" == blocked=* ]]; then
+            echo '::error::Production migration is blocked until the correct Neon aws-us-east-1 project is created and explicitly approved'
+            exit 1
+          fi
+          if [[ ! "$approval" =~ ^approved=[0-9]{4}-[0-9]{2}-[0-9]{2}\;project=[a-z0-9-]+\;region=aws-us-east-1\;host_sha256=[0-9a-f]{64}$ ]]; then
+            echo '::error::Production DB approval marker is missing, malformed, or not aws-us-east-1'
             exit 1
           fi
 
@@ -70,27 +74,30 @@ jobs:
           set -euo pipefail
           test -f package-lock.json || { echo '::error::package-lock.json is required before production migration'; exit 1; }
 
-      - name: Validate exact destination without exposing credentials
+      - name: Validate exact approved destination without exposing credentials
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
           const { createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
           const raw = process.env.DATABASE_URL?.trim();
           if (!raw) throw new Error('DATABASE_URL is required');
+          const approval = readFileSync('.launch/production-db-migration', 'utf8').trim();
+          const match = /^approved=\d{4}-\d{2}-\d{2};project=([a-z0-9-]+);region=aws-us-east-1;host_sha256=([0-9a-f]{64})$/.exec(approval);
+          if (!match) throw new Error('production DB target is not explicitly approved for aws-us-east-1');
+          const expectedHostSha256 = match[2];
+
           const url = new URL(raw);
           if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('production DB URL must be PostgreSQL');
           if (!url.username || !url.password) throw new Error('production DB URL credential is incomplete');
-          if (!url.hostname.endsWith('.us-east-2.aws.neon.tech')) throw new Error('production DB host is not the approved Neon us-east-2 target');
+          if (!url.hostname.endsWith('.us-east-1.aws.neon.tech')) throw new Error('production DB host is not Neon aws-us-east-1');
           if (url.pathname !== '/neondb') throw new Error('production DB database must be neondb');
           if (url.searchParams.get('sslmode') !== 'require') throw new Error('production DB must require TLS');
           if (url.searchParams.get('channel_binding') !== 'require') throw new Error('production DB must require channel binding');
 
-          // Pin the exact approved endpoint without committing its hostname to source.
-          const expectedHostSha256 = '4c067ec8bb706bf10e3cddbdd554aebe90fc7a69cf0d3e6ecbcd0165f662e9cd';
           const actualHostSha256 = createHash('sha256').update(url.hostname).digest('hex');
           if (actualHostSha256 !== expectedHostSha256) throw new Error('production DB endpoint fingerprint does not match the approved target');
-
           console.log('production DB exact destination guard PASS (credentials and endpoint hidden)');
           NODE
 

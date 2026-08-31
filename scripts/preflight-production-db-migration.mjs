@@ -53,6 +53,9 @@ try {
     if (applied.has('0002_email_auth.sql') && !applied.has('0001_initial.sql')) {
       throw new Error('production migration history is out of order');
     }
+    if (!applied.has('0001_initial.sql') && (appSchema || privateSchema)) {
+      throw new Error('application schemas exist without tracked initial migration');
+    }
     if (applied.has('0001_initial.sql') && (!appSchema || !privateSchema)) {
       throw new Error('tracked initial migration is missing required application schemas');
     }

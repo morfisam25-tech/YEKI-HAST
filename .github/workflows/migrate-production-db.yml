@@ -60,18 +60,28 @@ jobs:
           set -euo pipefail
           test -f package-lock.json || { echo '::error::package-lock.json is required before production migration'; exit 1; }
 
-      - name: Validate destination without exposing credentials
+      - name: Validate exact destination without exposing credentials
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
+          const { createHash } = require('node:crypto');
           const raw = process.env.DATABASE_URL?.trim();
           if (!raw) throw new Error('DATABASE_URL is required');
           const url = new URL(raw);
           if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('production DB URL must be PostgreSQL');
+          if (!url.username || !url.password) throw new Error('production DB URL credential is incomplete');
           if (!url.hostname.endsWith('.us-east-2.aws.neon.tech')) throw new Error('production DB host is not the approved Neon us-east-2 target');
           if (url.pathname !== '/neondb') throw new Error('production DB database must be neondb');
-          console.log('production DB destination guard PASS (credentials hidden)');
+          if (url.searchParams.get('sslmode') !== 'require') throw new Error('production DB must require TLS');
+          if (url.searchParams.get('channel_binding') !== 'require') throw new Error('production DB must require channel binding');
+
+          // Pin the exact approved endpoint without committing its hostname to source.
+          const expectedHostSha256 = '4c067ec8bb706bf10e3cddbdd554aebe90fc7a69cf0d3e6ecbcd0165f662e9cd';
+          const actualHostSha256 = createHash('sha256').update(url.hostname).digest('hex');
+          if (actualHostSha256 !== expectedHostSha256) throw new Error('production DB endpoint fingerprint does not match the approved target');
+
+          console.log('production DB exact destination guard PASS (credentials and endpoint hidden)');
           NODE
 
       - name: Install workspace dependencies from lock

@@ -18,7 +18,8 @@ test('deletion request revokes sessions but does not pretend deletion is complet
   assert.match(route, /account_deletion_requested/);
 });
 
-test('request is idempotent through prior audit detection and advisory locking', () => {
+test('request is idempotent only while a prior deletion request is pending', () => {
   assert.match(route, /pg_advisory_xact_lock/);
+  assert.match(route, /metadata->>'processingState'='pending'/);
   assert.match(route, /alreadyRequested/);
 });

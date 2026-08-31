@@ -262,6 +262,7 @@ jobs:
             return 1
           }
           check_path / 'ورود با ایمیل'
+          check_path / 'mailto:sales@uniqueholding.com.tr'
           check_path /privacy 'حریم خصوصی'
           check_path /terms 'قوانین استفاده'
           check_path /account/delete 'تأیید مالک حساب'
@@ -302,7 +303,7 @@ jobs:
             throw new Error(`${label} failed: ${last}`);
           }
 
-          await waitFor('/', (text) => text.includes('یکی هست') && text.includes('ورود با ایمیل'), 'production Web landing smoke');
+          await waitFor('/', (text) => text.includes('یکی هست') && text.includes('ورود با ایمیل') && text.includes('mailto:sales@uniqueholding.com.tr'), 'production Web landing smoke');
           await waitFor('/privacy', (text) => text.includes('حریم خصوصی') && text.includes('حذف حساب'), 'production Web privacy smoke');
           await waitFor('/terms', (text) => text.includes('قوانین استفاده') && text.includes('ماهیت سرویس'), 'production Web terms smoke');
           await waitFor('/account/delete', (text) => text.includes('حذف حساب') && text.includes('تأیید مالک حساب'), 'production Web account deletion smoke');

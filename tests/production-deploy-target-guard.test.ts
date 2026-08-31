@@ -158,7 +158,7 @@ test('API production deployment requires only irreducible external launch secret
 });
 
 test('production environment sync defaults to the verified Google Workspace mailbox while allowing overrides', () => {
-  assert.match(envSync, new RegExp(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox.replace('.', '\\.').replace('.', '\\.')}'`));
+  assert.match(envSync, escaped(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox}'`));
   assert.match(envSync, /optional\('PRODUCTION_SMTP_HOST', 'smtp\.gmail\.com'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_PORT', '465'\)/);
   assert.match(envSync, /optional\('PRODUCTION_SMTP_SECURE', 'true'\)/);
@@ -190,7 +190,7 @@ test('API production deployment must pass health readiness and bootstrap smoke c
 
 test('API production deployment must complete real Email OTP delivery verify session and logout', () => {
   assert.match(apiWorkflow, /smoke-production-email-auth\.mjs/);
-  assert.match(emailSmoke, new RegExp(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox.replace('.', '\\.').replace('.', '\\.')}'`));
+  assert.match(emailSmoke, escaped(`const DEFAULT_MAILBOX_EMAIL = '${defaultMailbox}'`));
   assert.match(emailSmoke, /optional\('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL\)/);
   assert.match(emailSmoke, /\/v1\/auth\/email\/request/);
   assert.match(emailSmoke, /imap\.gmail\.com/);

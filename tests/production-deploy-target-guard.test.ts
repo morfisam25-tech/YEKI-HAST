@@ -164,6 +164,12 @@ test('production environment sync defaults to Google Workspace submission while 
   assert.match(envSync, /optional\('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername\)/);
 });
 
+test('production environment sync uses the verified corporate support mailbox while allowing an explicit override', () => {
+  assert.match(envSync, /const DEFAULT_SUPPORT_EMAIL = 'sales@uniqueholding\.com\.tr'/);
+  assert.match(envSync, /optional\('PRODUCTION_SUPPORT_EMAIL', DEFAULT_SUPPORT_EMAIL\)/);
+  assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
+});
+
 test('production environment sync is pinned to the API project and preserves closed launch gates', () => {
   assert.match(envSync, escaped(teamId));
   assert.match(envSync, escaped(apiProject));

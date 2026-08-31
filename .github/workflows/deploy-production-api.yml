@@ -63,16 +63,9 @@ jobs:
             echo "::error::Manual production API deploy requires the exact confirmation phrase"
             exit 1
           fi
-
           missing=()
-          for name in \
-            VERCEL_TOKEN \
-            PRODUCTION_DATABASE_URL \
-            PRODUCTION_SMTP_PASSWORD
-          do
-            if [ -z "${!name:-}" ]; then
-              missing+=("$name")
-            fi
+          for name in VERCEL_TOKEN PRODUCTION_DATABASE_URL PRODUCTION_SMTP_PASSWORD; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '::error::Missing required repository secret(s): %s\n' "$(IFS=', '; echo "${missing[*]}")"
@@ -151,7 +144,7 @@ jobs:
           {
             "$schema": "https://openapi.vercel.sh/vercel.json",
             "framework": null,
-            "regions": ["cle1"],
+            "regions": ["iad1"],
             "installCommand": "cd .. && npm ci --ignore-scripts --no-audit --no-fund",
             "rewrites": [
               { "source": "/health", "destination": "/api/index" },
@@ -176,21 +169,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" pull \
-            --yes \
-            --environment=production \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
 
       - name: Build API production artifact from locked workspace
         working-directory: dist-api
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" build \
-            --prod \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
           test -f .vercel/output/config.json
 
       - name: Deploy prebuilt API artifact to UNIQUE production
@@ -198,12 +184,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" deploy \
-            --prebuilt \
-            --prod \
-            --yes \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
 
       - name: Verify production health readiness and bootstrap
         shell: bash
@@ -213,14 +194,12 @@ jobs:
           const base = process.env.API_PRODUCTION_URL;
           const expectedSha = process.env.GITHUB_SHA?.toLowerCase();
           if (!expectedSha || !/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('GITHUB_SHA is invalid');
-
           const expectedLegal = {
             privacyPolicyUrl: process.env.PRODUCTION_PRIVACY_POLICY_URL?.trim() || 'https://web-unique-6ff0.vercel.app/privacy',
             termsOfServiceUrl: process.env.PRODUCTION_TERMS_OF_SERVICE_URL?.trim() || 'https://web-unique-6ff0.vercel.app/terms',
             accountDeletionUrl: process.env.PRODUCTION_ACCOUNT_DELETION_URL?.trim() || 'https://web-unique-6ff0.vercel.app/account/delete',
             supportEmail: 'sales@uniqueholding.com.tr',
           };
-
           async function waitFor(path, validate) {
             let last = 'no response';
             for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -231,28 +210,14 @@ jobs:
                 try { body = JSON.parse(text); } catch {}
                 if (response.ok && validate(body)) return;
                 last = `${response.status} ${text.slice(0, 300)}`;
-              } catch (error) {
-                last = error instanceof Error ? error.message : String(error);
-              }
+              } catch (error) { last = error instanceof Error ? error.message : String(error); }
               await new Promise((resolve) => setTimeout(resolve, 5000));
             }
             throw new Error(`${path} failed production smoke test: ${last}`);
           }
-
           await waitFor('/health', (body) => body?.ok === true && body?.service === 'yeki-hast-api' && body?.releaseSha === expectedSha);
           await waitFor('/ready', (body) => body?.ok === true && body?.database === 'ready' && body?.schema === 'ready');
-          await waitFor('/v1/bootstrap', (body) =>
-            typeof body?.brandName === 'string'
-            && body?.market?.code === 'ir'
-            && Array.isArray(body?.languages)
-            && body.languages.length > 0
-            && body?.features?.callerClosedBetaEnabled === false
-            && body?.legal?.ready === true
-            && body?.legal?.privacyPolicyUrl === expectedLegal.privacyPolicyUrl
-            && body?.legal?.termsOfServiceUrl === expectedLegal.termsOfServiceUrl
-            && body?.legal?.accountDeletionUrl === expectedLegal.accountDeletionUrl
-            && body?.legal?.supportEmail === expectedLegal.supportEmail
-          );
+          await waitFor('/v1/bootstrap', (body) => typeof body?.brandName === 'string' && body?.market?.code === 'ir' && Array.isArray(body?.languages) && body.languages.length > 0 && body?.features?.callerClosedBetaEnabled === false && body?.legal?.ready === true && body?.legal?.privacyPolicyUrl === expectedLegal.privacyPolicyUrl && body?.legal?.termsOfServiceUrl === expectedLegal.termsOfServiceUrl && body?.legal?.accountDeletionUrl === expectedLegal.accountDeletionUrl && body?.legal?.supportEmail === expectedLegal.supportEmail);
           console.log('production API smoke PASS');
           NODE
 

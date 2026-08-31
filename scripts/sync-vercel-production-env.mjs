@@ -29,6 +29,14 @@ function provided(name) {
   return value;
 }
 
+function requireAbsentOrExact(name, expected, normalize = (value) => value) {
+  const value = provided(name);
+  if (value === null) return;
+  if (normalize(value) !== normalize(expected)) {
+    throw new Error(`${name} conflicts with the locked technical-beta configuration`);
+  }
+}
+
 function validateDatabaseUrl(value) {
   let url;
   try { url = new URL(value); }
@@ -91,16 +99,17 @@ if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a fu
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
-// The existing corporate mail domain is on Google Workspace. The verified sales
-// mailbox is the production SMTP default and may still be overridden explicitly
-// for SMTP delivery. Public support identity is separately locked below so API
-// bootstrap and checked-in Web policy surfaces cannot drift apart accidentally.
+// Technical beta has one verified Workspace identity. Optional legacy repository
+// secrets may remain present, but they are accepted only when they equal this
+// source-controlled identity; a stale secret cannot silently redirect auth mail.
+requireAbsentOrExact('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
+requireAbsentOrExact('PRODUCTION_SMTP_FROM_EMAIL', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
 const smtpHost = optional('PRODUCTION_SMTP_HOST', 'smtp.gmail.com');
 const smtpPort = optional('PRODUCTION_SMTP_PORT', '465');
 const smtpSecure = optional('PRODUCTION_SMTP_SECURE', 'true').toLowerCase();
-const smtpUsername = optional('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL).toLowerCase();
+const smtpUsername = DEFAULT_MAILBOX_EMAIL;
 const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
-const smtpFromEmail = optional('PRODUCTION_SMTP_FROM_EMAIL', smtpUsername).toLowerCase();
+const smtpFromEmail = DEFAULT_MAILBOX_EMAIL;
 const smtpFromName = optional('PRODUCTION_SMTP_FROM_NAME', 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
 const commercialHostingApproved = optional('PRODUCTION_COMMERCIAL_HOSTING_APPROVED', 'false').toLowerCase();
 
@@ -112,22 +121,23 @@ if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SE
 if (!['true', 'false'].includes(commercialHostingApproved)) {
   throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
 }
-validateEmail(smtpUsername, 'PRODUCTION_SMTP_USERNAME');
-validateEmail(smtpFromEmail);
+validateEmail(smtpUsername, 'SMTP_USERNAME');
+validateEmail(smtpFromEmail, 'SMTP_FROM_EMAIL');
 if (!smtpHost || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
-// Privacy, terms and account deletion are first-party Web surfaces checked into
-// this repository. Their canonical production URLs are safe defaults. Public
-// support is intentionally fixed to the same verified address rendered by the
-// Web source; changing it requires a coordinated source update, not a secret-only
-// override that could make API and Web disagree.
-const privacyPolicyUrl = provided('PRODUCTION_PRIVACY_POLICY_URL') ?? DEFAULT_PRIVACY_POLICY_URL;
-const termsOfServiceUrl = provided('PRODUCTION_TERMS_OF_SERVICE_URL') ?? DEFAULT_TERMS_OF_SERVICE_URL;
-const accountDeletionUrl = provided('PRODUCTION_ACCOUNT_DELETION_URL') ?? DEFAULT_ACCOUNT_DELETION_URL;
+// Public legal routes are checked-in first-party surfaces for this beta. Reject
+// stale optional secret overrides instead of allowing API bootstrap to drift from
+// the Web release that the frontend workflow actually verifies and publishes.
+requireAbsentOrExact('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL);
+requireAbsentOrExact('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL);
+requireAbsentOrExact('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL);
+const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL;
+const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL;
+const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL;
 const supportEmail = DEFAULT_MAILBOX_EMAIL;
-validatePublicHttpsUrl(privacyPolicyUrl, 'PRODUCTION_PRIVACY_POLICY_URL');
-validatePublicHttpsUrl(termsOfServiceUrl, 'PRODUCTION_TERMS_OF_SERVICE_URL');
-validatePublicHttpsUrl(accountDeletionUrl, 'PRODUCTION_ACCOUNT_DELETION_URL');
+validatePublicHttpsUrl(privacyPolicyUrl, 'PRIVACY_POLICY_URL');
+validatePublicHttpsUrl(termsOfServiceUrl, 'TERMS_OF_SERVICE_URL');
+validatePublicHttpsUrl(accountDeletionUrl, 'ACCOUNT_DELETION_URL');
 validateEmail(supportEmail, 'SUPPORT_EMAIL');
 
 const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;

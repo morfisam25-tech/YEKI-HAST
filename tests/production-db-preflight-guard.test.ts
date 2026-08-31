@@ -23,6 +23,8 @@ test('production migration preflight is catalog/history read-only', () => {
   assert.match(script, /SELECT filename, sha256/);
   assert.match(script, /f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09/);
   assert.match(script, /3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90/);
+  assert.match(script, /application schemas exist without tracked initial migration/);
+  assert.match(script, /tracked initial migration is missing required application schemas/);
   assert.doesNotMatch(script, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\b/i);
 });
 

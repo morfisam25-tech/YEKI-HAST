@@ -10,6 +10,9 @@ const apiWorkflow = await readFile(
   new URL('../.github/workflows/deploy-production-api.yml', import.meta.url),
   'utf8',
 );
+const apiVercel = JSON.parse(
+  await readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
+);
 const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
@@ -64,6 +67,7 @@ test('production DB migration is idempotent and followed by read-only verificati
   assert.match(migrationWorkflow, /verify-production-db\.mjs/);
 });
 
-test('production API runtime is aligned with the Neon Ohio region', () => {
+test('all API production configuration paths align with the Neon Ohio region', () => {
+  assert.deepEqual(apiVercel.regions, ['cle1']);
   assert.match(apiWorkflow, /"regions": \["cle1"\]/);
 });

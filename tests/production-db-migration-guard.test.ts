@@ -52,14 +52,19 @@ test('production DB migration uses only the secure repository credential and loc
   assert.doesNotMatch(migrationWorkflow, /console\.log\([^\n]*(password|DATABASE_URL)/i);
 });
 
-test('future production DB approval must pin us-east-1 endpoint fingerprint and transport before mutation', () => {
-  assert.match(migrationWorkflow, /\.us-east-1\.aws\.neon\.tech/);
-  assert.match(migrationWorkflow, /url\.pathname !== '\/neondb'/);
-  assert.match(migrationWorkflow, /sslmode'\) !== 'require'/);
-  assert.match(migrationWorkflow, /channel_binding'\) !== 'require'/);
-  assert.match(migrationWorkflow, /createHash\('sha256'\)\.update\(url\.hostname\)/);
+test('future production DB approval must pin us-east-1 endpoint fingerprint and transport before mutation or API deploy', () => {
+  for (const workflow of [migrationWorkflow, apiWorkflow]) {
+    assert.match(workflow, /\.us-east-1\.aws\.neon\.tech/);
+    assert.match(workflow, /url\.pathname !== '\/neondb'/);
+    assert.match(workflow, /sslmode'\) !== 'require'/);
+    assert.match(workflow, /channel_binding'\) !== 'require'/);
+    assert.match(workflow, /createHash\('sha256'\)\.update\(url\.hostname\)/);
+    assert.doesNotMatch(workflow, /\.us-east-2\.aws\.neon\.tech/);
+    assert.doesNotMatch(workflow, /royal-lab-98725266/);
+  }
   assert.match(migrationWorkflow, /endpoint fingerprint does not match the approved target/);
-  assert.doesNotMatch(migrationWorkflow, /\.us-east-2\.aws\.neon\.tech/);
+  assert.match(apiWorkflow, /production DB target is still blocked pending correct aws-us-east-1 project/);
+  assert.match(apiWorkflow, /production DB endpoint fingerprint does not match approved target/);
 });
 
 test('production DB migration is idempotent and followed by read-only verification', () => {

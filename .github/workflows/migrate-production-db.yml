@@ -7,10 +7,6 @@ on:
         description: 'Type MIGRATE_YEKI_HAST_PRODUCTION to run the production migration'
         required: true
         type: string
-  push:
-    branches: [main]
-    paths:
-      - .launch/production-db-migration
 
 permissions:
   contents: read
@@ -43,8 +39,8 @@ jobs:
             echo '::error::Unexpected repository'
             exit 1
           fi
-          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ] && [ "${MIGRATION_CONFIRM:-}" != 'MIGRATE_YEKI_HAST_PRODUCTION' ]; then
-            echo '::error::Manual production migration confirmation did not match the required phrase'
+          if [ "$GITHUB_EVENT_NAME" != 'workflow_dispatch' ] || [ "${MIGRATION_CONFIRM:-}" != 'MIGRATE_YEKI_HAST_PRODUCTION' ]; then
+            echo '::error::Production migration requires a manual dispatch with the exact confirmation phrase'
             exit 1
           fi
           if [ -z "${DATABASE_URL:-}" ]; then

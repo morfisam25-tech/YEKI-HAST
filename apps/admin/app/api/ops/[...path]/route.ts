@@ -14,7 +14,7 @@ const MAX_ADMIN_MUTATION_BODY_BYTES = 32 * 1024;
 
 function backendPath(parts: string[]): string | null {
   if (!Array.isArray(parts) || parts.length < 1) return null;
-  if (parts.some((part) => !/^[A-Za-z0-9._-]+$/.test(part))) return null;
+  if (parts.some((part) => part === '.' || part === '..' || !/^[A-Za-z0-9._-]+$/.test(part))) return null;
   return `/v1/admin/${parts.map(encodeURIComponent).join('/')}`;
 }
 

@@ -11,14 +11,16 @@ for (const [name, source, envName] of [
   ['web', webSource, 'WEB_API_BASE_URL'],
   ['admin', adminSource, 'ADMIN_API_BASE_URL'],
 ] as const) {
-  test(`${name} proxy keeps an explicit environment override`, () => {
-    assert.ok(source.includes(`process.env.${envName}`));
+  test(`${name} proxy source-locks production and keeps overrides non-production-only`, () => {
+    const productionLock = source.indexOf("if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;");
+    const envLookup = source.indexOf(`process.env.${envName}`);
+    const localhostFallback = source.indexOf("return 'http://localhost:4000';");
+    assert.ok(productionLock >= 0 && envLookup > productionLock && localhostFallback > envLookup);
   });
 
-  test(`${name} proxy has a safe canonical production fallback`, () => {
+  test(`${name} proxy uses the canonical production API origin`, () => {
     assert.ok(source.includes(currentOrigin));
     assert.doesNotMatch(source, new RegExp(staleOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    assert.match(source, /if \(process\.env\.NODE_ENV !== 'production'\) return 'http:\/\/localhost:4000'/);
     assert.match(source, /return PRODUCTION_API_BASE_URL/);
   });
 }

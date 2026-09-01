@@ -20,14 +20,14 @@ const pool = new pg.Pool({ connectionString, max: 1, connectionTimeoutMillis: 10
 try {
   const state = await pool.query(`
     SELECT
-      to_regnamespace('app')::text AS app_schema,
-      to_regnamespace('private_data')::text AS private_schema,
-      to_regclass('public.yeki_hast_schema_migrations')::text AS migration_table
+      to_regnamespace('app') IS NOT NULL AS app_schema,
+      to_regnamespace('private_data') IS NOT NULL AS private_schema,
+      to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migration_table
   `);
   const row = state.rows[0] ?? {};
-  const appSchema = row.app_schema === 'app';
-  const privateSchema = row.private_schema === 'private_data';
-  const migrationTable = row.migration_table === 'public.yeki_hast_schema_migrations';
+  const appSchema = row.app_schema === true;
+  const privateSchema = row.private_schema === true;
+  const migrationTable = row.migration_table === true;
 
   if (!migrationTable) {
     if (appSchema || privateSchema) {

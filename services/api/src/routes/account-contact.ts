@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
+import { requireCallerClosedBetaEnabled } from '../lib/caller-beta.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { encryptPrivateText, normalizeE164, phoneHash } from '../lib/security.ts';
 
@@ -25,6 +26,10 @@ export async function getCallPhoneStatus(req: IncomingMessage, res: ServerRespon
 }
 
 export async function setCallPhone(req: IncomingMessage, res: ServerResponse) {
+  // Call-phone data is only needed for Caller operation. Do not collect it while
+  // the Caller beta/commercial gate is closed.
+  requireCallerClosedBetaEnabled();
+
   const { userId } = await requireAuth(req);
   const body = await readJson<{ phone?: unknown }>(req);
   const phone = phoneInput(body.phone);

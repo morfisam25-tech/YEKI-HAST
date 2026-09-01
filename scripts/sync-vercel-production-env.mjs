@@ -7,6 +7,10 @@ const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
 const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
 const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
+const DEFAULT_SMTP_HOST = 'smtp.gmail.com';
+const DEFAULT_SMTP_PORT = '465';
+const DEFAULT_SMTP_SECURE = 'true';
+const DEFAULT_SMTP_FROM_NAME = 'یکی هست';
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -99,18 +103,22 @@ if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a fu
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
-// Technical beta has one verified Workspace identity. Optional legacy repository
-// secrets may remain present, but they are accepted only when they equal this
-// source-controlled identity; a stale secret cannot silently redirect auth mail.
+// Technical beta has one source-locked Workspace/Gmail transport. Optional legacy
+// repository secrets may remain present, but they are accepted only when they equal
+// the locked values so stale config cannot redirect SMTP credentials or public mail.
+requireAbsentOrExact('PRODUCTION_SMTP_HOST', DEFAULT_SMTP_HOST, (value) => value.toLowerCase());
+requireAbsentOrExact('PRODUCTION_SMTP_PORT', DEFAULT_SMTP_PORT);
+requireAbsentOrExact('PRODUCTION_SMTP_SECURE', DEFAULT_SMTP_SECURE, (value) => value.toLowerCase());
 requireAbsentOrExact('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
 requireAbsentOrExact('PRODUCTION_SMTP_FROM_EMAIL', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
-const smtpHost = optional('PRODUCTION_SMTP_HOST', 'smtp.gmail.com');
-const smtpPort = optional('PRODUCTION_SMTP_PORT', '465');
-const smtpSecure = optional('PRODUCTION_SMTP_SECURE', 'true').toLowerCase();
+requireAbsentOrExact('PRODUCTION_SMTP_FROM_NAME', DEFAULT_SMTP_FROM_NAME);
+const smtpHost = DEFAULT_SMTP_HOST;
+const smtpPort = DEFAULT_SMTP_PORT;
+const smtpSecure = DEFAULT_SMTP_SECURE;
 const smtpUsername = DEFAULT_MAILBOX_EMAIL;
 const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
 const smtpFromEmail = DEFAULT_MAILBOX_EMAIL;
-const smtpFromName = optional('PRODUCTION_SMTP_FROM_NAME', 'یکی هست').replace(/[\r\n]/g, ' ').slice(0, 80);
+const smtpFromName = DEFAULT_SMTP_FROM_NAME;
 const commercialHostingApproved = optional('PRODUCTION_COMMERCIAL_HOSTING_APPROVED', 'false').toLowerCase();
 
 const portNumber = Number(smtpPort);

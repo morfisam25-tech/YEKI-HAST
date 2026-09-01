@@ -17,14 +17,15 @@ test('production migration preflight has valid JavaScript syntax', () => {
 });
 
 test('production migration preflight is catalog/history read-only', () => {
-  assert.match(script, /to_regnamespace\('app'\)/);
-  assert.match(script, /to_regnamespace\('private_data'\)/);
-  assert.match(script, /to_regclass\('public\.yeki_hast_schema_migrations'\)/);
+  assert.match(script, /to_regnamespace\('app'\) IS NOT NULL/);
+  assert.match(script, /to_regnamespace\('private_data'\) IS NOT NULL/);
+  assert.match(script, /to_regclass\('public\.yeki_hast_schema_migrations'\) IS NOT NULL/);
   assert.match(script, /SELECT filename, sha256/);
   assert.match(script, /f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09/);
   assert.match(script, /3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90/);
   assert.match(script, /application schemas exist without tracked initial migration/);
   assert.match(script, /tracked initial migration is missing required application schemas/);
+  assert.doesNotMatch(script, /to_regclass\('public\.yeki_hast_schema_migrations'\)::text/);
   assert.doesNotMatch(script, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\b/i);
 });
 

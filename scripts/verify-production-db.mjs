@@ -16,13 +16,20 @@ try {
   const migrations = await pool.query(`
     SELECT filename, sha256
     FROM public.yeki_hast_schema_migrations
-    WHERE filename IN ('0001_initial.sql','0002_email_auth.sql')
+    ORDER BY filename
   `);
-  const migrationMap = new Map(migrations.rows.map((row) => [row.filename, row.sha256]));
   const expectedMigrations = new Map([
     ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
     ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
   ]);
+  const migrationMap = new Map();
+  for (const migration of migrations.rows) {
+    const filename = String(migration.filename ?? '');
+    const sha256 = String(migration.sha256 ?? '');
+    if (!expectedMigrations.has(filename)) throw new Error(`unexpected production migration record: ${filename || 'unknown'}`);
+    migrationMap.set(filename, sha256);
+  }
+  if (migrationMap.size !== expectedMigrations.size) throw new Error('production migration history is incomplete');
   for (const [filename, expectedSha] of expectedMigrations) {
     if (migrationMap.get(filename) !== expectedSha) throw new Error(`migration tracking mismatch: ${filename}`);
   }
@@ -76,11 +83,11 @@ try {
     'private_data.safety_event_details',
   ];
   const relations = await pool.query(`
-    SELECT r.relation_name, to_regclass(r.relation_name)::text AS resolved
+    SELECT r.relation_name, to_regclass(r.relation_name) IS NOT NULL AS present
     FROM unnest($1::text[]) AS r(relation_name)
   `, [criticalRelations]);
   for (const row of relations.rows) {
-    if (row.resolved !== row.relation_name) throw new Error(`critical relation missing: ${row.relation_name}`);
+    if (row.present !== true) throw new Error(`critical relation missing: ${row.relation_name}`);
   }
 
   const criticalTriggers = [
@@ -105,11 +112,11 @@ try {
 
   const emailSchema = await pool.query(`
     SELECT
-      to_regclass('private_data.user_emails')::text AS user_emails,
-      to_regclass('private_data.email_otp_challenges')::text AS email_otp_challenges
+      to_regclass('private_data.user_emails') IS NOT NULL AS user_emails,
+      to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_challenges
   `);
-  if (emailSchema.rows[0]?.user_emails !== 'private_data.user_emails') throw new Error('user_emails schema missing');
-  if (emailSchema.rows[0]?.email_otp_challenges !== 'private_data.email_otp_challenges') {
+  if (emailSchema.rows[0]?.user_emails !== true) throw new Error('user_emails schema missing');
+  if (emailSchema.rows[0]?.email_otp_challenges !== true) {
     throw new Error('email_otp_challenges schema missing');
   }
 

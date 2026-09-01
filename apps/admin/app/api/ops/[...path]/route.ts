@@ -10,6 +10,8 @@ import {
 
 type Context = { params: Promise<{ path: string[] }> };
 
+const MAX_ADMIN_MUTATION_BODY_BYTES = 32 * 1024;
+
 function backendPath(parts: string[]): string | null {
   if (!Array.isArray(parts) || parts.length < 1) return null;
   if (parts.some((part) => !/^[A-Za-z0-9._-]+$/.test(part))) return null;
@@ -30,7 +32,18 @@ async function proxy(request: Request, context: Context) {
   if (!target) return NextResponse.json({ error: 'invalid_admin_path' }, { status: 400 });
 
   const incoming = new URL(request.url);
-  const body = request.method === 'GET' ? undefined : await request.text();
+  let body: string | undefined;
+  if (request.method !== 'GET') {
+    const contentLength = Number(request.headers.get('content-length') ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_ADMIN_MUTATION_BODY_BYTES) {
+      return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    }
+    body = await request.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_ADMIN_MUTATION_BODY_BYTES) {
+      return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    }
+  }
+
   const response = await backendRequest(`${target}${incoming.search}`, {
     method: request.method,
     ...(body ? { body } : {}),

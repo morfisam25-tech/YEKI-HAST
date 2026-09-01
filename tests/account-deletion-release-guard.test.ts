@@ -37,11 +37,15 @@ test('public Web deletion page requires OTP and an explicit destructive confirma
   assert.match(webPage, /حذف فوری همه سوابق نیست/);
 });
 
-test('production env sync uses first-party policy and deletion URLs while keeping support explicit', () => {
+test('production env sync source-locks first-party policy, deletion, and support surfaces', () => {
   assert.match(envSync, /DEFAULT_PRIVACY_POLICY_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/privacy'/);
   assert.match(envSync, /DEFAULT_TERMS_OF_SERVICE_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/terms'/);
   assert.match(envSync, /DEFAULT_ACCOUNT_DELETION_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/account\/delete'/);
-  assert.match(envSync, /provided\('PRODUCTION_PRIVACY_POLICY_URL'\) \?\? DEFAULT_PRIVACY_POLICY_URL/);
-  assert.match(envSync, /provided\('PRODUCTION_TERMS_OF_SERVICE_URL'\) \?\? DEFAULT_TERMS_OF_SERVICE_URL/);
-  assert.match(envSync, /provided\('PRODUCTION_SUPPORT_EMAIL'\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL\)/);
+  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL\)/);
+  assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL/);
+  assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL/);
+  assert.match(envSync, /const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL/);
+  assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL/);
 });

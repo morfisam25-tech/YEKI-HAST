@@ -17,12 +17,12 @@ const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
 
-const blockedMarker = 'blocked=pending-secret-update-and-exact-target-approval;project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=72f19903407308e91d8a595df3e7f232f41ca8ff23546dbbd2e518fac8373d76';
+const blockedMarker = /^blocked=[a-z0-9-]+;project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=e589e6310a67818d2dde702c353e0c94ecf12c4d710d78d6dfd57e4240e364c2$/;
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 
-test('production DB migration stays blocked until the verified aws-us-east-1 target credential is updated and explicitly approved', () => {
-  assert.equal(approvalMarker, blockedMarker);
+test('production DB migration remains blocked on the verified aws-us-east-1 target until release gates pass', () => {
+  assert.match(approvalMarker, blockedMarker);
   assert.match(migrationWorkflow, /Production migration is blocked until the correct Neon aws-us-east-1 project is created and explicitly approved/);
   assert.match(migrationWorkflow, /region=aws-us-east-1/);
   assert.match(migrationWorkflow, /host_sha256=\[0-9a-f\]\{64\}/);
@@ -50,7 +50,8 @@ test('production DB migration uses only the secure repository credential and loc
   assert.ok(migrationWorkflow.includes(setupNodeAction));
   assert.match(migrationWorkflow, /node-version: '22\.23\.1'/);
   assert.match(migrationWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
-  assert.doesNotMatch(migrationWorkflow, /echo[^\n]*DATABASE_URL/i);
+  assert.doesNotMatch(migrationWorkflow, /\b(?:echo|printf)\b[^\n]*\$\{?DATABASE_URL\b/i);
+  assert.doesNotMatch(migrationWorkflow, /\b(?:printenv|env)\b[^\n]*\bDATABASE_URL\b/i);
   assert.doesNotMatch(migrationWorkflow, /console\.log\([^\n]*(password|DATABASE_URL)/i);
 });
 

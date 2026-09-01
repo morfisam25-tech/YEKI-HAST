@@ -20,6 +20,13 @@ function required(name: string): string {
   return value;
 }
 
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]?.trim();
+  const value = raw ? Number(raw) : fallback;
+  if (!Number.isInteger(value) || value < min || value > max) throw new Error(`${name} is invalid`);
+  return value;
+}
+
 export function phoneHash(phoneE164: string): string {
   return createHmac('sha256', required('PHONE_HASH_PEPPER')).update(phoneE164).digest('hex');
 }
@@ -112,6 +119,11 @@ export function validateEmailSecurityEnv(): void {
   required('IP_HASH_PEPPER');
   required('OTP_HASH_PEPPER');
   encryptionKeyRing();
+  boundedIntegerEnv('SESSION_TTL_HOURS', 720, 1, 8760);
+  boundedIntegerEnv('OTP_TTL_SECONDS', 300, 60, 1800);
+  boundedIntegerEnv('OTP_EMAIL_LIMIT_PER_15M', 5, 1, 100);
+  boundedIntegerEnv('OTP_EMAIL_IP_LIMIT_PER_15M', 200, 1, 10_000);
+  boundedIntegerEnv('OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000);
 }
 
 export function validateKycSecurityEnv(): void {

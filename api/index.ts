@@ -2,6 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getPublicReleaseConfig } from '../services/api/src/lib/public-release.ts';
 import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.ts';
 
+const EXPECTED_MIGRATIONS = new Map([
+  ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
+  ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+]);
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.statusCode = status;
@@ -13,6 +18,11 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.setHeader('x-frame-options', 'DENY');
   res.setHeader('content-security-policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   res.end(payload);
+}
+
+function logInternal(label: string, error?: unknown): void {
+  const errorName = error instanceof Error ? error.name : error === undefined ? undefined : 'UnknownError';
+  console.error(label, ...(errorName ? [{ errorName }] : []));
 }
 
 function releaseSha(): string | null {
@@ -56,7 +66,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/ready') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
-      console.error('readiness_database_url_missing');
+      logInternal('readiness_database_url_missing');
       sendJson(res, 503, { ok: false, error: 'service_not_ready' });
       return;
     }
@@ -65,13 +75,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     try {
       pool = await loadPgPool(connectionString);
     } catch (error) {
-      console.error('readiness_pg_import_failed', error);
+      logInternal('readiness_pg_import_failed', error);
       sendJson(res, 503, { ok: false, error: 'service_not_ready' });
       return;
     }
 
     try {
       const critical = await pool.query<{
+        migrations_ready: boolean;
         users_ready: boolean;
         sessions_ready: boolean;
         pricing_ready: boolean;
@@ -79,6 +90,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         email_otp_ready: boolean;
       }>(`
         SELECT
+          to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migrations_ready,
           to_regclass('app.users') IS NOT NULL AS users_ready,
           to_regclass('private_data.auth_sessions') IS NOT NULL AS sessions_ready,
           to_regclass('app.pricing_plans') IS NOT NULL AS pricing_ready,
@@ -86,15 +98,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready
       `);
       const row = critical.rows[0];
-      const schemaReady = Boolean(
-        row?.users_ready
+      const relationsReady = Boolean(
+        row?.migrations_ready
+        && row?.users_ready
         && row?.sessions_ready
         && row?.pricing_ready
         && row?.audit_ready
         && row?.email_otp_ready
       );
-      if (!schemaReady) {
+      if (!relationsReady) {
         console.error('readiness_schema_incomplete', {
+          migrations: Boolean(row?.migrations_ready),
           users: Boolean(row?.users_ready),
           sessions: Boolean(row?.sessions_ready),
           pricing: Boolean(row?.pricing_ready),
@@ -104,9 +118,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;
       }
+
+      const migrations = await pool.query<{ filename: string; sha256: string }>(`
+        SELECT filename, sha256
+        FROM public.yeki_hast_schema_migrations
+        WHERE filename IN ('0001_initial.sql','0002_email_auth.sql')
+      `);
+      const migrationMap = new Map(migrations.rows.map((migration) => [migration.filename, migration.sha256]));
+      for (const [filename, expectedSha] of EXPECTED_MIGRATIONS) {
+        if (migrationMap.get(filename) !== expectedSha) {
+          console.error('readiness_migration_integrity_mismatch', { filename });
+          sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+          return;
+        }
+      }
+
       sendJson(res, 200, { ok: true, database: 'ready', schema: 'ready' });
     } catch (error) {
-      console.error('readiness_database_query_failed', error);
+      logInternal('readiness_database_query_failed', error);
       sendJson(res, 503, { ok: false, error: 'service_not_ready' });
     } finally {
       await pool.end().catch(() => undefined);
@@ -117,7 +146,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (method === 'GET' && url.pathname === '/v1/bootstrap') {
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) {
-      console.error('bootstrap_database_url_missing');
+      logInternal('bootstrap_database_url_missing');
       sendJson(res, 503, { error: 'service_not_ready' });
       return;
     }
@@ -126,7 +155,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     try {
       pool = await loadPgPool(connectionString);
     } catch (error) {
-      console.error('bootstrap_pg_import_failed', error);
+      logInternal('bootstrap_pg_import_failed', error);
       sendJson(res, 503, { error: 'service_not_ready' });
       return;
     }
@@ -193,7 +222,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
       });
     } catch (error) {
-      console.error('bootstrap_database_query_failed', error);
+      logInternal('bootstrap_database_query_failed', error);
       sendJson(res, 500, { error: 'internal_error' });
     } finally {
       await pool.end().catch(() => undefined);
@@ -205,7 +234,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const { handleApiRequest } = await import('../services/api/src/handler.ts');
     return await handleApiRequest(req, res);
   } catch (error) {
-    console.error('backend_import_failed', error);
+    logInternal('backend_import_failed', error);
     sendJson(res, 500, { error: 'internal_error' });
   }
 }

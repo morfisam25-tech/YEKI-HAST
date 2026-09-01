@@ -28,6 +28,6 @@ test('email OTP numeric validation rejects non-integer and out-of-range values',
   assert.match(securitySource, /Number\.isInteger\(value\)/);
   assert.match(securitySource, /value < min \|\| value > max/);
   assert.match(securitySource, /OTP_EMAIL_LIMIT_PER_15M', 5, 1, 100/);
-  assert.match(securitySource, /OTP_EMAIL_IP_LIMIT_PER_15M', 200, 1, 10_000/);
+  assert.match(securitySource, /OTP_EMAIL_IP_LIMIT_PER_15M', 200, 1, 1000/);
   assert.match(securitySource, /OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000/);
 });

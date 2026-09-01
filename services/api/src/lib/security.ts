@@ -122,7 +122,7 @@ export function validateEmailSecurityEnv(): void {
   boundedIntegerEnv('SESSION_TTL_HOURS', 720, 1, 8760);
   boundedIntegerEnv('OTP_TTL_SECONDS', 300, 60, 1800);
   boundedIntegerEnv('OTP_EMAIL_LIMIT_PER_15M', 5, 1, 100);
-  boundedIntegerEnv('OTP_EMAIL_IP_LIMIT_PER_15M', 200, 1, 10_000);
+  boundedIntegerEnv('OTP_EMAIL_IP_LIMIT_PER_15M', 200, 1, 1000);
   boundedIntegerEnv('OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000);
 }
 

@@ -40,9 +40,12 @@ test('admin logout clears browser cookie before best-effort backend revocation',
   assert.match(logoutRoute, /authorization: `Bearer \$\{token\}`/);
 });
 
-test('admin operation proxy requires session, same-origin mutation metadata, and bounded bodies', () => {
+test('admin operation proxy stays inside admin namespace and bounds mutation bodies', () => {
   assert.match(opsRoute, /request\.method !== 'GET' && !browserMutationAllowed\(request\)/);
   assert.match(opsRoute, /ADMIN_SESSION_COOKIE/);
+  assert.match(opsRoute, /part === '\.'/);
+  assert.match(opsRoute, /part === '\.\.'/);
+  assert.match(opsRoute, /`\/v1\/admin\/\$\{parts\.map\(encodeURIComponent\)\.join\('\/'\)\}`/);
   assert.match(opsRoute, /MAX_ADMIN_MUTATION_BODY_BYTES = 32 \* 1024/);
   assert.match(opsRoute, /content-length/);
   assert.match(opsRoute, /TextEncoder\(\)\.encode\(body\)\.byteLength/);

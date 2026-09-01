@@ -3,10 +3,10 @@ export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-theta.vercel.app';
 const BACKEND_REQUEST_TIMEOUT_MS = 15_000;
 
 export function backendBaseUrl(): string {
+  if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;
   const configured = process.env.WEB_API_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
-  if (process.env.NODE_ENV !== 'production') return 'http://localhost:4000';
-  return PRODUCTION_API_BASE_URL;
+  return 'http://localhost:4000';
 }
 
 export function browserMutationAllowed(request: Request): boolean {

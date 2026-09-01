@@ -20,13 +20,25 @@ const closedProviderCredentials = [
   'IPPANEL_API_KEY',
 ];
 
+const closedProviderSelectors = [
+  'SMS_PROVIDER',
+  'PAYMENT_PROVIDER',
+  'KYC_INQUIRY_PROVIDER',
+  'PAYOUT_PROVIDER',
+  'TELEPHONY_PROVIDER',
+];
+
 test('smallest technical beta deploy does not require closed-provider credentials', () => {
   for (const name of closedProviderCredentials) {
     assert.doesNotMatch(apiWorkflow, new RegExp(`secrets\\.${name}`));
   }
 });
 
-test('production env sync keeps provider-gated caller surfaces closed by default', () => {
+test('production env sync explicitly disables every closed provider selector', () => {
+  for (const key of closedProviderSelectors) {
+    assert.match(envSync, new RegExp(`setPlain\\('${key}', ''\\)`));
+  }
+  assert.match(envSync, /setPlain\('SMSIR_OTP_TEMPLATE_APPROVED', 'false'\)/);
   assert.match(envSync, /CALLER_CLOSED_BETA_ENABLED', 'false'/);
   assert.match(envSync, /MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false'/);
   assert.match(envSync, /DEV_EXPOSE_OTP', 'false'/);

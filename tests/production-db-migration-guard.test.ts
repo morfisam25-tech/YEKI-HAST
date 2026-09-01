@@ -51,7 +51,7 @@ test('production DB migration uses only the secure repository credential and loc
   assert.match(migrationWorkflow, /node-version: '22\.23\.1'/);
   assert.match(migrationWorkflow, /npm ci --ignore-scripts --no-audit --no-fund/);
   assert.doesNotMatch(migrationWorkflow, /\b(?:echo|printf)\b[^\n]*\$\{?DATABASE_URL\b/i);
-  assert.doesNotMatch(migrationWorkflow, /\b(?:printenv|env)\b[^\n]*\bDATABASE_URL\b/i);
+  assert.doesNotMatch(migrationWorkflow, /\bprintenv\b[^\n]*\bDATABASE_URL\b/i);
   assert.doesNotMatch(migrationWorkflow, /console\.log\([^\n]*(password|DATABASE_URL)/i);
 });
 

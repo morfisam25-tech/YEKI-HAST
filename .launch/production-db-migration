@@ -1,1 +1,1 @@
-blocked=pending-correct-aws-us-east-1-production-db
+blocked=pending-secret-update-and-exact-target-approval;project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=72f19903407308e91d8a595df3e7f232f41ca8ff23546dbbd2e518fac8373d76

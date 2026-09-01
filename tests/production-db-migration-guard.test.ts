@@ -17,11 +17,11 @@ const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
 
-const blockedMarker = 'blocked=pending-correct-aws-us-east-1-production-db';
+const blockedMarker = 'blocked=pending-secret-update-and-exact-target-approval;project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=72f19903407308e91d8a595df3e7f232f41ca8ff23546dbbd2e518fac8373d76';
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 
-test('production DB migration stays blocked until an exact aws-us-east-1 target is explicitly approved', () => {
+test('production DB migration stays blocked until the verified aws-us-east-1 target credential is updated and explicitly approved', () => {
   assert.equal(approvalMarker, blockedMarker);
   assert.match(migrationWorkflow, /Production migration is blocked until the correct Neon aws-us-east-1 project is created and explicitly approved/);
   assert.match(migrationWorkflow, /region=aws-us-east-1/);

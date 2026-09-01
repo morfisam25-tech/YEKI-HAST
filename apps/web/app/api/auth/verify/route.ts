@@ -4,15 +4,25 @@ import { WEB_SESSION_COOKIE, backendRequest, browserMutationAllowed, jsonOrNull,
 
 type SessionPayload = { token?: unknown; expiresInHours?: unknown };
 
+const MAX_EMAIL_LENGTH = 254;
+const MAX_AUTH_BODY_BYTES = 4_096;
+
 export async function POST(request: Request) {
   if (!browserMutationAllowed(request)) {
     return NextResponse.json({ error: 'forbidden_origin' }, { status: 403 });
   }
 
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_AUTH_BODY_BYTES) {
+    return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+  }
+
   const body = await request.json().catch(() => null) as { email?: unknown; code?: unknown } | null;
   const email = typeof body?.email === 'string' ? body.email.trim() : '';
   const code = typeof body?.code === 'string' ? body.code.trim() : '';
-  if (!email) return NextResponse.json({ error: 'invalid_email' }, { status: 400 });
+  if (!email || email.length > MAX_EMAIL_LENGTH) {
+    return NextResponse.json({ error: 'invalid_email' }, { status: 400 });
+  }
   if (!/^\d{6}$/.test(code)) return NextResponse.json({ error: 'invalid_otp' }, { status: 400 });
 
   const verified = await backendRequest('/v1/auth/email/verify', {

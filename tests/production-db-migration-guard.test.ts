@@ -10,6 +10,10 @@ const apiWorkflow = await readFile(
   new URL('../.github/workflows/deploy-production-api.yml', import.meta.url),
   'utf8',
 );
+const productionDbVerifier = await readFile(
+  new URL('../scripts/verify-production-db.mjs', import.meta.url),
+  'utf8',
+);
 const apiVercel = JSON.parse(
   await readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
 );
@@ -17,12 +21,12 @@ const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
 
-const blockedMarker = /^blocked=[a-z0-9-]+;project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=e589e6310a67818d2dde702c353e0c94ecf12c4d710d78d6dfd57e4240e364c2$/;
+const approvedMarker = /^approved=\d{4}-\d{2}-\d{2};project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=e589e6310a67818d2dde702c353e0c94ecf12c4d710d78d6dfd57e4240e364c2$/;
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
 
-test('production DB migration remains blocked on the verified aws-us-east-1 target until release gates pass', () => {
-  assert.match(approvalMarker, blockedMarker);
+test('production DB approval remains pinned to the verified aws-us-east-1 target', () => {
+  assert.match(approvalMarker, approvedMarker);
   assert.match(migrationWorkflow, /Production migration is blocked until the correct Neon aws-us-east-1 project is created and explicitly approved/);
   assert.match(migrationWorkflow, /region=aws-us-east-1/);
   assert.match(migrationWorkflow, /host_sha256=\[0-9a-f\]\{64\}/);
@@ -74,6 +78,14 @@ test('production DB migration is idempotent and followed by read-only verificati
   assert.match(migrationWorkflow, /preflight-production-db-migration\.mjs/);
   assert.match(migrationWorkflow, /npm run db:migrate/);
   assert.match(migrationWorkflow, /verify-production-db\.mjs/);
+});
+
+test('production DB verifier checks exact migration history and relation existence without regclass display-name assumptions', () => {
+  assert.match(productionDbVerifier, /SELECT filename, sha256[\s\S]*ORDER BY filename/);
+  assert.match(productionDbVerifier, /unexpected production migration record/);
+  assert.match(productionDbVerifier, /production migration history is incomplete/);
+  assert.match(productionDbVerifier, /to_regclass\(r\.relation_name\) IS NOT NULL AS present/);
+  assert.doesNotMatch(productionDbVerifier, /to_regclass\(r\.relation_name\)::text AS resolved/);
 });
 
 test('all API production configuration paths stay aligned with Vercel iad1 while DB target remains us-east-1', () => {

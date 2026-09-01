@@ -11,6 +11,12 @@ import { jalaliToGregorianIso } from '../domain/persian-calendar.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { encryptPrivateText, kycLookupHash } from '../lib/security.ts';
+import { validateKycInquiryProviderEnv } from '../providers/kyc-inquiry.ts';
+
+function requireKycSubmissionProvider(): void {
+  try { validateKycInquiryProviderEnv(); }
+  catch { throw new HttpError(503, 'kyc_provider_not_configured'); }
+}
 
 function normalizeLegalName(value: unknown, field = 'legalName'): string {
   const name = requireString(value, field, 2, 160).replace(/\s+/g, ' ');
@@ -42,6 +48,11 @@ function normalizedBirthDate(body: { dateOfBirth?: unknown; dateOfBirthJalali?: 
 }
 
 export async function submitListenerKyc(req: IncomingMessage, res: ServerResponse) {
+  // Do not collect identity/banking payloads while the real inquiry provider is disabled.
+  // Technical beta keeps KYC provider selectors blank, so this fails before body parsing
+  // and before any sensitive-data write.
+  requireKycSubmissionProvider();
+
   const { userId } = await requireAuth(req);
   const body = await readJson<{
     legalName?: unknown;

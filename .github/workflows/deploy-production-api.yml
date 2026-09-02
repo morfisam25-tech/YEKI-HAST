@@ -32,6 +32,7 @@ jobs:
       VERCEL_ORG_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_TEAM_SLUG: unique-6ff0
       VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+      API_PROJECT_NAME: yeki-hast
       API_PRODUCTION_URL: https://yeki-hast-unique-6ff0.vercel.app
       VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
       ESBUILD_BIN: ${{ github.workspace }}/node_modules/.bin/esbuild
@@ -234,6 +235,15 @@ jobs:
         run: |
           set -euo pipefail
           "$VERCEL_BIN" deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+
+      - name: Make production API publicly reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" project protection disable "$API_PROJECT_NAME" \
+            --sso \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG"
 
       - name: Verify production health readiness and bootstrap
         shell: bash

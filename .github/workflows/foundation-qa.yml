@@ -118,13 +118,11 @@ jobs:
           KYC_HASH_PEPPER: ci-kyc-pepper-0000000000000000000000000000
           ACTIVE_DATA_ENCRYPTION_KEY_ID: k1
           DATA_ENCRYPTION_KEYS: '{"k1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
-          EMAIL_PROVIDER: smtp
-          SMTP_HOST: smtp.example.test
-          SMTP_PORT: '587'
-          SMTP_SECURE: 'false'
-          SMTP_USERNAME: ci-user
-          SMTP_PASSWORD: ci-password
-          SMTP_FROM_EMAIL: no-reply@example.test
+          EMAIL_PROVIDER: gmail_api
+          GMAIL_SERVICE_ACCOUNT_JSON: '{"type":"service_account","client_email":"foundation-qa@example.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\nci-only-placeholder-not-a-credential\n-----END PRIVATE KEY-----\n","token_uri":"https://oauth2.googleapis.com/token"}'
+          GMAIL_IMPERSONATED_USER: sales@uniqueholding.com.tr
+          GMAIL_FROM_EMAIL: sales@uniqueholding.com.tr
+          GMAIL_FROM_NAME: Yeki Hast
         run: npm run verify:security-config
 
       - name: Typecheck all workspaces

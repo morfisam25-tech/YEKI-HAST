@@ -65,7 +65,7 @@ async function maybeBootstrapFirstAdminByEmail(
   `, [userId]);
   await client.query(`
     INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
-    VALUES ($1,'admin_bootstrap_completed','admin_user',$1,
+    VALUES ($1,'admin_bootstrap_completed','admin_user',$1::text,
             jsonb_build_object('method','verified_email_otp'))
   `, [userId]);
 }
@@ -215,7 +215,7 @@ export async function verifyEmailOtp(req: IncomingMessage, res: ServerResponse) 
         WHERE actor_user_id=$1
           AND action='account_deletion_requested'
           AND entity_type='user'
-          AND entity_id=$1
+          AND entity_id=$1::text
           AND metadata->>'processingState'='pending'
         LIMIT 1
       `, [userId]);

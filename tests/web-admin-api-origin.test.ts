@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 const webSource = await readFile(new URL('../apps/web/app/api/_backend.ts', import.meta.url), 'utf8');
 const adminSource = await readFile(new URL('../apps/admin/app/api/_backend.ts', import.meta.url), 'utf8');
-const currentOrigin = 'https://yeki-hast-theta.vercel.app';
-const staleOrigin = 'https://yeki-hast.vercel.app';
+const currentOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
+const staleOrigin = 'https://yeki-hast-theta.vercel.app';
 
 for (const [name, source, envName] of [
   ['web', webSource, 'WEB_API_BASE_URL'],

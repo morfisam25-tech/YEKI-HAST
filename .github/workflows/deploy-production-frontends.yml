@@ -90,25 +90,44 @@ jobs:
           test -x "$VERCEL_BIN"
           "$VERCEL_BIN" --version
 
-      - name: Require Web and Admin to be protected before any frontend deployment
+      - name: Enforce Web and Admin protection before any frontend deployment
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
           const targets = [
-            ['Web', process.env.WEB_PRODUCTION_URL],
-            ['Admin', process.env.ADMIN_PRODUCTION_URL],
+            ['Web', process.env.WEB_PROJECT_ID, process.env.WEB_PRODUCTION_URL],
+            ['Admin', process.env.ADMIN_PROJECT_ID, process.env.ADMIN_PRODUCTION_URL],
           ];
+          if (!token || !teamId) throw new Error('frontend protection environment is incomplete');
+
+          async function setProtection(label, projectId, value) {
+            if (!projectId || !/^prj_[A-Za-z0-9]+$/.test(projectId)) throw new Error(`${label} project id is invalid`);
+            const url = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`);
+            url.searchParams.set('teamId', teamId);
+            const response = await fetch(url, {
+              method: 'PATCH',
+              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+              body: JSON.stringify({ ssoProtection: value }),
+            });
+            if (!response.ok) throw new Error(`${label} protection update failed (${response.status})`);
+          }
+
+          for (const [label, projectId] of targets) {
+            await setProtection(label, projectId, { deploymentType: 'all' });
+          }
 
           function isProtectionResponse(status) {
             return (status >= 300 && status < 400) || status === 401 || status === 403;
           }
 
-          for (const [label, url] of targets) {
+          for (const [label, , url] of targets) {
             if (!url) throw new Error(`${label} production URL is missing`);
             let last = 'no response';
             let protectedOk = false;
-            for (let attempt = 1; attempt <= 4; attempt += 1) {
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
               try {
                 const response = await fetch(url, { cache: 'no-store', redirect: 'manual' });
                 if (isProtectionResponse(response.status)) {
@@ -123,7 +142,7 @@ jobs:
             }
             if (!protectedOk) throw new Error(`${label} must be protected before deployment: ${last}`);
           }
-          console.log('frontend pre-deploy protection PASS');
+          console.log('frontend pre-deploy protection enforcement PASS');
           NODE
 
       - name: Bind exact UNIQUE projects
@@ -323,10 +342,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$VERCEL_BIN" project protection disable "$WEB_PROJECT_NAME" \
-            --sso \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_TEAM_SLUG"
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          if (!token || !teamId || !projectId) throw new Error('Web public cutover environment is incomplete');
+          const url = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`);
+          url.searchParams.set('teamId', teamId);
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ ssoProtection: null }),
+          });
+          if (!response.ok) throw new Error(`Web public cutover failed (${response.status})`);
+          console.log('verified production Web public cutover requested');
+          NODE
 
       - name: Verify Web canonical production alias public surfaces
         shell: bash
@@ -364,10 +394,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -x "$VERCEL_BIN" ]; then
-            "$VERCEL_BIN" project protection enable "$WEB_PROJECT_NAME" \
-              --sso \
-              --token "$VERCEL_TOKEN" \
-              --scope "$VERCEL_TEAM_SLUG"
-            echo 'production Web re-protection requested after failed release'
-          fi
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          if (!token || !teamId || !projectId) throw new Error('Web re-protection environment is incomplete');
+          const url = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`);
+          url.searchParams.set('teamId', teamId);
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ ssoProtection: { deploymentType: 'all' } }),
+          });
+          if (!response.ok) throw new Error(`Web re-protection failed (${response.status})`);
+          console.log('production Web re-protection requested after failed release');
+          NODE

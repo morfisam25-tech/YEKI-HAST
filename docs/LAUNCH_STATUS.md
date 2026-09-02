@@ -66,34 +66,39 @@ This file is the repository source of truth for current launch state. Re-check l
 - No new Listener production API/Web/Admin deployment has been performed after DB verification.
 - No Vercel plan purchase or upgrade has been authorized.
 
+### Gmail mailbox preflight
+
+- The connected `sales@uniqueholding.com.tr` mailbox was verified directly.
+- A self-addressed preflight message sent from the mailbox to itself was returned with both `SENT` and `INBOX`, confirming the release smoke test's same-mailbox delivery/readback assumption. The temporary test message was then moved to Trash.
+- This mailbox preflight does not substitute for the production domain-wide-delegated service-account OAuth test; that remains part of the guarded production API deploy.
+
 ### GitHub secrets / credentials
 
 - `PRODUCTION_DATABASE_URL` is present as a Repository Secret and has passed the exact production target guard during migration run #5.
-- At the latest manual GitHub Actions Secrets UI check, Environment secrets were empty and the Repository secrets list showed only `PRODUCTION_DATABASE_URL`.
-- `VERCEL_TOKEN` still requires manual creation/verification unless the UI state has changed since that check.
+- `VERCEL_TOKEN` was manually confirmed present in the Repository Secrets UI after creation for the `UNIQUE` deployment scope. Its operational validity will still be checked by the guarded API deployment before any Vercel mutation proceeds.
 - The old SMTP/App Password secret is no longer required.
-- The new production mail credential is `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON`. It must be the real Google service-account JSON whose numeric OAuth client ID has been granted Workspace domain-wide delegation for the exact Gmail scopes used by this release.
+- The remaining mail credential is `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON`. It must be the real Google service-account JSON whose numeric OAuth client ID has been granted Workspace domain-wide delegation for the exact Gmail scopes used by this release.
 - Never paste DB, Vercel, Google private-key, provider, OTP or session secrets into chat/source.
 
-## Remaining blockers
+## Remaining blocker
 
 ### Required before controlled API deployment
 
-1. Create/verify Repository Secret `VERCEL_TOKEN` using a token scoped for the `UNIQUE` Listener deployment workflow.
-2. Complete the Google Workspace Gmail API machine-auth setup:
+1. Complete the Google Workspace Gmail API machine-auth setup:
    - Gmail API enabled for the Google Cloud project that owns the service account.
    - Service account created with domain-wide delegation enabled.
    - Its OAuth client ID authorized in Google Workspace Admin for `https://www.googleapis.com/auth/gmail.send` and `https://www.googleapis.com/auth/gmail.readonly`.
    - Repository Secret `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON` set to the downloaded service-account JSON. The checked-in release code fixes the impersonated/from identity to `sales@uniqueholding.com.tr`.
-3. Run the manual controlled API deploy from exact authorized `main` and require all of these to pass:
+2. Run the manual controlled API deploy from exact authorized `main` and require all of these to pass:
    - Foundation QA lineage attestation.
    - Read-only production DB verification.
+   - Vercel token/team/project authorization guard.
    - Production API deployment to the exact `UNIQUE` project.
    - `/health` PASS.
    - `/ready` PASS.
    - `/v1/bootstrap` expected safe behavior.
    - Real Gmail API Email OTP delivery/readback, verification, session, logout and revocation E2E.
-4. Only after the API gate is green, run the guarded frontend deployment. Web may become public only after its smoke checks; Admin must remain protected.
+3. Only after the API gate is green, run the guarded frontend deployment. Web may become public only after its smoke checks; Admin must remain protected.
 
 ### Intentionally closed for technical beta
 
@@ -114,11 +119,12 @@ This file is the repository source of truth for current launch state. Re-check l
 1. Foundation QA — **PASS** on `5a4b63fe7eabc05fa9a1ca219cc3d0d7039bde88` in run `33578910668`.
 2. Exact production DB target approval — **PASS**.
 3. Production DB migration + read-only verification — **PASS** in run `33572791927`.
-4. Secure Vercel token + delegated Gmail service-account credential — **BLOCKED on manual external credentials/setup**.
-5. Controlled API deploy + health/readiness/bootstrap/Email OTP E2E — pending step 4.
-6. Controlled frontend deploy; Web public only after smoke, Admin protected — pending API PASS.
-7. Keep provider-gated Caller/Payment/KYC/Payout/Telephony/SMS flows closed.
-8. Confirm commercial hosting eligibility before paid traffic.
+4. Vercel Repository Secret — **PRESENT; operational validation pending guarded deploy**.
+5. Delegated Gmail service-account credential — **BLOCKED on manual Google Cloud / Workspace setup**.
+6. Controlled API deploy + health/readiness/bootstrap/Email OTP E2E — pending step 5.
+7. Controlled frontend deploy; Web public only after smoke, Admin protected — pending API PASS.
+8. Keep provider-gated Caller/Payment/KYC/Payout/Telephony/SMS flows closed.
+9. Confirm commercial hosting eligibility before paid traffic.
 
 ## Non-negotiable rules
 

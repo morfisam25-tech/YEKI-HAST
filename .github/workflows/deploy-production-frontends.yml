@@ -178,6 +178,27 @@ jobs:
             --scope "$VERCEL_TEAM_SLUG"
           test -f .vercel/output/config.json
 
+      - name: Expose hoisted workspace dependencies to prebuilt deployer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d node_modules
+          test -f node_modules/client-only/index.js
+          for app in apps/web apps/admin; do
+            if [ -L "$app/node_modules" ]; then
+              rm "$app/node_modules"
+            elif [ -e "$app/node_modules" ]; then
+              if find "$app/node_modules" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+                echo "::error::$app/node_modules is unexpectedly populated; refusing to replace it"
+                exit 1
+              fi
+              rmdir "$app/node_modules"
+            fi
+            ln -s ../../node_modules "$app/node_modules"
+            test -f "$app/node_modules/client-only/index.js"
+          done
+          echo 'workspace dependency bridge PASS'
+
       - name: Deploy prebuilt Web artifact to protected UNIQUE production
         id: deploy_web
         working-directory: apps/web

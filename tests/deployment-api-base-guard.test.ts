@@ -6,8 +6,8 @@ const env = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
 const adminBackend = await readFile(new URL('../apps/admin/app/api/_backend.ts', import.meta.url), 'utf8');
 const webBackend = await readFile(new URL('../apps/web/app/api/_backend.ts', import.meta.url), 'utf8');
 const paymentProvider = await readFile(new URL('../services/api/src/providers/payment.ts', import.meta.url), 'utf8');
-const canonicalApiOrigin = 'https://yeki-hast-theta.vercel.app';
-const staleApiOrigin = 'https://yeki-hast.vercel.app';
+const canonicalApiOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
+const staleApiOrigin = 'https://yeki-hast-theta.vercel.app';
 
 test('web and admin Vercel projects keep override support and the canonical production API origin', () => {
   assert.match(env, /^WEB_API_BASE_URL=$/m);

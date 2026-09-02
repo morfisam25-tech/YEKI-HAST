@@ -6,7 +6,7 @@ const appConfig = JSON.parse(await readFile(new URL('../apps/mobile/app.json', i
 const easConfig = JSON.parse(await readFile(new URL('../apps/mobile/eas.json', import.meta.url), 'utf8'));
 const packageJson = JSON.parse(await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8'));
 
-const productionApiOrigin = 'https://yeki-hast-theta.vercel.app';
+const productionApiOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
 const sdk57Node = '22.23.1';
 
 test('mobile app has stable Android and iOS application identifiers', () => {

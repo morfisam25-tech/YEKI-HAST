@@ -32,7 +32,7 @@ jobs:
       VERCEL_ORG_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_TEAM_SLUG: unique-6ff0
       VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
-      API_PRODUCTION_URL: https://yeki-hast-theta.vercel.app
+      API_PRODUCTION_URL: https://yeki-hast-unique-6ff0.vercel.app
       VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
       ESBUILD_BIN: ${{ github.workspace }}/node_modules/.bin/esbuild
     steps:

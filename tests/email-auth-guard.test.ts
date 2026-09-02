@@ -48,6 +48,12 @@ test('email OTP is hashed, rate limited, attempt limited, and session-backed', (
   assert.doesNotMatch(route, /INSERT INTO private_data\.user_emails\(\s*user_id,\s*email\s*[,)]/);
 });
 
+test('email auth audit entity ids are explicitly text-cast when sharing a UUID parameter', () => {
+  assert.match(route, /VALUES \(\$1,'admin_bootstrap_completed','admin_user',\$1::text,/);
+  assert.match(route, /actor_user_id=\$1[\s\S]*entity_id=\$1::text[\s\S]*processingState/);
+  assert.doesNotMatch(route, /entity_id=\$1\s*\n/);
+});
+
 test('browser-proxied email OTP uses a separate IP bucket without weakening phone OTP', () => {
   assert.match(route, /integerEnv\('OTP_EMAIL_IP_LIMIT_PER_15M', 200\)/);
   assert.doesNotMatch(route, /integerEnv\('OTP_IP_LIMIT_PER_15M', 20\)/);

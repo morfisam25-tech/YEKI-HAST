@@ -87,9 +87,10 @@ test('production release installs only from the committed workspace lock', () =>
 });
 
 test('API deploy is fail-closed on irreducible credentials and approved DB target', () => {
-  for (const name of ['VERCEL_TOKEN', 'PRODUCTION_DATABASE_URL', 'PRODUCTION_SMTP_PASSWORD']) {
+  for (const name of ['VERCEL_TOKEN', 'PRODUCTION_DATABASE_URL', 'PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON']) {
     assert.match(apiWorkflow, escaped(name));
   }
+  assert.doesNotMatch(apiWorkflow, /PRODUCTION_SMTP_PASSWORD/);
   assert.match(apiWorkflow, /Require explicitly approved aws-us-east-1 database target/);
   assert.match(apiWorkflow, /\.us-east-1\.aws\.neon\.tech/);
   assert.match(apiWorkflow, /host_sha256/);
@@ -106,8 +107,9 @@ test('production env sync keeps technical-beta gates closed and public identity 
   assert.match(envSync, /MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false'/);
   assert.match(envSync, /BOOTSTRAP_ADMIN_ENABLED', 'false'/);
   assert.match(envSync, /DEV_EXPOSE_OTP', 'false'/);
-  assert.match(envSync, /EMAIL_PROVIDER', 'smtp'/);
-  assert.doesNotMatch(envSync, /console\.log\([^\n]*(DATABASE_URL|SMTP_PASSWORD|DATA_ENCRYPTION_KEYS|HASH_PEPPER)/);
+  assert.match(envSync, /EMAIL_PROVIDER', 'gmail_api'/);
+  assert.match(envSync, /GMAIL_IMPERSONATED_USER/);
+  assert.doesNotMatch(envSync, /console\.log\([^\n]*(DATABASE_URL|GMAIL_SERVICE_ACCOUNT_JSON|DATA_ENCRYPTION_KEYS|HASH_PEPPER)/);
 });
 
 test('API release requires exact live readiness and real Email OTP E2E', () => {
@@ -118,12 +120,14 @@ test('API release requires exact live readiness and real Email OTP E2E', () => {
   assert.match(apiWorkflow, /body\?\.legal\?\.ready === true/);
   assert.match(apiWorkflow, escaped(defaultMailbox));
   assert.match(apiWorkflow, /smoke-production-email-auth\.mjs/);
-  assert.match(emailSmoke, /imap\.gmail\.com/);
+  assert.match(emailSmoke, /gmail\.googleapis\.com\/gmail\/v1\/users\/me/);
+  assert.match(emailSmoke, /gmail\.readonly/);
+  assert.match(emailSmoke, /labelIds=INBOX/);
   assert.match(emailSmoke, /\/v1\/auth\/email\/request/);
   assert.match(emailSmoke, /\/v1\/auth\/email\/verify/);
   assert.match(emailSmoke, /\/v1\/auth\/logout/);
   assert.match(emailSmoke, /revoked\.status !== 401/);
-  assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password)/i);
+  assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password|private_key)/i);
 });
 
 test('frontend release stays protected until exact smoke passes and only Web may open', () => {

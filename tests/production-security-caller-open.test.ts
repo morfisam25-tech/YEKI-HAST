@@ -5,6 +5,13 @@ import test from 'node:test';
 
 const verifier = fileURLToPath(new URL('../scripts/verify-production-security-config.mjs', import.meta.url));
 
+const serviceAccount = JSON.stringify({
+  type: 'service_account',
+  client_email: 'mailer@test-project.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\ntest-key-material\n-----END PRIVATE KEY-----\n',
+  token_uri: 'https://oauth2.googleapis.com/token',
+});
+
 function baseEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -17,13 +24,11 @@ function baseEnv(): NodeJS.ProcessEnv {
     KYC_HASH_PEPPER: 'test-kyc-pepper-0000000000000000000000000000',
     ACTIVE_DATA_ENCRYPTION_KEY_ID: 'k1',
     DATA_ENCRYPTION_KEYS: '{"k1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}',
-    EMAIL_PROVIDER: 'smtp',
-    SMTP_HOST: 'smtp.example.test',
-    SMTP_PORT: '587',
-    SMTP_SECURE: 'false',
-    SMTP_USERNAME: 'test-user',
-    SMTP_PASSWORD: 'test-password',
-    SMTP_FROM_EMAIL: 'no-reply@example.test',
+    EMAIL_PROVIDER: 'gmail_api',
+    GMAIL_SERVICE_ACCOUNT_JSON: serviceAccount,
+    GMAIL_IMPERSONATED_USER: 'sales@uniqueholding.com.tr',
+    GMAIL_FROM_EMAIL: 'sales@uniqueholding.com.tr',
+    GMAIL_FROM_NAME: 'Yeki Hast',
     BOOTSTRAP_ADMIN_ENABLED: 'false',
     BOOTSTRAP_ADMIN_PHONE_E164: '',
     BOOTSTRAP_ADMIN_EMAIL: '',

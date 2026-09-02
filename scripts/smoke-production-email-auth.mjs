@@ -1,18 +1,13 @@
-import tls from 'node:tls';
+import { sign } from 'node:crypto';
 
 const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
-  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
-  return value;
-}
-
-function optional(name, fallback) {
-  const value = process.env[name]?.trim();
-  if (!value) return fallback;
-  if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
   return value;
 }
 
@@ -20,125 +15,83 @@ function normalizedEmail(value) {
   const email = value.trim().toLowerCase();
   const parts = email.split('@');
   if (parts.length !== 2 || !parts[0] || !parts[1]?.includes('.') || /\s|[\r\n]/.test(email)) {
-    throw new Error('PRODUCTION_SMTP_USERNAME must be an email address for the E2E mailbox');
+    throw new Error('production Gmail mailbox identity is invalid');
   }
   return email;
 }
 
-function imapQuote(value) {
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+function parseServiceAccount(raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON is invalid'); }
+  if (!parsed || parsed.type !== 'service_account') throw new Error('production Gmail service account type is invalid');
+  if (!/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/i.test(String(parsed.client_email ?? ''))) {
+    throw new Error('production Gmail service account client email is invalid');
+  }
+  if (typeof parsed.private_key !== 'string' || !parsed.private_key.includes('-----BEGIN PRIVATE KEY-----') || !parsed.private_key.includes('-----END PRIVATE KEY-----')) {
+    throw new Error('production Gmail service account private key is invalid');
+  }
+  if ((parsed.token_uri ?? GOOGLE_TOKEN_URL) !== GOOGLE_TOKEN_URL) {
+    throw new Error('production Gmail service account token endpoint is invalid');
+  }
+  return parsed;
 }
 
-function imapDate(date) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${date.getUTCDate()}-${months[date.getUTCMonth()]}-${date.getUTCFullYear()}`;
+function encodeJwtPart(value) {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
 }
 
-function waitForData(socket, timeoutMs = 15_000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { cleanup(); reject(new Error('imap_timeout')); }, timeoutMs);
-    const cleanup = () => {
-      clearTimeout(timer);
-      socket.off('data', onData);
-      socket.off('error', onError);
-      socket.off('close', onClose);
-    };
-    const onData = (chunk) => { cleanup(); resolve(chunk); };
-    const onError = (error) => { cleanup(); reject(error); };
-    const onClose = () => { cleanup(); reject(new Error('imap_connection_closed')); };
-    socket.once('data', onData);
-    socket.once('error', onError);
-    socket.once('close', onClose);
+async function delegatedAccessToken(credential, subject, scope) {
+  const now = Math.floor(Date.now() / 1000);
+  const signingInput = [
+    encodeJwtPart({ alg: 'RS256', typ: 'JWT' }),
+    encodeJwtPart({
+      iss: credential.client_email,
+      sub: subject,
+      scope,
+      aud: GOOGLE_TOKEN_URL,
+      iat: now,
+      exp: now + 3600,
+    }),
+  ].join('.');
+  let signature;
+  try {
+    signature = sign('RSA-SHA256', Buffer.from(signingInput, 'utf8'), credential.private_key).toString('base64url');
+  } catch {
+    throw new Error('production Gmail service account signing failed');
+  }
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion: `${signingInput}.${signature}`,
   });
+  const response = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`production Gmail OAuth failed (${response.status})`);
+  const payload = await response.json().catch(() => null);
+  if (typeof payload?.access_token !== 'string' || payload.access_token.length < 20) {
+    throw new Error('production Gmail OAuth returned an invalid response');
+  }
+  return payload.access_token;
 }
 
-class ImapConnection {
-  constructor(socket) {
-    this.socket = socket;
-    this.buffer = Buffer.alloc(0);
-    this.counter = 0;
-    socket.setTimeout(20_000);
-  }
-
-  async readGreeting() {
-    await this.readUntilLine(() => true);
-  }
-
-  async readUntilLine(predicate) {
-    for (;;) {
-      const text = this.buffer.toString('utf8');
-      let offset = 0;
-      for (;;) {
-        const index = text.indexOf('\r\n', offset);
-        if (index < 0) break;
-        const line = text.slice(offset, index);
-        if (predicate(line)) {
-          this.buffer = Buffer.from(text.slice(index + 2), 'utf8');
-          return line;
-        }
-        offset = index + 2;
-      }
-      const chunk = await waitForData(this.socket);
-      this.buffer = Buffer.concat([this.buffer, chunk]);
-    }
-  }
-
-  async command(command) {
-    const tag = `a${++this.counter}`;
-    this.socket.write(`${tag} ${command}\r\n`);
-    let collected = Buffer.alloc(0);
-    for (;;) {
-      const combined = Buffer.concat([collected, this.buffer]);
-      const text = combined.toString('utf8');
-      const marker = new RegExp(`(?:^|\\r\\n)${tag} (OK|NO|BAD)[^\\r\\n]*\\r\\n`);
-      const match = marker.exec(text);
-      if (match) {
-        const end = match.index + match[0].length;
-        const consumed = Buffer.from(text.slice(0, end), 'utf8');
-        const remainder = Buffer.from(text.slice(end), 'utf8');
-        this.buffer = remainder;
-        if (match[1] !== 'OK') throw new Error(`imap_command_${match[1].toLowerCase()}`);
-        return consumed.toString('utf8');
-      }
-      collected = combined;
-      this.buffer = Buffer.alloc(0);
-      const chunk = await waitForData(this.socket);
-      this.buffer = Buffer.concat([this.buffer, chunk]);
-    }
-  }
-
-  close() {
-    this.socket.destroy();
-  }
+async function gmailJson(token, path) {
+  const response = await fetch(`${GMAIL_API_BASE}${path}`, {
+    headers: { authorization: `Bearer ${token}` },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`production Gmail read failed (${response.status})`);
+  return response.json();
 }
 
-async function connectImap(username, password) {
-  const socket = tls.connect({
-    host: 'imap.gmail.com',
-    port: 993,
-    servername: 'imap.gmail.com',
-    rejectUnauthorized: true,
-  });
-  await new Promise((resolve, reject) => {
-    const cleanup = () => {
-      socket.off('secureConnect', onConnect);
-      socket.off('error', onError);
-      socket.off('timeout', onTimeout);
-    };
-    const onConnect = () => { cleanup(); resolve(); };
-    const onError = (error) => { cleanup(); reject(error); };
-    const onTimeout = () => { cleanup(); reject(new Error('imap_timeout')); };
-    socket.setTimeout(20_000);
-    socket.once('secureConnect', onConnect);
-    socket.once('error', onError);
-    socket.once('timeout', onTimeout);
-  });
-
-  const imap = new ImapConnection(socket);
-  await imap.readGreeting();
-  await imap.command(`LOGIN ${imapQuote(username)} ${imapQuote(password)}`);
-  await imap.command('SELECT INBOX');
-  return imap;
+function decodeRawMessage(raw) {
+  if (typeof raw !== 'string' || !raw) return '';
+  try { return Buffer.from(raw, 'base64url').toString('utf8'); }
+  catch { return ''; }
 }
 
 function extractFreshOtp(rawMessage, email, startedAt) {
@@ -150,19 +103,21 @@ function extractFreshOtp(rawMessage, email, startedAt) {
   return rawMessage.match(/کد ورود شما:\s*(\d{6})/)?.[1] ?? null;
 }
 
-async function waitForOtp(imap, email, startedAt) {
-  const since = imapDate(new Date(startedAt - 60_000));
+async function waitForOtp(token, email, startedAt) {
+  const query = encodeURIComponent(`to:${email} newer_than:1d`);
   for (let attempt = 1; attempt <= 15; attempt += 1) {
-    const search = await imap.command(`SEARCH SINCE ${since} TO ${imapQuote(email)}`);
-    const ids = search.match(/\* SEARCH([^\r\n]*)/i)?.[1]?.trim().split(/\s+/).filter(Boolean) ?? [];
-    for (const id of ids.slice(-12).reverse()) {
-      const fetched = await imap.command(`FETCH ${id} (BODY.PEEK[])`);
-      const code = extractFreshOtp(fetched, email, startedAt);
+    const listed = await gmailJson(token, `/messages?labelIds=INBOX&maxResults=25&q=${query}`);
+    const messages = Array.isArray(listed?.messages) ? listed.messages : [];
+    for (const message of messages.slice(0, 25)) {
+      const id = typeof message?.id === 'string' ? message.id : '';
+      if (!/^[A-Za-z0-9_-]+$/.test(id)) continue;
+      const detail = await gmailJson(token, `/messages/${encodeURIComponent(id)}?format=raw`);
+      const code = extractFreshOtp(decodeRawMessage(detail?.raw), email, startedAt);
       if (code) return code;
     }
     await new Promise((resolve) => setTimeout(resolve, 4_000));
   }
-  throw new Error('fresh production OTP email was not observed over IMAP');
+  throw new Error('fresh production OTP email was not observed in the Gmail inbox');
 }
 
 async function jsonRequest(url, init, expectedStatus) {
@@ -177,8 +132,9 @@ async function jsonRequest(url, init, expectedStatus) {
 
 const base = required('API_PRODUCTION_URL').replace(/\/$/, '');
 if (!base.startsWith('https://')) throw new Error('API_PRODUCTION_URL must use HTTPS');
-const email = normalizedEmail(optional('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL));
-const mailboxPassword = required('PRODUCTION_SMTP_PASSWORD');
+const email = normalizedEmail(DEFAULT_MAILBOX_EMAIL);
+const credential = parseServiceAccount(required('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON'));
+const gmailToken = await delegatedAccessToken(credential, email, GMAIL_READ_SCOPE);
 const startedAt = Date.now();
 
 await jsonRequest(`${base}/v1/auth/email/request`, {
@@ -187,14 +143,7 @@ await jsonRequest(`${base}/v1/auth/email/request`, {
   body: JSON.stringify({ email }),
 }, 202);
 
-const imap = await connectImap(email, mailboxPassword);
-let code;
-try {
-  code = await waitForOtp(imap, email, startedAt);
-  await imap.command('LOGOUT').catch(() => undefined);
-} finally {
-  imap.close();
-}
+let code = await waitForOtp(gmailToken, email, startedAt);
 
 const verified = await jsonRequest(`${base}/v1/auth/email/verify`, {
   method: 'POST',

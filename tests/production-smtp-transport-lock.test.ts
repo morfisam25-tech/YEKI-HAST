@@ -3,27 +3,35 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
+const provider = await readFile(new URL('../services/api/src/providers/email.ts', import.meta.url), 'utf8');
+const workflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 
-const lockedInputs = [
-  'PRODUCTION_SMTP_HOST',
-  'PRODUCTION_SMTP_PORT',
-  'PRODUCTION_SMTP_SECURE',
-  'PRODUCTION_SMTP_USERNAME',
-  'PRODUCTION_SMTP_FROM_EMAIL',
-  'PRODUCTION_SMTP_FROM_NAME',
-];
+const mailbox = 'sales@uniqueholding.com.tr';
 
-test('technical beta source-locks Gmail SMTP transport before using the app password', () => {
-  assert.match(envSync, /const DEFAULT_SMTP_HOST = 'smtp\.gmail\.com'/);
-  assert.match(envSync, /const DEFAULT_SMTP_PORT = '465'/);
-  assert.match(envSync, /const DEFAULT_SMTP_SECURE = 'true'/);
+test('technical beta source-locks delegated Gmail API transport to the Workspace mailbox', () => {
   assert.match(envSync, /const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding\.com\.tr'/);
-  for (const name of lockedInputs) {
-    assert.match(envSync, new RegExp(`requireAbsentOrExact\\('${name}'`));
-  }
-  assert.match(envSync, /const smtpHost = DEFAULT_SMTP_HOST/);
-  assert.match(envSync, /const smtpPort = DEFAULT_SMTP_PORT/);
-  assert.match(envSync, /const smtpSecure = DEFAULT_SMTP_SECURE/);
-  assert.match(envSync, /const smtpUsername = DEFAULT_MAILBOX_EMAIL/);
-  assert.match(envSync, /const smtpPassword = required\('PRODUCTION_SMTP_PASSWORD'\)/);
+  assert.match(envSync, /const GOOGLE_TOKEN_URL = 'https:\/\/oauth2\.googleapis\.com\/token'/);
+  assert.match(envSync, /requiredMultiline\('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON'\)/);
+  assert.match(envSync, /validateServiceAccountJson\(gmailServiceAccountJson\)/);
+  assert.match(envSync, /setPlain\('EMAIL_PROVIDER', 'gmail_api'\)/);
+  assert.match(envSync, /setSensitive\('GMAIL_SERVICE_ACCOUNT_JSON', gmailServiceAccountJson\)/);
+  assert.match(envSync, /setPlain\('GMAIL_IMPERSONATED_USER', gmailImpersonatedUser\)/);
+  assert.match(envSync, /setPlain\('GMAIL_FROM_EMAIL', gmailFromEmail\)/);
+  assert.match(envSync, new RegExp(mailbox.replaceAll('.', '\\.')));
+  assert.doesNotMatch(envSync, /smtp\.gmail\.com|PRODUCTION_SMTP_PASSWORD|setSensitive\('SMTP_PASSWORD'/);
+});
+
+test('runtime Gmail credential cannot redirect OAuth or mail delivery away from Google', () => {
+  assert.match(provider, /const GOOGLE_TOKEN_URL = 'https:\/\/oauth2\.googleapis\.com\/token'/);
+  assert.match(provider, /const GMAIL_SEND_URL = 'https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send'/);
+  assert.match(provider, /tokenUri !== GOOGLE_TOKEN_URL/);
+  assert.match(provider, /GMAIL_SEND_SCOPE/);
+  assert.match(provider, /production Gmail identity is not approved/);
+  assert.doesNotMatch(provider, /process\.env\.(?:GOOGLE_TOKEN_URL|GMAIL_SEND_URL|GMAIL_SCOPE)/);
+});
+
+test('production API workflow requires the delegated Gmail credential instead of an App Password', () => {
+  assert.match(workflow, /PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON: \$\{\{ secrets\.PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON \}\}/);
+  assert.match(workflow, /VERCEL_TOKEN PRODUCTION_DATABASE_URL PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON/);
+  assert.doesNotMatch(workflow, /PRODUCTION_SMTP_PASSWORD/);
 });

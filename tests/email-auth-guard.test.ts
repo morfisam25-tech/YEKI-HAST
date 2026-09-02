@@ -59,22 +59,29 @@ test('browser-proxied email OTP uses a separate IP bucket without weakening phon
   assert.match(envExample, /OTP_EMAIL_IP_LIMIT_PER_15M=200/);
 });
 
-test('production email provider fails closed and supports encrypted SMTP transport', () => {
+test('production email provider fails closed and uses fixed delegated Gmail API endpoints', () => {
   assert.match(provider, /dev email provider is forbidden in production/);
   assert.match(provider, /EMAIL_PROVIDER/);
-  assert.match(provider, /STARTTLS/);
-  assert.match(provider, /rejectUnauthorized: true/);
-  assert.match(provider, /AUTH LOGIN/);
-  assert.doesNotMatch(provider, /console\.log\([^)]*(password|SMTP_PASSWORD)/i);
+  assert.match(provider, /provider === 'gmail_api'/);
+  assert.match(provider, /https:\/\/oauth2\.googleapis\.com\/token/);
+  assert.match(provider, /https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send/);
+  assert.match(provider, /https:\/\/www\.googleapis\.com\/auth\/gmail\.send/);
+  assert.match(provider, /sign\('RSA-SHA256'/);
+  assert.match(provider, /toString\('base64url'\)/);
+  assert.doesNotMatch(provider, /AUTH LOGIN|smtp\.gmail\.com|SMTP_PASSWORD/);
+  assert.doesNotMatch(provider, /console\.log\([^)]*(private_key|access_token|GMAIL_SERVICE_ACCOUNT_JSON)/i);
 });
 
-test('production Email OTP smoke parser stays in parity with the exact provider message format', () => {
+test('production Email OTP smoke reads the delivered message through delegated Gmail readonly API', () => {
   assert.match(provider, /`کد ورود شما: \$\{input\.code\}`/);
   assert.match(provider, /`To: <\$\{recipient\}>`/);
+  assert.match(smoke, /https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly/);
+  assert.match(smoke, /labelIds=INBOX/);
+  assert.match(smoke, /format=raw/);
   assert.match(smoke, /rawMessage\.match\(\/کد ورود شما:\\s\*\(\\d\{6\}\)\//);
-  assert.match(smoke, /lower\.includes\(`to: <\$\{email\}>`\)/);
   assert.match(smoke, /revoked\.status !== 401/);
-  assert.doesNotMatch(smoke, /console\.log\([^\n]*(code|token|password)/i);
+  assert.doesNotMatch(smoke, /imap\.gmail\.com|PRODUCTION_SMTP_PASSWORD/);
+  assert.doesNotMatch(smoke, /console\.log\([^\n]*(code|token|password|private_key)/i);
 });
 
 test('email routes are separate from legacy SMS OTP and primary mobile UI uses email', () => {

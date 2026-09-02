@@ -7,15 +7,19 @@ const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
 const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
 const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
-const DEFAULT_SMTP_HOST = 'smtp.gmail.com';
-const DEFAULT_SMTP_PORT = '465';
-const DEFAULT_SMTP_SECURE = 'true';
-const DEFAULT_SMTP_FROM_NAME = 'یکی هست';
+const DEFAULT_GMAIL_FROM_NAME = 'یکی هست';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
   if (/\r|\n/.test(value)) throw new Error(`${name} contains a line break`);
+  return value;
+}
+
+function requiredMultiline(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
@@ -56,10 +60,31 @@ function validateDatabaseUrl(value) {
   }
 }
 
-function validateEmail(value, name = 'PRODUCTION_SMTP_FROM_EMAIL') {
+function validateEmail(value, name = 'email') {
   const parts = value.toLowerCase().split('@');
   if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s|[\r\n]/.test(value)) {
     throw new Error(`${name} is invalid`);
+  }
+}
+
+function validateServiceAccountJson(value) {
+  let credential;
+  try { credential = JSON.parse(value); }
+  catch { throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON is invalid JSON'); }
+  if (!credential || credential.type !== 'service_account') {
+    throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON must be a service account credential');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/i.test(String(credential.client_email ?? ''))) {
+    throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON client email is invalid');
+  }
+  if (typeof credential.private_key !== 'string' || !credential.private_key.includes('-----BEGIN PRIVATE KEY-----') || !credential.private_key.includes('-----END PRIVATE KEY-----')) {
+    throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON private key is invalid');
+  }
+  if ((credential.token_uri ?? GOOGLE_TOKEN_URL) !== GOOGLE_TOKEN_URL) {
+    throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON token endpoint is invalid');
+  }
+  if (!/^\d{6,30}$/.test(String(credential.client_id ?? ''))) {
+    throw new Error('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON client ID is invalid');
   }
 }
 
@@ -103,35 +128,21 @@ if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a fu
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
 
-// Technical beta has one source-locked Workspace/Gmail transport. Optional legacy
-// repository secrets may remain present, but they are accepted only when they equal
-// the locked values so stale config cannot redirect SMTP credentials or public mail.
-requireAbsentOrExact('PRODUCTION_SMTP_HOST', DEFAULT_SMTP_HOST, (value) => value.toLowerCase());
-requireAbsentOrExact('PRODUCTION_SMTP_PORT', DEFAULT_SMTP_PORT);
-requireAbsentOrExact('PRODUCTION_SMTP_SECURE', DEFAULT_SMTP_SECURE, (value) => value.toLowerCase());
-requireAbsentOrExact('PRODUCTION_SMTP_USERNAME', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
-requireAbsentOrExact('PRODUCTION_SMTP_FROM_EMAIL', DEFAULT_MAILBOX_EMAIL, (value) => value.toLowerCase());
-requireAbsentOrExact('PRODUCTION_SMTP_FROM_NAME', DEFAULT_SMTP_FROM_NAME);
-const smtpHost = DEFAULT_SMTP_HOST;
-const smtpPort = DEFAULT_SMTP_PORT;
-const smtpSecure = DEFAULT_SMTP_SECURE;
-const smtpUsername = DEFAULT_MAILBOX_EMAIL;
-const smtpPassword = required('PRODUCTION_SMTP_PASSWORD');
-const smtpFromEmail = DEFAULT_MAILBOX_EMAIL;
-const smtpFromName = DEFAULT_SMTP_FROM_NAME;
-const commercialHostingApproved = optional('PRODUCTION_COMMERCIAL_HOSTING_APPROVED', 'false').toLowerCase();
+// Technical beta uses one source-locked Google Workspace identity. The service-account
+// credential is accepted only as a raw secret and runtime code can exchange it only at
+// Google's fixed OAuth endpoint, then send through the fixed Gmail API endpoint.
+const gmailServiceAccountJson = requiredMultiline('PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON');
+validateServiceAccountJson(gmailServiceAccountJson);
+const gmailImpersonatedUser = DEFAULT_MAILBOX_EMAIL;
+const gmailFromEmail = DEFAULT_MAILBOX_EMAIL;
+const gmailFromName = DEFAULT_GMAIL_FROM_NAME;
+validateEmail(gmailImpersonatedUser, 'GMAIL_IMPERSONATED_USER');
+validateEmail(gmailFromEmail, 'GMAIL_FROM_EMAIL');
 
-const portNumber = Number(smtpPort);
-if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
-  throw new Error('PRODUCTION_SMTP_PORT is invalid');
-}
-if (!['true', 'false'].includes(smtpSecure)) throw new Error('PRODUCTION_SMTP_SECURE must be true or false');
+const commercialHostingApproved = optional('PRODUCTION_COMMERCIAL_HOSTING_APPROVED', 'false').toLowerCase();
 if (!['true', 'false'].includes(commercialHostingApproved)) {
   throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
 }
-validateEmail(smtpUsername, 'SMTP_USERNAME');
-validateEmail(smtpFromEmail, 'SMTP_FROM_EMAIL');
-if (!smtpHost || !smtpPassword) throw new Error('SMTP configuration is incomplete');
 
 // Public legal routes are checked-in first-party surfaces for this beta. Reject
 // stale optional secret overrides instead of allowing API bootstrap to drift from
@@ -167,14 +178,11 @@ setSensitive('DATABASE_URL', databaseUrl);
 setPlain('DB_POOL_MAX', '10');
 setPlain('YEKI_HAST_RELEASE_SHA', releaseSha);
 
-setPlain('EMAIL_PROVIDER', 'smtp');
-setPlain('SMTP_HOST', smtpHost);
-setPlain('SMTP_PORT', String(portNumber));
-setPlain('SMTP_SECURE', smtpSecure);
-setSensitive('SMTP_USERNAME', smtpUsername);
-setSensitive('SMTP_PASSWORD', smtpPassword);
-setPlain('SMTP_FROM_EMAIL', smtpFromEmail);
-setPlain('SMTP_FROM_NAME', smtpFromName);
+setPlain('EMAIL_PROVIDER', 'gmail_api');
+setSensitive('GMAIL_SERVICE_ACCOUNT_JSON', gmailServiceAccountJson);
+setPlain('GMAIL_IMPERSONATED_USER', gmailImpersonatedUser);
+setPlain('GMAIL_FROM_EMAIL', gmailFromEmail);
+setPlain('GMAIL_FROM_NAME', gmailFromName);
 
 setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
 setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);

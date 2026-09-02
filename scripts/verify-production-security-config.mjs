@@ -1,5 +1,8 @@
 import { Buffer } from 'node:buffer';
 
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const PRODUCTION_MAILBOX = 'sales@uniqueholding.com.tr';
+
 function required(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
@@ -39,6 +42,21 @@ function emailAddress(name) {
     throw new Error(`${name} is invalid`);
   }
   return value;
+}
+
+function validateGmailServiceAccount(name) {
+  let credential;
+  try { credential = JSON.parse(required(name)); }
+  catch { throw new Error(`${name} must be valid JSON`); }
+  if (!credential || credential.type !== 'service_account') throw new Error(`${name} must be a service account credential`);
+  if (!/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/i.test(String(credential.client_email ?? ''))) {
+    throw new Error(`${name} client email is invalid`);
+  }
+  if (typeof credential.private_key !== 'string' || !credential.private_key.includes('-----BEGIN PRIVATE KEY-----') || !credential.private_key.includes('-----END PRIVATE KEY-----')) {
+    throw new Error(`${name} private key is invalid`);
+  }
+  if ((credential.token_uri ?? GOOGLE_TOKEN_URL) !== GOOGLE_TOKEN_URL) throw new Error(`${name} token endpoint is invalid`);
+  return credential;
 }
 
 function publicHttpsUrl(name) {
@@ -94,13 +112,15 @@ if (typeof activeKey !== 'string' || Buffer.from(activeKey, 'base64').length !==
 }
 
 const emailProvider = required('EMAIL_PROVIDER');
-if (emailProvider !== 'smtp') throw new Error('Production EMAIL_PROVIDER must be smtp');
-required('SMTP_HOST');
-integer('SMTP_PORT', undefined, 1, 65535);
-boolean('SMTP_SECURE');
-required('SMTP_USERNAME');
-required('SMTP_PASSWORD');
-emailAddress('SMTP_FROM_EMAIL');
+if (emailProvider !== 'gmail_api') throw new Error('Production EMAIL_PROVIDER must be gmail_api');
+validateGmailServiceAccount('GMAIL_SERVICE_ACCOUNT_JSON');
+if (emailAddress('GMAIL_IMPERSONATED_USER') !== PRODUCTION_MAILBOX) {
+  throw new Error('GMAIL_IMPERSONATED_USER must be the approved Workspace mailbox');
+}
+if (emailAddress('GMAIL_FROM_EMAIL') !== PRODUCTION_MAILBOX) {
+  throw new Error('GMAIL_FROM_EMAIL must be the approved Workspace mailbox');
+}
+required('GMAIL_FROM_NAME');
 
 const bootstrapEnabled = optionalBoolean('BOOTSTRAP_ADMIN_ENABLED', false);
 const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
@@ -146,7 +166,6 @@ if (callerClosedBetaEnabled) {
   if (!boolean('COMMERCIAL_HOSTING_APPROVED')) {
     throw new Error('COMMERCIAL_HOSTING_APPROVED must be true before production Caller can open');
   }
-  // Do not allow a caller-facing launch until the real public policy/support surfaces exist.
   publicHttpsUrl('PRIVACY_POLICY_URL');
   publicHttpsUrl('TERMS_OF_SERVICE_URL');
   publicHttpsUrl('ACCOUNT_DELETION_URL');

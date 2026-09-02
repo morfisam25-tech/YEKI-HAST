@@ -13,7 +13,7 @@ for (const [name, source, envName] of [
     const productionLock = source.indexOf("if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;");
     const envLookup = source.indexOf(`process.env.${envName}`);
     assert.ok(productionLock >= 0 && envLookup > productionLock);
-    assert.match(source, /PRODUCTION_API_BASE_URL = 'https:\/\/yeki-hast-theta\.vercel\.app'/);
+    assert.match(source, /PRODUCTION_API_BASE_URL = 'https:\/\/yeki-hast-unique-6ff0\.vercel\.app'/);
     assert.match(source, /BACKEND_REQUEST_TIMEOUT_MS = 15_000/);
     assert.match(source, /AbortSignal\.timeout\(BACKEND_REQUEST_TIMEOUT_MS\)/);
   });

@@ -1,6 +1,6 @@
 # Launch Status — یکی هست
 
-Last reviewed: 2026-09-01
+Last reviewed: 2026-09-02
 
 This file is the repository source of truth for current launch state. Re-check live GitHub, Vercel, Neon and provider state before trusting older chat notes.
 
@@ -16,17 +16,18 @@ This file is the repository source of truth for current launch state. Re-check l
 - Caller beta, Payment, KYC, Payout, Telephony and production SMS selectors remain provider-gated/fail-closed.
 - KYC and call-phone endpoints stop before sensitive-body collection when their production provider/beta gate is closed.
 - Production browser/backend API targets remain locked to the canonical production API; unsafe localhost/http/credential-bearing overrides are rejected.
-- Production email transport is source-locked to Google Workspace SMTP for `sales@uniqueholding.com.tr`; real delivery still requires the repository App Password secret and production E2E.
+- Production email transport is source-locked to the Gmail API for `sales@uniqueholding.com.tr`, using a Google Workspace domain-wide-delegated service account. SMTP/App Password is no longer part of the production release path.
+- Production Email OTP E2E sends through Gmail API and reads the delivered OTP back through delegated Gmail readonly API before session/logout/revocation checks.
 
 ## Verified GitHub gates
 
 ### Foundation QA
 
-- Current code baseline: `4be2c54540dc06f35157ace10e7a8a853564b468`.
-- Foundation QA run `#878` / Actions run `33572162259`: **SUCCESS**.
-- Foundation tests: PASS.
+- Current code/workflow baseline: `5a4b63fe7eabc05fa9a1ca219cc3d0d7039bde88`.
+- Foundation QA run `#882` / Actions run `33578910668`: **SUCCESS**.
+- Foundation tests: `524/524` PASS.
 - Foundation invariant validator: PASS.
-- Email-first production security verifier: PASS.
+- Gmail-API production security verifier: PASS.
 - Workspace typecheck: PASS.
 - Web production build: PASS.
 - Admin production build: PASS.
@@ -69,15 +70,21 @@ This file is the repository source of truth for current launch state. Re-check l
 
 - `PRODUCTION_DATABASE_URL` is present as a Repository Secret and has passed the exact production target guard during migration run #5.
 - At the latest manual GitHub Actions Secrets UI check, Environment secrets were empty and the Repository secrets list showed only `PRODUCTION_DATABASE_URL`.
-- Therefore `VERCEL_TOKEN` and `PRODUCTION_SMTP_PASSWORD` still require manual creation unless the UI state changes after that check.
-- Never paste DB, Vercel, SMTP, provider, OTP or session secrets into chat/source.
+- `VERCEL_TOKEN` still requires manual creation/verification unless the UI state has changed since that check.
+- The old SMTP/App Password secret is no longer required.
+- The new production mail credential is `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON`. It must be the real Google service-account JSON whose numeric OAuth client ID has been granted Workspace domain-wide delegation for the exact Gmail scopes used by this release.
+- Never paste DB, Vercel, Google private-key, provider, OTP or session secrets into chat/source.
 
 ## Remaining blockers
 
 ### Required before controlled API deployment
 
 1. Create/verify Repository Secret `VERCEL_TOKEN` using a token scoped for the `UNIQUE` Listener deployment workflow.
-2. Create/verify Repository Secret `PRODUCTION_SMTP_PASSWORD` using the Google Workspace App Password for the source-locked `sales@uniqueholding.com.tr` SMTP identity.
+2. Complete the Google Workspace Gmail API machine-auth setup:
+   - Gmail API enabled for the Google Cloud project that owns the service account.
+   - Service account created with domain-wide delegation enabled.
+   - Its OAuth client ID authorized in Google Workspace Admin for `https://www.googleapis.com/auth/gmail.send` and `https://www.googleapis.com/auth/gmail.readonly`.
+   - Repository Secret `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON` set to the downloaded service-account JSON. The checked-in release code fixes the impersonated/from identity to `sales@uniqueholding.com.tr`.
 3. Run the manual controlled API deploy from exact authorized `main` and require all of these to pass:
    - Foundation QA lineage attestation.
    - Read-only production DB verification.
@@ -85,7 +92,7 @@ This file is the repository source of truth for current launch state. Re-check l
    - `/health` PASS.
    - `/ready` PASS.
    - `/v1/bootstrap` expected safe behavior.
-   - Real Email OTP delivery, verification, session, logout and revocation E2E.
+   - Real Gmail API Email OTP delivery/readback, verification, session, logout and revocation E2E.
 4. Only after the API gate is green, run the guarded frontend deployment. Web may become public only after its smoke checks; Admin must remain protected.
 
 ### Intentionally closed for technical beta
@@ -104,10 +111,10 @@ This file is the repository source of truth for current launch state. Re-check l
 
 ## Controlled release sequence
 
-1. Foundation QA — **PASS** on `4be2c54540dc06f35157ace10e7a8a853564b468`.
+1. Foundation QA — **PASS** on `5a4b63fe7eabc05fa9a1ca219cc3d0d7039bde88` in run `33578910668`.
 2. Exact production DB target approval — **PASS**.
 3. Production DB migration + read-only verification — **PASS** in run `33572791927`.
-4. Secure Vercel and SMTP repository credentials — **BLOCKED on manual secrets**.
+4. Secure Vercel token + delegated Gmail service-account credential — **BLOCKED on manual external credentials/setup**.
 5. Controlled API deploy + health/readiness/bootstrap/Email OTP E2E — pending step 4.
 6. Controlled frontend deploy; Web public only after smoke, Admin protected — pending API PASS.
 7. Keep provider-gated Caller/Payment/KYC/Payout/Telephony/SMS flows closed.

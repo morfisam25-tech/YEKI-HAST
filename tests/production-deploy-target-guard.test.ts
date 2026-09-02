@@ -138,8 +138,8 @@ test('API release makes only YEKI-HAST API public before exact live readiness an
   assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password|private_key)/i);
 });
 
-test('frontend release stays protected until exact smoke passes and only Web may open', () => {
-  const preflight = frontendWorkflow.indexOf('Require Web and Admin to be protected before any frontend deployment');
+test('frontend release enforces exact protection until smoke passes and only Web may open', () => {
+  const preflight = frontendWorkflow.indexOf('Enforce Web and Admin protection before any frontend deployment');
   const webDeploy = frontendWorkflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
   const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
   const adminProtection = frontendWorkflow.indexOf('Require Admin to remain protected from unauthenticated access');
@@ -151,8 +151,11 @@ test('frontend release stays protected until exact smoke passes and only Web may
   assert.ok(preflight >= 0 && webDeploy > preflight && adminDeploy > webDeploy);
   assert.ok(adminProtection > adminDeploy && adminSmoke > adminProtection);
   assert.ok(webSmoke > adminSmoke && cutover > webSmoke && publicSmoke > cutover);
-  assert.match(frontendWorkflow, /project protection disable "\$WEB_PROJECT_NAME"/);
+  assert.match(frontendWorkflow, /api\.vercel\.com\/v9\/projects/);
+  assert.match(frontendWorkflow, /ssoProtection: value/);
+  assert.match(frontendWorkflow, /deploymentType: 'all'/);
+  assert.match(frontendWorkflow, /JSON\.stringify\(\{ ssoProtection: null \}\)/);
   assert.doesNotMatch(frontendWorkflow, /project protection disable "\$ADMIN_PROJECT_NAME"/);
-  assert.match(frontendWorkflow, /project protection enable "\$WEB_PROJECT_NAME"/);
+  assert.match(frontendWorkflow, /Web re-protection failed/);
   assert.match(frontendWorkflow, /mailto:sales@uniqueholding\.com\.tr/);
 });

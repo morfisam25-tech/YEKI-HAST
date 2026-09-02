@@ -16,9 +16,11 @@ test('selected technical-beta support mailbox is reachable from all checked-in p
 });
 
 test('mailbox usability is not treated as proven by source alone and production release carries a real mailbox E2E', () => {
-  assert.match(emailSmoke, /imap\.gmail\.com/);
-  assert.match(emailSmoke, /fresh production OTP email was not observed over IMAP/);
+  assert.match(emailSmoke, /https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me/);
+  assert.match(emailSmoke, /https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly/);
+  assert.match(emailSmoke, /fresh production OTP email was not observed in the Gmail inbox/);
   assert.match(emailSmoke, /production Email OTP delivery \+ verify \+ session \+ logout E2E PASS/);
+  assert.doesNotMatch(emailSmoke, /imap\.gmail\.com/);
 });
 
 test('public home does not imply voice calling or provider-gated listener operations are open', () => {

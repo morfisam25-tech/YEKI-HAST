@@ -181,7 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const { appendFileSync } = require('node:fs');
+          const { appendFileSync } = await import('node:fs');
           const token = process.env.VERCEL_TOKEN?.trim();
           const teamId = process.env.VERCEL_TEAM_ID?.trim();
           const projectId = process.env.VERCEL_PROJECT_ID?.trim();

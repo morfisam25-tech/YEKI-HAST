@@ -112,7 +112,15 @@ test('production env sync keeps technical-beta gates closed and public identity 
   assert.doesNotMatch(envSync, /console\.log\([^\n]*(DATABASE_URL|GMAIL_SERVICE_ACCOUNT_JSON|DATA_ENCRYPTION_KEYS|HASH_PEPPER)/);
 });
 
-test('API release requires exact live readiness and real Email OTP E2E', () => {
+test('API release makes only YEKI-HAST API public before exact live readiness and Email OTP E2E', () => {
+  const deploy = apiWorkflow.indexOf('Deploy prebuilt API artifact to UNIQUE production');
+  const publicCutover = apiWorkflow.indexOf('Make production API publicly reachable');
+  const liveSmoke = apiWorkflow.indexOf('Verify production health readiness and bootstrap');
+  const emailE2e = apiWorkflow.indexOf('Verify production Email OTP delivery session and logout E2E');
+
+  assert.ok(deploy >= 0 && publicCutover > deploy && liveSmoke > publicCutover && emailE2e > liveSmoke);
+  assert.match(apiWorkflow, /API_PROJECT_NAME: yeki-hast/);
+  assert.match(apiWorkflow, /project protection disable "\$API_PROJECT_NAME"/);
   assert.match(apiWorkflow, /body\?\.releaseSha === expectedSha/);
   assert.match(apiWorkflow, /body\?\.database === 'ready'/);
   assert.match(apiWorkflow, /body\?\.schema === 'ready'/);

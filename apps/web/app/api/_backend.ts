@@ -1,5 +1,5 @@
 export const WEB_SESSION_COOKIE = process.env.NODE_ENV === 'production' ? '__Host-yeki_web_session' : 'yeki_web_session';
-export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-theta.vercel.app';
+export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-unique-6ff0.vercel.app';
 const BACKEND_REQUEST_TIMEOUT_MS = 15_000;
 
 export function backendBaseUrl(): string {

@@ -140,12 +140,12 @@ jobs:
 
       - name: Export Android bundle
         env:
-          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-theta.vercel.app
+          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-unique-6ff0.vercel.app
         run: npm --workspace @yeki-hast/mobile run export:android
 
       - name: Export iOS bundle
         env:
-          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-theta.vercel.app
+          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-unique-6ff0.vercel.app
         run: npm --workspace @yeki-hast/mobile run export:ios
 
       - name: Bundle production API runtime

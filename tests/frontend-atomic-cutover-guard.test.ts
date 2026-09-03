@@ -4,38 +4,33 @@ import test from 'node:test';
 
 const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 
-test('Web and Admin are forced protected before either production deployment begins', () => {
-  const protectionPreflight = workflow.indexOf('Enforce Web and Admin protection before any frontend deployment');
-  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
-  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
+test('Web staged protection is configured and Admin is verified fail-closed before either deployment begins', () => {
+  const protectionPreflight = workflow.indexOf('Configure staged Web protection and require Admin fail-closed before any frontend deployment');
+  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact as protected staged production');
+  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact as protected staged production');
 
   assert.ok(protectionPreflight >= 0);
   assert.ok(webDeploy > protectionPreflight);
   assert.ok(adminDeploy > webDeploy);
-  assert.match(workflow, /frontend pre-deploy protection enforcement PASS/);
-  assert.match(workflow, /\['Web', process\.env\.WEB_PROJECT_ID, process\.env\.WEB_PRODUCTION_URL\]/);
-  assert.match(workflow, /\['Admin', process\.env\.ADMIN_PROJECT_ID, process\.env\.ADMIN_PRODUCTION_URL\]/);
-  assert.match(workflow, /ssoProtection: value/);
-  assert.match(workflow, /deploymentType: 'all'/);
-  assert.match(workflow, /status >= 300 && status < 400/);
-  assert.match(workflow, /status === 401 \|\| status === 403/);
-  assert.match(workflow, /must be protected before deployment/);
+  assert.match(workflow, /frontend staged protection preflight PASS/);
+  assert.match(workflow, /ssoProtection: \{ deploymentType: 'prod_deployment_urls_and_all_previews' \}/);
+  assert.match(workflow, /Admin must remain protected before deployment/);
+  assert.doesNotMatch(workflow, /deploymentType: 'all'/);
 });
 
-test('Web is not made public until both exact frontend deployments and protected smoke checks pass', () => {
-  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
-  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
+test('both production artifacts are staged without domain assignment and protected before authenticated smoke', () => {
+  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact as protected staged production');
+  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact as protected staged production');
+  const stagedProtection = workflow.indexOf('Require staged Web and Admin deployment URLs protected from unauthenticated access');
   const adminSmoke = workflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
-  const webProtectedSmoke = workflow.indexOf('Verify exact protected Web release before public cutover');
-  const publicCutover = workflow.indexOf('Make only verified Web release public');
-  const publicSmoke = workflow.indexOf('Verify Web canonical production alias public surfaces');
+  const webSmoke = workflow.indexOf('Verify exact protected Web release before public cutover');
 
-  assert.ok(webDeploy >= 0);
-  assert.ok(adminDeploy > webDeploy);
-  assert.ok(adminSmoke > adminDeploy);
-  assert.ok(webProtectedSmoke > adminSmoke);
-  assert.ok(publicCutover > webProtectedSmoke);
-  assert.ok(publicSmoke > publicCutover);
+  assert.ok(webDeploy >= 0 && adminDeploy > webDeploy);
+  assert.ok(stagedProtection > adminDeploy);
+  assert.ok(adminSmoke > stagedProtection);
+  assert.ok(webSmoke > adminSmoke);
+  assert.match(workflow, /--prod \\\n\s+--skip-domain/);
+  assert.match(workflow, /staged frontend unauthenticated protection PASS/);
 });
 
 test('deploy commands capture exact deployment URLs instead of trusting aliases for pre-cutover smoke', () => {
@@ -57,16 +52,30 @@ test('exact protected Web pre-cutover smoke verifies every required public surfa
   assert.match(workflow, /"\$VERCEL_BIN" curl "\$path"/);
 });
 
-test('a failed public cutover re-protects Web through the exact project API', () => {
-  const recoveryStart = workflow.indexOf('Re-protect Web if public cutover fails');
+test('only smoke-verified staged releases are promoted and Web public smoke runs last', () => {
+  const adminSmoke = workflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
+  const webSmoke = workflow.indexOf('Verify exact protected Web release before public cutover');
+  const adminPromote = workflow.indexOf('Promote verified Admin release while keeping canonical protected');
+  const adminProtection = workflow.indexOf('Require promoted Admin canonical to remain protected from unauthenticated access');
+  const webPromote = workflow.indexOf('Promote only verified Web release to public production');
+  const publicSmoke = workflow.indexOf('Verify Web canonical production alias public surfaces');
+
+  assert.ok(adminPromote > webSmoke && webSmoke > adminSmoke);
+  assert.ok(adminProtection > adminPromote);
+  assert.ok(webPromote > adminProtection);
+  assert.ok(publicSmoke > webPromote);
+  assert.match(workflow, /"\$VERCEL_BIN" promote "\$ADMIN_EXACT_DEPLOYMENT_URL"/);
+  assert.match(workflow, /"\$VERCEL_BIN" promote "\$WEB_EXACT_DEPLOYMENT_URL"/);
+});
+
+test('a failed post-promotion public check rolls Web back instead of requiring a paid protection add-on', () => {
+  const recoveryStart = workflow.indexOf('Roll back Web if post-promotion public verification fails');
   assert.ok(recoveryStart >= 0);
   const recovery = workflow.slice(recoveryStart);
-  assert.match(recovery, /if: \$\{\{ failure\(\) \}\}/);
-  assert.match(recovery, /process\.env\.WEB_PROJECT_ID/);
-  assert.match(recovery, /api\.vercel\.com\/v9\/projects/);
-  assert.match(recovery, /method: 'PATCH'/);
-  assert.match(recovery, /JSON\.stringify\(\{ ssoProtection: \{ deploymentType: 'all' \} \}\)/);
-  assert.match(recovery, /production Web re-protection requested after failed release/);
+  assert.match(recovery, /failure\(\) && steps\.promote_web\.conclusion == 'success'/);
+  assert.match(recovery, /"\$VERCEL_BIN" rollback/);
+  assert.match(recovery, /rollback status/);
+  assert.match(recovery, /production Web rolled back after failed public verification/);
   assert.doesNotMatch(recovery, /ADMIN_PROJECT_ID/);
-  assert.doesNotMatch(recovery, /project protection (?:enable|disable)/);
+  assert.doesNotMatch(recovery, /ssoProtection/);
 });

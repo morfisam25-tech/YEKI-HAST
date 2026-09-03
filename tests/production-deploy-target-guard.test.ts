@@ -138,24 +138,31 @@ test('API release makes only YEKI-HAST API public before exact live readiness an
   assert.doesNotMatch(emailSmoke, /console\.log\([^\n]*(code|token|password|private_key)/i);
 });
 
-test('frontend release enforces exact protection until smoke passes and only Web may open', () => {
-  const preflight = frontendWorkflow.indexOf('Enforce Web and Admin protection before any frontend deployment');
-  const webDeploy = frontendWorkflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
-  const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
-  const adminProtection = frontendWorkflow.indexOf('Require Admin to remain protected from unauthenticated access');
+test('frontend release stages protected production artifacts, verifies exact deployments, then promotes safely', () => {
+  const preflight = frontendWorkflow.indexOf('Configure staged Web protection and require Admin fail-closed before any frontend deployment');
+  const webDeploy = frontendWorkflow.indexOf('Deploy prebuilt Web artifact as protected staged production');
+  const adminDeploy = frontendWorkflow.indexOf('Deploy prebuilt Admin artifact as protected staged production');
+  const stagedProtection = frontendWorkflow.indexOf('Require staged Web and Admin deployment URLs protected from unauthenticated access');
   const adminSmoke = frontendWorkflow.indexOf('Verify exact protected Admin deployment shell with authenticated Vercel CLI');
   const webSmoke = frontendWorkflow.indexOf('Verify exact protected Web release before public cutover');
-  const cutover = frontendWorkflow.indexOf('Make only verified Web release public');
+  const adminPromote = frontendWorkflow.indexOf('Promote verified Admin release while keeping canonical protected');
+  const adminProtection = frontendWorkflow.indexOf('Require promoted Admin canonical to remain protected from unauthenticated access');
+  const webPromote = frontendWorkflow.indexOf('Promote only verified Web release to public production');
   const publicSmoke = frontendWorkflow.indexOf('Verify Web canonical production alias public surfaces');
+  const rollback = frontendWorkflow.indexOf('Roll back Web if post-promotion public verification fails');
 
   assert.ok(preflight >= 0 && webDeploy > preflight && adminDeploy > webDeploy);
-  assert.ok(adminProtection > adminDeploy && adminSmoke > adminProtection);
-  assert.ok(webSmoke > adminSmoke && cutover > webSmoke && publicSmoke > cutover);
+  assert.ok(stagedProtection > adminDeploy && adminSmoke > stagedProtection && webSmoke > adminSmoke);
+  assert.ok(adminPromote > webSmoke && adminProtection > adminPromote && webPromote > adminProtection);
+  assert.ok(publicSmoke > webPromote && rollback > publicSmoke);
   assert.match(frontendWorkflow, /api\.vercel\.com\/v9\/projects/);
-  assert.match(frontendWorkflow, /ssoProtection: value/);
-  assert.match(frontendWorkflow, /deploymentType: 'all'/);
-  assert.match(frontendWorkflow, /JSON\.stringify\(\{ ssoProtection: null \}\)/);
+  assert.match(frontendWorkflow, /deploymentType: 'prod_deployment_urls_and_all_previews'/);
+  assert.match(frontendWorkflow, /--prod \\\n\s+--skip-domain/);
+  assert.match(frontendWorkflow, /"\$VERCEL_BIN" promote "\$ADMIN_EXACT_DEPLOYMENT_URL"/);
+  assert.match(frontendWorkflow, /"\$VERCEL_BIN" promote "\$WEB_EXACT_DEPLOYMENT_URL"/);
+  assert.match(frontendWorkflow, /"\$VERCEL_BIN" rollback/);
+  assert.doesNotMatch(frontendWorkflow, /deploymentType: 'all'/);
+  assert.doesNotMatch(frontendWorkflow, /JSON\.stringify\(\{ ssoProtection: null \}\)/);
   assert.doesNotMatch(frontendWorkflow, /project protection disable "\$ADMIN_PROJECT_NAME"/);
-  assert.match(frontendWorkflow, /Web re-protection failed/);
   assert.match(frontendWorkflow, /mailto:sales@uniqueholding\.com\.tr/);
 });

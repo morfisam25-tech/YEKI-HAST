@@ -23,7 +23,7 @@ test('QA attestation happens before each production mutation', () => {
   const apiQa = apiWorkflow.indexOf('Require successful Foundation QA coverage for this source');
   const apiEnv = apiWorkflow.indexOf('Sync exact API production environment to UNIQUE');
   const frontendQa = frontendWorkflow.indexOf('Require successful Foundation QA coverage for this source');
-  const frontendWebDeploy = frontendWorkflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
+  const frontendWebDeploy = frontendWorkflow.indexOf('Deploy prebuilt Web artifact as protected staged production');
 
   assert.ok(migrationQa >= 0 && migrationApply > migrationQa);
   assert.ok(apiQa >= 0 && apiEnv > apiQa);

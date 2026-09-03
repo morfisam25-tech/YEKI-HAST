@@ -6,8 +6,8 @@ const workflow = await readFile(new URL('../.github/workflows/deploy-production-
 
 test('frontend prebuilt deployment exposes locked hoisted workspace dependencies', () => {
   const bridge = workflow.indexOf('Expose hoisted workspace dependencies to prebuilt deployer');
-  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
-  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
+  const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact as protected staged production');
+  const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact as protected staged production');
 
   assert.ok(bridge >= 0, 'workspace dependency bridge step must exist');
   assert.ok(webDeploy > bridge, 'Web deploy must run after workspace dependency bridge');

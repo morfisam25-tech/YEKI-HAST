@@ -201,20 +201,45 @@ jobs:
           test -d node_modules
           test -f node_modules/client-only/index.js
           test -f node_modules/next/dist/compiled/@opentelemetry/api/index.js
+          test -f node_modules/react/cjs/react.production.js
+          test -f node_modules/react-dom/cjs/react-dom.production.js
           for app in apps/web apps/admin; do
             mkdir -p "$app/node_modules"
-            if [ ! -f "$app/node_modules/client-only/index.js" ]; then
-              rm -rf "$app/node_modules/client-only"
-              ln -s ../../../node_modules/client-only "$app/node_modules/client-only"
-            fi
-            if [ ! -f "$app/node_modules/next/dist/compiled/@opentelemetry/api/index.js" ]; then
-              rm -rf "$app/node_modules/next"
-              ln -s ../../../node_modules/next "$app/node_modules/next"
-            fi
+            for root_entry in node_modules/*; do
+              [ -e "$root_entry" ] || continue
+              name="${root_entry#node_modules/}"
+              if [ "$name" = "@yeki-hast" ]; then
+                continue
+              fi
+              if [[ "$name" == @* ]] && [ -d "$root_entry" ]; then
+                mkdir -p "$app/node_modules/$name"
+                for scoped_entry in "$root_entry"/*; do
+                  [ -e "$scoped_entry" ] || continue
+                  package="${scoped_entry#"$root_entry"/}"
+                  target="$app/node_modules/$name/$package"
+                  if [ -L "$target" ] && [ ! -e "$target" ]; then
+                    rm -f "$target"
+                  fi
+                  if [ ! -e "$target" ]; then
+                    ln -s "../../../../node_modules/$name/$package" "$target"
+                  fi
+                done
+              else
+                target="$app/node_modules/$name"
+                if [ -L "$target" ] && [ ! -e "$target" ]; then
+                  rm -f "$target"
+                fi
+                if [ ! -e "$target" ]; then
+                  ln -s "../../../node_modules/$name" "$target"
+                fi
+              fi
+            done
             test -f "$app/node_modules/client-only/index.js"
             test -f "$app/node_modules/next/dist/compiled/@opentelemetry/api/index.js"
+            test -f "$app/node_modules/react/cjs/react.production.js"
+            test -f "$app/node_modules/react-dom/cjs/react-dom.production.js"
           done
-          echo 'workspace dependency bridge PASS'
+          echo 'workspace hoisted dependency mirror PASS'
 
       - name: Deploy prebuilt Web artifact as protected staged production
         id: deploy_web

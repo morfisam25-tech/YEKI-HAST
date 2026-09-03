@@ -7,14 +7,24 @@ const workflow = await readFile(new URL('../.github/workflows/deploy-production-
 const webProjectId = 'prj_afhSiMYpsCfIAxuOmotLAWBvTMDg';
 const adminProjectId = 'prj_l18v3f003ORfiN6hKxYwJbvVPzzC';
 
-test('controlled frontend release disables Vercel Authentication only for Web', () => {
+test('controlled frontend release uses the Vercel project API and opens only Web', () => {
   assert.match(workflow, /WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg/);
-  assert.match(workflow, /WEB_PROJECT_NAME: web/);
-  assert.match(workflow, /project protection disable "\$WEB_PROJECT_NAME"/);
-  assert.match(workflow, /--sso/);
-  assert.doesNotMatch(workflow, /project protection disable "\$ADMIN_PROJECT_NAME"/);
+  assert.match(workflow, /ADMIN_PROJECT_ID: prj_l18v3f003ORfiN6hKxYwJbvVPzzC/);
   assert.ok(workflow.includes(webProjectId));
   assert.ok(workflow.includes(adminProjectId));
+  assert.match(workflow, /api\.vercel\.com\/v9\/projects/);
+  assert.match(workflow, /method: 'PATCH'/);
+  assert.match(workflow, /JSON\.stringify\(\{ ssoProtection: value \}\)/);
+  assert.match(workflow, /deploymentType: 'all'/);
+
+  const publicCutoverStart = workflow.indexOf('Make only verified Web release public');
+  const publicSmokeStart = workflow.indexOf('Verify Web canonical production alias public surfaces');
+  assert.ok(publicCutoverStart >= 0 && publicSmokeStart > publicCutoverStart);
+  const publicCutover = workflow.slice(publicCutoverStart, publicSmokeStart);
+  assert.match(publicCutover, /process\.env\.WEB_PROJECT_ID/);
+  assert.match(publicCutover, /JSON\.stringify\(\{ ssoProtection: null \}\)/);
+  assert.doesNotMatch(publicCutover, /ADMIN_PROJECT_ID/);
+  assert.doesNotMatch(workflow, /project protection (?:enable|disable)/);
 });
 
 test('Admin remains fail-closed to unauthenticated visitors and is then checked with authenticated CLI access', () => {

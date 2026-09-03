@@ -10,6 +10,7 @@ for (const [label, config] of [
   ['Admin', adminConfig],
 ] as const) {
   test(`${label} traces production files from the monorepo root`, () => {
+    assert.match(config, /from 'node:path'/);
     assert.match(config, /outputFileTracingRoot:\s*resolve\(process\.cwd\(\), '\.\.\/\.\.'\)/);
   });
 }

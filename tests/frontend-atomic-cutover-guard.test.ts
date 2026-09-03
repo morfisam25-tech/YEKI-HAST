@@ -4,17 +4,19 @@ import test from 'node:test';
 
 const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
 
-test('Web and Admin must already be protected before either production deployment begins', () => {
-  const protectionPreflight = workflow.indexOf('Require Web and Admin to be protected before any frontend deployment');
+test('Web and Admin are forced protected before either production deployment begins', () => {
+  const protectionPreflight = workflow.indexOf('Enforce Web and Admin protection before any frontend deployment');
   const webDeploy = workflow.indexOf('Deploy prebuilt Web artifact to protected UNIQUE production');
   const adminDeploy = workflow.indexOf('Deploy prebuilt Admin artifact to UNIQUE production');
 
   assert.ok(protectionPreflight >= 0);
   assert.ok(webDeploy > protectionPreflight);
   assert.ok(adminDeploy > webDeploy);
-  assert.match(workflow, /frontend pre-deploy protection PASS/);
-  assert.match(workflow, /\['Web', process\.env\.WEB_PRODUCTION_URL\]/);
-  assert.match(workflow, /\['Admin', process\.env\.ADMIN_PRODUCTION_URL\]/);
+  assert.match(workflow, /frontend pre-deploy protection enforcement PASS/);
+  assert.match(workflow, /\['Web', process\.env\.WEB_PROJECT_ID, process\.env\.WEB_PRODUCTION_URL\]/);
+  assert.match(workflow, /\['Admin', process\.env\.ADMIN_PROJECT_ID, process\.env\.ADMIN_PRODUCTION_URL\]/);
+  assert.match(workflow, /ssoProtection: value/);
+  assert.match(workflow, /deploymentType: 'all'/);
   assert.match(workflow, /status >= 300 && status < 400/);
   assert.match(workflow, /status === 401 \|\| status === 403/);
   assert.match(workflow, /must be protected before deployment/);
@@ -55,11 +57,16 @@ test('exact protected Web pre-cutover smoke verifies every required public surfa
   assert.match(workflow, /"\$VERCEL_BIN" curl "\$path"/);
 });
 
-test('a failed public cutover requests Web SSO re-protection', () => {
-  assert.match(workflow, /Re-protect Web if public cutover fails/);
-  assert.match(workflow, /if: \$\{\{ failure\(\) \}\}/);
-  assert.match(workflow, /project protection enable "\$WEB_PROJECT_NAME"/);
-  assert.match(workflow, /--sso/);
-  assert.match(workflow, /production Web re-protection requested after failed release/);
-  assert.doesNotMatch(workflow, /project protection (?:enable|disable) "\$ADMIN_PROJECT_NAME"/);
+test('a failed public cutover re-protects Web through the exact project API', () => {
+  const recoveryStart = workflow.indexOf('Re-protect Web if public cutover fails');
+  assert.ok(recoveryStart >= 0);
+  const recovery = workflow.slice(recoveryStart);
+  assert.match(recovery, /if: \$\{\{ failure\(\) \}\}/);
+  assert.match(recovery, /process\.env\.WEB_PROJECT_ID/);
+  assert.match(recovery, /api\.vercel\.com\/v9\/projects/);
+  assert.match(recovery, /method: 'PATCH'/);
+  assert.match(recovery, /JSON\.stringify\(\{ ssoProtection: \{ deploymentType: 'all' \} \}\)/);
+  assert.match(recovery, /production Web re-protection requested after failed release/);
+  assert.doesNotMatch(recovery, /ADMIN_PROJECT_ID/);
+  assert.doesNotMatch(recovery, /project protection (?:enable|disable)/);
 });

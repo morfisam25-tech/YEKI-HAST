@@ -34,9 +34,20 @@ describe('V4 existing deployment verification/promote workflow', () => {
     assert.match(workflow, /deployment\.projectId !== projectId/);
   });
 
-  it('uses non-interactive protected curl and real Admin SSR markers', () => {
+  it('uses VERCEL_TOKEN environment auth for protected curl and real Admin SSR markers', () => {
+    assert.match(workflow, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
     assert.match(workflow, /--deployment "\$ADMIN_EXACT_DEPLOYMENT_URL"[\s\S]*?--yes/);
     assert.match(workflow, /--deployment "\$WEB_EXACT_DEPLOYMENT_URL"[\s\S]*?--yes/);
+    const adminSmokeBlock = workflow.slice(
+      indexOfOrFail('Authenticated smoke exact Admin deployment with real SSR markers'),
+      indexOfOrFail('Authenticated smoke exact Web deployment'),
+    );
+    const webSmokeBlock = workflow.slice(
+      indexOfOrFail('Authenticated smoke exact Web deployment'),
+      indexOfOrFail('Promote verified Admin deployment'),
+    );
+    assert.doesNotMatch(adminSmokeBlock, /--token/);
+    assert.doesNotMatch(webSmokeBlock, /--token/);
     assert.match(workflow, /یکی هست \/ عملیات/);
     assert.match(workflow, /در حال بررسی نشست ادمین/);
     assert.doesNotMatch(workflow, /grep -Fq 'داشبورد'/);

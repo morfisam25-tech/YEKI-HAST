@@ -32,10 +32,14 @@ test('V2 frontend release uses Vercel repo-level monorepo linking before prebuil
   assert.match(workflow, /remoteName: 'origin'/);
   assert.match(workflow, /directory: 'apps\/web'/);
   assert.match(workflow, /directory: 'apps\/admin'/);
+  assert.match(workflow, /test -f \.\.\/\.\.\/\.vercel\/\.env\.production\.local/);
+  assert.match(workflow, /test -f \.\.\/\.\.\/\.vercel\/project\.json/);
+  assert.match(workflow, /test -f \.\.\/\.\.\/\.vercel\/repo\.json/);
   assert.match(workflow, /test -f \.vercel\/repo\.json/);
   assert.match(workflow, /test -f apps\/web\/\.vercel\/output\/config\.json/);
   assert.match(workflow, /test -f apps\/admin\/\.vercel\/output\/config\.json/);
 
+  assert.doesNotMatch(workflow, /test -f \.vercel\/\.env\.production\.local/);
   assert.doesNotMatch(workflow, /> apps\/web\/\.vercel\/project\.json/);
   assert.doesNotMatch(workflow, /> apps\/admin\/\.vercel\/project\.json/);
   assert.doesNotMatch(workflow, /workspace hoisted dependency mirror PASS/);

@@ -201,16 +201,11 @@ jobs:
           test -d node_modules
           test -f node_modules/client-only/index.js
           for app in apps/web apps/admin; do
-            if [ -L "$app/node_modules" ]; then
-              rm "$app/node_modules"
-            elif [ -e "$app/node_modules" ]; then
-              if find "$app/node_modules" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
-                echo "::error::$app/node_modules is unexpectedly populated; refusing to replace it"
-                exit 1
-              fi
-              rmdir "$app/node_modules"
+            mkdir -p "$app/node_modules"
+            if [ ! -f "$app/node_modules/client-only/index.js" ]; then
+              rm -rf "$app/node_modules/client-only"
+              ln -s ../../../node_modules/client-only "$app/node_modules/client-only"
             fi
-            ln -s ../../node_modules "$app/node_modules"
             test -f "$app/node_modules/client-only/index.js"
           done
           echo 'workspace dependency bridge PASS'

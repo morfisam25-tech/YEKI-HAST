@@ -139,7 +139,6 @@ jobs:
           "$VERCEL_BIN" curl / \
             --deployment "$ADMIN_EXACT_DEPLOYMENT_URL" \
             --yes \
-            --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_TEAM_SLUG" \
             >"$tmp"
           grep -Fq 'یکی هست / عملیات' "$tmp"
@@ -157,7 +156,6 @@ jobs:
             "$VERCEL_BIN" curl "$path" \
               --deployment "$WEB_EXACT_DEPLOYMENT_URL" \
               --yes \
-              --token "$VERCEL_TOKEN" \
               --scope "$VERCEL_TEAM_SLUG" \
               >"$tmp"
             grep -Fq "$needle" "$tmp"

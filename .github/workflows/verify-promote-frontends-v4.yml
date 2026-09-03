@@ -1,0 +1,245 @@
+name: Verify and Promote V4 Frontends
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PRODUCTION-FRONTENDS to confirm V4 verification and promotion'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeki-hast-production-frontends
+  cancel-in-progress: false
+
+jobs:
+  verify-promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_TEAM_SLUG: unique-6ff0
+      WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg
+      ADMIN_PROJECT_ID: prj_l18v3f003ORfiN6hKxYwJbvVPzzC
+      RELEASE_SHA: 39b3e58a352db6b61338739b4d20f19c2006f125
+      WEB_EXACT_DEPLOYMENT_URL: https://web-gax4jiw5k-unique-6ff0.vercel.app
+      ADMIN_EXACT_DEPLOYMENT_URL: https://admin-4xoi0aw5d-unique-6ff0.vercel.app
+      WEB_PRODUCTION_URL: https://web-unique-6ff0.vercel.app
+      ADMIN_PRODUCTION_URL: https://admin-unique-6ff0.vercel.app
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
+
+    steps:
+      - name: Require authorized main verification
+        shell: bash
+        env:
+          MANUAL_CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo '::error::Verification is allowed only from main'; exit 1; }
+          test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST" || { echo '::error::Unexpected repository'; exit 1; }
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch" || { echo '::error::Manual workflow dispatch is required'; exit 1; }
+          test "${MANUAL_CONFIRM:-}" = "DEPLOY-PRODUCTION-FRONTENDS" || { echo '::error::Exact confirmation phrase is required'; exit 1; }
+          test -n "${VERCEL_TOKEN:-}" || { echo '::error::VERCEL_TOKEN repository secret is required'; exit 1; }
+
+      - name: Checkout current main and release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Require frontend source unchanged since V4 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$RELEASE_SHA^{commit}"
+          git diff --quiet "$RELEASE_SHA" "$GITHUB_SHA" -- apps/web apps/admin packages package.json package-lock.json || {
+            echo '::error::Frontend/runtime source changed since the exact V4 deployments were built'; exit 1;
+          }
+          echo 'V4 release source equivalence PASS'
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Install locked workspace and require Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          test -x "$VERCEL_BIN"
+          "$VERCEL_BIN" --version
+
+      - name: Bind exact UNIQUE projects for authenticated verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel apps/web/.vercel apps/admin/.vercel
+          mkdir -p apps/web/.vercel apps/admin/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > apps/web/.vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$ADMIN_PROJECT_ID" > apps/admin/.vercel/project.json
+          echo 'exact app-local verification links PASS'
+
+      - name: Require exact V4 deployments READY and owned by expected projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN;
+          const teamId = process.env.VERCEL_TEAM_ID;
+          const releaseSha = process.env.RELEASE_SHA;
+          const targets = [
+            ['Web', process.env.WEB_EXACT_DEPLOYMENT_URL, process.env.WEB_PROJECT_ID],
+            ['Admin', process.env.ADMIN_EXACT_DEPLOYMENT_URL, process.env.ADMIN_PROJECT_ID],
+          ];
+          for (const [label, rawUrl, projectId] of targets) {
+            const host = new URL(rawUrl).host;
+            const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+            endpoint.searchParams.set('teamId', teamId);
+            const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+            if (!response.ok) throw new Error(`${label} deployment lookup failed (${response.status})`);
+            const deployment = await response.json();
+            if (deployment.projectId !== projectId) throw new Error(`${label} deployment project mismatch`);
+            if (deployment.readyState !== 'READY') throw new Error(`${label} deployment is not READY (${deployment.readyState})`);
+            const commit = deployment.meta?.githubCommitSha || deployment.meta?.gitCommitSha || null;
+            if (commit && commit !== releaseSha) throw new Error(`${label} deployment source mismatch (${commit})`);
+            console.log(`${label} exact deployment identity/READY PASS`);
+          }
+          NODE
+
+      - name: Require exact V4 deployment URLs remain protected unauthenticated
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const targets = [['Web', process.env.WEB_EXACT_DEPLOYMENT_URL], ['Admin', process.env.ADMIN_EXACT_DEPLOYMENT_URL]];
+          function protectedResponse(response) {
+            if (response.status === 401 || response.status === 403) return true;
+            if (response.status < 300 || response.status >= 400) return false;
+            const location = response.headers.get('location') || '';
+            return response.status === 302 || /vercel\.com|\/_vercel\//i.test(location);
+          }
+          for (const [label, url] of targets) {
+            const response = await fetch(url, { cache: 'no-store', redirect: 'manual' });
+            if (!protectedResponse(response)) throw new Error(`${label} exact deployment is not protected (${response.status})`);
+            console.log(`${label} exact deployment protection PASS (${response.status})`);
+          }
+          NODE
+
+      - name: Authenticated smoke exact Admin deployment with real SSR markers
+        working-directory: apps/admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+          "$VERCEL_BIN" curl / \
+            --deployment "$ADMIN_EXACT_DEPLOYMENT_URL" \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_TEAM_SLUG" \
+            >"$tmp"
+          grep -Fq 'یکی هست / عملیات' "$tmp"
+          grep -Fq 'در حال بررسی نشست ادمین' "$tmp"
+          echo 'production exact protected Admin smoke PASS'
+
+      - name: Authenticated smoke exact Web deployment
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_path() {
+            local path="$1" needle="$2" tmp
+            tmp="$(mktemp)"
+            "$VERCEL_BIN" curl "$path" \
+              --deployment "$WEB_EXACT_DEPLOYMENT_URL" \
+              --yes \
+              --token "$VERCEL_TOKEN" \
+              --scope "$VERCEL_TEAM_SLUG" \
+              >"$tmp"
+            grep -Fq "$needle" "$tmp"
+            rm -f "$tmp"
+          }
+          check_path / 'ورود با ایمیل'
+          check_path / 'mailto:sales@uniqueholding.com.tr'
+          check_path /privacy 'حریم خصوصی'
+          check_path /terms 'قوانین استفاده'
+          check_path /account/delete 'تأیید مالک حساب'
+          echo 'production exact protected Web smoke PASS'
+
+      - name: Promote verified Admin deployment
+        id: promote_admin
+        working-directory: apps/admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" promote "$ADMIN_EXACT_DEPLOYMENT_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'verified Admin V4 deployment promoted'
+
+      - name: Require Admin canonical remains protected
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const url = process.env.ADMIN_PRODUCTION_URL;
+          let last = 'no response';
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            try {
+              const response = await fetch(url, { cache: 'no-store', redirect: 'manual' });
+              const location = response.headers.get('location') || '';
+              const ok = response.status === 401 || response.status === 403 || ((response.status >= 300 && response.status < 400) && (response.status === 302 || /vercel\.com|\/_vercel\//i.test(location)));
+              if (ok) { console.log(`production Admin protection PASS (${response.status})`); process.exit(0); }
+              last = `unexpected status ${response.status}`;
+            } catch (error) { last = error instanceof Error ? error.message : String(error); }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          throw new Error(`Admin protection failed after promotion: ${last}`);
+          NODE
+
+      - name: Promote verified Web deployment to public production
+        id: promote_web
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" promote "$WEB_EXACT_DEPLOYMENT_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'verified Web V4 deployment promoted'
+
+      - name: Verify public Web canonical surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = process.env.WEB_PRODUCTION_URL;
+          async function waitFor(path, validate, label) {
+            let last = 'no response';
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(`${base}${path}`, { cache: 'no-store', redirect: 'manual' });
+                const text = await response.text();
+                if (response.ok && validate(text)) { console.log(`${label} PASS`); return; }
+                last = `${response.status} ${text.slice(0, 160)}`;
+              } catch (error) { last = error instanceof Error ? error.message : String(error); }
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            throw new Error(`${label} failed: ${last}`);
+          }
+          await waitFor('/', text => text.includes('یکی هست') && text.includes('ورود با ایمیل') && text.includes('mailto:sales@uniqueholding.com.tr'), 'production Web landing smoke');
+          await waitFor('/privacy', text => text.includes('حریم خصوصی') && text.includes('حذف حساب'), 'production Web privacy smoke');
+          await waitFor('/terms', text => text.includes('قوانین استفاده') && text.includes('ماهیت سرویس'), 'production Web terms smoke');
+          await waitFor('/account/delete', text => text.includes('حذف حساب') && text.includes('تأیید مالک حساب'), 'production Web account deletion smoke');
+          console.log('production Web public smoke PASS');
+          NODE
+
+      - name: Roll back Web if final public verification fails
+        if: ${{ failure() && steps.promote_web.conclusion == 'success' }}
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" rollback --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" rollback status --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'production Web rolled back after failed final verification'

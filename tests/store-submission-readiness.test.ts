@@ -39,21 +39,24 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy explicitly covers current mobile listener beta data', () => {
+test('privacy policy explicitly covers current mobile listener beta data and deletion behavior', () => {
   assert.match(privacyPage, /Web و اپ موبایل/);
   assert.match(privacyPage, /نام مستعار/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
   assert.match(privacyPage, /تماس صوتی Caller/);
+  assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
+  assert.match(privacyPage, /نگهداری ضروری/);
 });
 
-test('account deletion is discoverable in app and initiable from the public web resource', () => {
+test('account deletion is discoverable in app and truthfully completable from the public web resource', () => {
   assert.match(mobileRoot, />حذف حساب</);
   assert.match(mobileRoot, /accountDeletionUrl/);
   assert.match(deletionPage, /\/api\/account\/deletion-request/);
-  assert.match(deletionPage, /نشست‌های فعال همان لحظه باطل می‌شوند/);
-  assert.match(deletionPage, /حذف حساب/);
+  assert.match(deletionPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
+  assert.match(deletionPage, /حساب حذف شد/);
+  assert.match(deletionPage, /همه نشست‌ها همان لحظه باطل می‌شوند/);
 });
 
 test('current mobile package has no known analytics or advertising SDK that would invalidate privacy draft', () => {

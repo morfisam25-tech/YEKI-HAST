@@ -1,6 +1,6 @@
 # Listener APP / «یکی هست» — Launch Readiness
 
-Last reviewed: 2026-08-31
+Last reviewed: 2026-09-03
 
 This document defines the stable launch gates. Live state, current HEAD, run IDs, infrastructure findings and the exact remaining blockers are maintained only in [`LAUNCH_STATUS.md`](./LAUNCH_STATUS.md). If the two files ever appear to disagree, `LAUNCH_STATUS.md` is authoritative for current state.
 
@@ -58,7 +58,7 @@ The checked-in first-party public URLs are:
 - Terms: `https://web-unique-6ff0.vercel.app/terms`
 - Account deletion: `https://web-unique-6ff0.vercel.app/account/delete`
 
-A real support mailbox remains required. The technical-beta source currently selects `sales@uniqueholding.com.tr`, but source selection alone is not proof of mailbox readiness: the production SMTP/IMAP Email OTP E2E must pass before release. Replacing the support identity requires an intentional source/public-surface update and equivalent real verification; a secret-only override must not silently redirect support.
+A real support mailbox remains required. The technical-beta source currently selects `sales@uniqueholding.com.tr`, but source selection alone is not proof of mailbox readiness: the production domain-wide-delegated Gmail API Email OTP delivery/readback E2E must pass before release. Replacing the support identity requires an intentional source/public-surface update and equivalent real verification; a secret-only override must not silently redirect support.
 
 ## Account deletion gate
 

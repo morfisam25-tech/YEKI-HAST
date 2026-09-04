@@ -1,137 +1,153 @@
 # Launch Status — یکی هست
 
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 This file is the repository source of truth for current launch state. Re-check live GitHub, Vercel, Neon and provider state before trusting older chat notes.
 
-## Current source state
+## Executive status
 
-- Production Vercel scope is pinned to Team `UNIQUE` and the exact YEKI-HAST API/Web/Admin projects. Evidence Axis is excluded from Listener release workflows.
-- Automatic Vercel Git deployment is disabled in checked-in API/Web/Admin configuration.
-- API deploy, frontend deploy and production DB migration are manual-only `workflow_dispatch` mutations with exact confirmation phrases plus `main`/repository guards.
-- Release tooling is locked to Node `22.23.1`, npm `10.9.8`, the committed workspace lock and lock-installed release binaries.
-- API production region is `iad1`; Neon production region is `aws-us-east-1` only.
-- Production DB target approval is pinned to project `weathered-bar-87205560` with an exact endpoint fingerprint and required TLS/channel binding.
-- Production migration preflight and verifier compare exact migration filenames/hashes and reject unknown migration history.
-- Caller beta, Payment, KYC, Payout, Telephony and production SMS selectors remain provider-gated/fail-closed.
-- KYC and call-phone endpoints stop before sensitive-body collection when their production provider/beta gate is closed.
-- Production browser/backend API targets remain locked to the canonical production API; unsafe localhost/http/credential-bearing overrides are rejected.
-- Production email transport is source-locked to the Gmail API for `sales@uniqueholding.com.tr`, using a Google Workspace domain-wide-delegated service account. SMTP/App Password is no longer part of the production release path.
-- Production Email OTP E2E sends through Gmail API and reads the delivered OTP back through delegated Gmail readonly API before session/logout/revocation checks.
+**Technical Beta production release: PASS for the currently opened scope.**
 
-## Verified GitHub gates
+The production database, API, Gmail Email OTP path, public Web and protected Admin have all passed their guarded production gates. There is no known code/runtime blocker remaining for the current Email-first Technical Beta scope.
 
-### Foundation QA
+This does **not** mean full commercial launch, Caller voice, payments, KYC, payouts, telephony, production phone/SMS OTP or native app-store release are open. Those capabilities remain intentionally fail-closed behind their own external/provider/commercial gates.
 
-- Current code/workflow baseline: `5a4b63fe7eabc05fa9a1ca219cc3d0d7039bde88`.
-- Foundation QA run `#882` / Actions run `33578910668`: **SUCCESS**.
-- Foundation tests: `524/524` PASS.
-- Foundation invariant validator: PASS.
-- Gmail-API production security verifier: PASS.
-- Workspace typecheck: PASS.
-- Web production build: PASS.
-- Admin production build: PASS.
-- Android export: PASS.
-- iOS export: PASS.
-- Production API bundle/artifact: PASS.
-- Later changes to this status file are metadata-only and are permitted by the QA lineage guard; code/workflow changes still require fresh QA.
+## Current source and QA
 
-### Production DB migration
+- Current `main`: `9b7629915a8d753e70e97973e3ff035c86823171`.
+- Foundation QA run `#927` / Actions run `33818814010`: **SUCCESS**.
+- The full QA gate passed: dependency lock validation, runtime syntax, Foundation tests, invariant validator, Email-first production security verifier, workspace typecheck, Web build, Admin build, Android export, iOS export, API bundle and artifact upload.
+- Production Vercel scope remains pinned to Team `UNIQUE` only. Evidence Axis is excluded from Listener release workflows.
+- Automatic Vercel Git deployment remains disabled; production mutations are guarded manual workflows.
+- Release tooling remains locked to Node `22.23.1`, npm `10.9.8` and the committed dependency lock.
 
-- Production migration run `#5` / Actions run `33572791927`: **SUCCESS**.
-- Exact Virginia destination guard: PASS.
-- Read-only migration preflight: `2 known migration(s)` PASS.
-- `0001_initial.sql`: already applied; migration runner reported `skip`.
-- `0002_email_auth.sql`: already applied; migration runner reported `skip`.
-- Post-migration read-only production verifier: **PASS**.
-- The earlier migration attempts that exposed verifier/preflight `regclass` display-name assumptions did not justify weakening any target/history guard; both checks were corrected and re-covered by Foundation QA before run #5.
-
-## Live infrastructure last verified
-
-### Neon
+## Production database — PASS
 
 - Production project: `weathered-bar-87205560` — `yeki-hast-production`.
 - Region: `aws-us-east-1` (N. Virginia).
 - Default branch: `production` (`br-plain-paper-aucjl3y6`).
 - Database: `neondb`.
-- Production application schema and both official repository migration records are now present and verified by the guarded GitHub workflow.
-- `falling-rain-19435219` (`yeki-hast-credential-probe`) and `calm-sun-22159730` (`yeki-hast-scratch`) remain test-only and must never be used for production.
+- Production migration run `#5` / Actions run `33572791927`: **SUCCESS**.
+- Exact target guard, migration-history verification and post-migration read-only verifier: **PASS**.
+- Official repository migrations `0001_initial.sql` and `0002_email_auth.sql` are present in production history.
+- Test-only Neon projects must never be used for production.
 
-### Vercel
+## Production API — PASS
 
-- Team: `UNIQUE` (`team_GmseY3ibD05FWemVhLElL3hI`).
-- API project: `prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy` (`yeki-hast`).
-- Canonical API domain remains `https://yeki-hast-theta.vercel.app`.
-- Latest observed API production deployment is READY (`dpl_BmKu2scQHZNCTHptgSs4cc4zXWmA`) but predates the current verified release source/database cutover.
-- No new Listener production API/Web/Admin deployment has been performed after DB verification.
-- No Vercel plan purchase or upgrade has been authorized.
+- Vercel team: `UNIQUE` (`team_GmseY3ibD05FWemVhLElL3hI`).
+- API project: `prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy`.
+- Canonical API: `https://yeki-hast-unique-6ff0.vercel.app`.
+- Proven production source: `bfc820a17567aaed7df793ad3121794dc59cd8d7c`.
+- Proven production deployment: `dpl_8Tez3zqFLJcnjgzvpgxU6Z9LZ3YB` — READY.
+- Controlled API deploy run `#8` / Actions run `33673505914`: **SUCCESS**.
+- Production DB verification: PASS.
+- `/health`: PASS.
+- `/ready`: PASS.
+- `/v1/bootstrap`: expected safe behavior PASS.
+- Real Email OTP E2E through Gmail API: PASS, including delivery/readback, verification, authenticated session, logout and revocation checks.
 
-### Gmail mailbox preflight
+## Google Workspace / Gmail production auth — PASS
 
-- The connected `sales@uniqueholding.com.tr` mailbox was verified directly.
-- A self-addressed preflight message sent from the mailbox to itself was returned with both `SENT` and `INBOX`, confirming the release smoke test's same-mailbox delivery/readback assumption. The temporary test message was then moved to Trash.
-- This mailbox preflight does not substitute for the production domain-wide-delegated service-account OAuth test; that remains part of the guarded production API deploy.
+- Gmail API is enabled for the production Google Cloud project.
+- Service account: `yeki-hast-production-mail@yeki-hast-production.iam.gserviceaccount.com`.
+- Workspace domain-wide delegation is configured.
+- OAuth client ID: `116733941915896907799`.
+- Authorized scopes are exactly:
+  - `https://www.googleapis.com/auth/gmail.send`
+  - `https://www.googleapis.com/auth/gmail.readonly`
+- Repository Secret `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON` is installed.
+- Production sender/impersonated identity remains `sales@uniqueholding.com.tr` with sender name `یکی هست`.
+- SMTP/App Password is not part of the production release path.
 
-### GitHub secrets / credentials
+## Production Web/Admin — PASS
 
-- `PRODUCTION_DATABASE_URL` is present as a Repository Secret and has passed the exact production target guard during migration run #5.
-- `VERCEL_TOKEN` was manually confirmed present in the Repository Secrets UI after creation for the `UNIQUE` deployment scope. Its operational validity will still be checked by the guarded API deployment before any Vercel mutation proceeds.
-- The old SMTP/App Password secret is no longer required.
-- The remaining mail credential is `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON`. It must be the real Google service-account JSON whose numeric OAuth client ID has been granted Workspace domain-wide delegation for the exact Gmail scopes used by this release.
-- Never paste DB, Vercel, Google private-key, provider, OTP or session secrets into chat/source.
+Frontend application source was built from release source `39b3e58a352db6b61338739b4d20f19c2006f125`. Later `main` changes through `9b762991...` changed only release verification workflow/test metadata for this frontend cutover; the verifier explicitly confirmed frontend/runtime source equivalence before promotion.
 
-## Remaining blocker
+### Web
 
-### Required before controlled API deployment
+- Project: `prj_afhSiMYpsCfIAxuOmotLAWBvTMDg`.
+- Canonical: `https://web-unique-6ff0.vercel.app`.
+- Exact verified V4 deployment: `https://web-gax4jiw5k-unique-6ff0.vercel.app`.
+- Exact deployment identity/READY: PASS.
+- Protected pre-promotion authenticated smoke: PASS.
+- Promoted to public production: PASS.
+- Public canonical smoke: PASS for:
+  - `/`
+  - `/privacy`
+  - `/terms`
+  - `/account/delete`
 
-1. Complete the Google Workspace Gmail API machine-auth setup:
-   - Gmail API enabled for the Google Cloud project that owns the service account.
-   - Service account created with domain-wide delegation enabled.
-   - Its OAuth client ID authorized in Google Workspace Admin for `https://www.googleapis.com/auth/gmail.send` and `https://www.googleapis.com/auth/gmail.readonly`.
-   - Repository Secret `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON` set to the downloaded service-account JSON. The checked-in release code fixes the impersonated/from identity to `sales@uniqueholding.com.tr`.
-2. Run the manual controlled API deploy from exact authorized `main` and require all of these to pass:
-   - Foundation QA lineage attestation.
-   - Read-only production DB verification.
-   - Vercel token/team/project authorization guard.
-   - Production API deployment to the exact `UNIQUE` project.
-   - `/health` PASS.
-   - `/ready` PASS.
-   - `/v1/bootstrap` expected safe behavior.
-   - Real Gmail API Email OTP delivery/readback, verification, session, logout and revocation E2E.
-3. Only after the API gate is green, run the guarded frontend deployment. Web may become public only after its smoke checks; Admin must remain protected.
+### Admin
 
-### Intentionally closed for technical beta
+- Project: `prj_l18v3f003ORfiN6hKxYwJbvVPzzC`.
+- Canonical: `https://admin-unique-6ff0.vercel.app`.
+- Exact verified V4 deployment: `https://admin-4xoi0aw5d-unique-6ff0.vercel.app`.
+- Exact deployment identity/READY: PASS.
+- Authenticated Admin SSR smoke: PASS.
+- Promoted: PASS.
+- Canonical Admin protection after promotion: PASS.
+
+### Final frontend verification
+
+- Workflow: `Verify and Promote V4 Frontends`.
+- Run `#2` / Actions run `33820757590`: **SUCCESS**.
+- Both exact staged URLs were confirmed protected before authenticated smoke.
+- Admin smoke: PASS.
+- Web smoke: PASS.
+- Admin promotion: PASS; canonical remained protected.
+- Web promotion: PASS; canonical public surfaces verified.
+- Rollback step was not needed and was skipped.
+
+## Current Technical Beta scope
+
+### Open / technically released
+
+- Email-first authentication through real Gmail API production transport.
+- Production API and database for the released Email-first scope.
+- Public Web landing/support/legal/account-deletion-request surfaces.
+- Protected Admin operations shell.
+- Listener onboarding/training/assessment foundations only to the extent already source- and production-gated.
+
+### Intentionally closed / fail-closed
 
 - Caller voice.
 - Payment/top-up.
-- KYC.
-- Payout.
+- KYC provider flow.
+- Payout provider flow.
 - Telephony.
 - Production SMS/phone OTP until a real approved provider/template gate is satisfied.
-- Native store launch credentials/artwork/signing are separate from backend/web technical beta.
+- Any commercial feature that depends on a still-closed provider.
 
-### Separate commercial gate
+These are not defects in the Technical Beta release; they are deliberately closed capabilities and must not be represented as production-ready.
 
-- Do not open paid/commercial traffic or buy/upgrade a Vercel plan without explicit approval.
+## External/non-code gates still remaining
 
-## Controlled release sequence
+These do not require another API/DB/frontend redeploy unless their scope changes source or configuration:
 
-1. Foundation QA — **PASS** on `5a4b63fe7eabc05fa9a1ca219cc3d0d7039bde88` in run `33578910668`.
-2. Exact production DB target approval — **PASS**.
-3. Production DB migration + read-only verification — **PASS** in run `33572791927`.
-4. Vercel Repository Secret — **PRESENT; operational validation pending guarded deploy**.
-5. Delegated Gmail service-account credential — **BLOCKED on manual Google Cloud / Workspace setup**.
-6. Controlled API deploy + health/readiness/bootstrap/Email OTP E2E — pending step 5.
-7. Controlled frontend deploy; Web public only after smoke, Admin protected — pending API PASS.
-8. Keep provider-gated Caller/Payment/KYC/Payout/Telephony/SMS flows closed.
-9. Confirm commercial hosting eligibility before paid traffic.
+1. **Administrative/legal/licensing process** for operating the service — handled separately from this repository release.
+2. **Commercial hosting eligibility** must be re-checked against the then-current Vercel plan/terms before paid traffic is opened. No plan purchase/upgrade is authorized by this document.
+3. **Caller/payment/KYC/payout/telephony/SMS** each require their real provider contract/configuration/credentials and live verification before opening.
+4. **Native store release** still requires real Expo/EAS linkage where applicable, approved production artwork, Android signing/store credentials, Apple signing/App Store credentials, final metadata/privacy declarations and a verified signed production build.
+5. **Final destructive account deletion/anonymization** remains blocked until retention rules are defined for financial ledger, payment/payout, safety, disputes and other retained/open records. The current production surface implements the safe deletion-request stage only.
+
+## Repository governance note
+
+- As last read on 2026-09-03, GitHub branch `main` reports `protected: false`.
+- This did not invalidate the guarded Technical Beta production release because all production mutation workflows independently require `main`, exact manual confirmation, target guards and QA lineage.
+- Branch protection is nevertheless recommended repository hardening and should be enabled when repository governance is configured; it is not a reason to mutate the already-verified production runtime.
+
+## Release conclusion
+
+For the defined **Email-first Technical Beta** scope, the technical production release is complete and verified.
+
+Do not rerun database migration, API deployment or frontend deployment merely to obtain another green check. Reopen a production release only when new source/configuration/provider evidence changes the released scope.
 
 ## Non-negotiable rules
 
-- Do not touch Evidence Axis.
+- Do not touch Evidence Axis from Listener release workflows.
 - No production mutation outside the guarded exact Listener targets.
 - Never use test-only Neon projects for production.
 - Never guess provider behavior.
-- Never expose secrets, private identity data, banking data or OTP/session material.
-- Production stays fail-closed.
-- Never mark a launch gate green unless it actually ran and passed.
+- Never expose secrets, private identity data, banking data, OTPs or session material.
+- Closed provider capabilities stay fail-closed.
+- Never mark a new launch gate green unless it actually ran and passed.

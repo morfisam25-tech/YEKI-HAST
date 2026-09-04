@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const emailAuth = await readFile(new URL('../services/api/src/routes/auth-email.ts', import.meta.url), 'utf8');
 const phoneAuth = await readFile(new URL('../services/api/src/routes/auth.ts', import.meta.url), 'utf8');
+const deletionRoute = await readFile(new URL('../services/api/src/routes/account-deletion.ts', import.meta.url), 'utf8');
 const webProxy = await readFile(new URL('../apps/web/app/api/account/deletion-request/route.ts', import.meta.url), 'utf8');
 const webPage = await readFile(new URL('../apps/web/app/account/delete/page.tsx', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
@@ -29,12 +30,21 @@ test('Web deletion request is same-origin authenticated and clears the revoked c
   assert.match(webProxy, /store\.delete\(WEB_SESSION_COOKIE\)/);
 });
 
-test('public Web deletion page requires OTP and an explicit destructive confirmation', () => {
+test('public Web deletion page requires OTP, destructive confirmation and truthfully distinguishes completion from review', () => {
   assert.match(webPage, /\/api\/auth\/request/);
   assert.match(webPage, /\/api\/auth\/verify/);
   assert.match(webPage, /\/api\/account\/deletion-request/);
   assert.match(webPage, /confirmation\.trim\(\) !== 'حذف حساب'/);
-  assert.match(webPage, /حذف فوری همه سوابق نیست/);
+  assert.match(webPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
+  assert.match(webPage, /حساب حذف شد/);
+  assert.match(webPage, /نیازمند بررسی نگهداری/);
+});
+
+test('API never reports completed until app.users deletion succeeds or account is already gone', () => {
+  const deleteIndex = deletionRoute.indexOf('DELETE FROM app.users WHERE id=$1 RETURNING id');
+  const responseIndex = deletionRoute.indexOf("status: deletionCompleted ? 'completed' : 'requested'");
+  assert.ok(deleteIndex > -1 && responseIndex > deleteIndex);
+  assert.match(deletionRoute, /sqlError\?\.code === '23503'/);
 });
 
 test('production env sync source-locks first-party policy, deletion, and support surfaces', () => {

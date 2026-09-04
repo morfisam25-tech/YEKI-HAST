@@ -1,0 +1,186 @@
+name: Configure Production Domains
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type CONFIGURE-YEKI-HAST-DOMAINS to attach the registered domains to UNIQUE Web'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: yeki-hast-production-domains
+  cancel-in-progress: false
+
+jobs:
+  configure-domains:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_TEAM_SLUG: unique-6ff0
+      WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg
+      PRIMARY_DOMAIN: yekihast.app
+      PRIMARY_WWW: www.yekihast.app
+      SECONDARY_DOMAIN: yeki-hast.com
+      SECONDARY_WWW: www.yeki-hast.com
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
+
+    steps:
+      - name: Require authorized main domain configuration
+        shell: bash
+        env:
+          MANUAL_CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo '::error::Production domain configuration is allowed only from main'; exit 1; }
+          test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST" || { echo '::error::Unexpected repository'; exit 1; }
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch" || { echo '::error::Manual workflow dispatch is required'; exit 1; }
+          test "${MANUAL_CONFIRM:-}" = "CONFIGURE-YEKI-HAST-DOMAINS" || { echo '::error::Exact confirmation phrase is required'; exit 1; }
+          test -n "${VERCEL_TOKEN:-}" || { echo '::error::VERCEL_TOKEN repository secret is required'; exit 1; }
+
+      - name: Checkout exact source and history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Require successful Foundation QA coverage for this source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/require-green-foundation-qa.mjs
+
+      - name: Install locked Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f package-lock.json
+          npm ci --ignore-scripts --no-audit --no-fund
+          test -x "$VERCEL_BIN"
+          "$VERCEL_BIN" --version
+
+      - name: Attach exact registered domains and canonical redirects to UNIQUE Web
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          const primary = process.env.PRIMARY_DOMAIN?.trim();
+          if (!token || !teamId || !projectId || !primary) throw new Error('domain configuration environment is incomplete');
+
+          const desired = [
+            { name: primary, redirect: null, redirectStatusCode: null },
+            { name: process.env.PRIMARY_WWW.trim(), redirect: primary, redirectStatusCode: 308 },
+            { name: process.env.SECONDARY_DOMAIN.trim(), redirect: primary, redirectStatusCode: 308 },
+            { name: process.env.SECONDARY_WWW.trim(), redirect: primary, redirectStatusCode: 308 },
+          ];
+
+          const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+          const projectDomainUrl = (name) => {
+            const url = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}/domains/${encodeURIComponent(name)}`);
+            url.searchParams.set('teamId', teamId);
+            return url;
+          };
+          const addUrl = new URL(`https://api.vercel.com/v10/projects/${encodeURIComponent(projectId)}/domains`);
+          addUrl.searchParams.set('teamId', teamId);
+
+          async function getDomain(name) {
+            const response = await fetch(projectDomainUrl(name), { headers });
+            if (response.status === 404) return null;
+            if (!response.ok) throw new Error(`Unable to inspect ${name} (${response.status}): ${(await response.text()).slice(0, 300)}`);
+            return response.json();
+          }
+
+          for (const item of desired) {
+            let current = await getDomain(item.name);
+            if (!current) {
+              const body = { name: item.name };
+              if (item.redirect) {
+                body.redirect = item.redirect;
+                body.redirectStatusCode = item.redirectStatusCode;
+              }
+              const response = await fetch(addUrl, { method: 'POST', headers, body: JSON.stringify(body) });
+              if (!response.ok) throw new Error(`Unable to add ${item.name} (${response.status}): ${(await response.text()).slice(0, 300)}`);
+              current = await response.json();
+            } else {
+              const redirectMatches = (current.redirect ?? null) === item.redirect;
+              const statusMatches = (current.redirectStatusCode ?? null) === item.redirectStatusCode;
+              if (!redirectMatches || !statusMatches) {
+                const response = await fetch(projectDomainUrl(item.name), {
+                  method: 'PATCH',
+                  headers,
+                  body: JSON.stringify({ redirect: item.redirect, redirectStatusCode: item.redirectStatusCode }),
+                });
+                if (!response.ok) throw new Error(`Unable to update ${item.name} (${response.status}): ${(await response.text()).slice(0, 300)}`);
+                current = await response.json();
+              }
+            }
+
+            if (current.projectId !== projectId) throw new Error(`${item.name} project ownership mismatch`);
+            if ((current.redirect ?? null) !== item.redirect) throw new Error(`${item.name} redirect mismatch`);
+            if ((current.redirectStatusCode ?? null) !== item.redirectStatusCode) throw new Error(`${item.name} redirect status mismatch`);
+            console.log(`${item.name}: attached to UNIQUE Web; verified=${Boolean(current.verified)} redirect=${current.redirect ?? 'none'}`);
+          }
+          NODE
+
+      - name: Inspect exact DNS requirements without changing registrar DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## YEKI-HAST domain configuration'
+            echo
+            echo 'Vercel project attachment and redirect policy are configured. GoDaddy remains the authoritative DNS provider until its records are changed.'
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for domain in "$PRIMARY_DOMAIN" "$PRIMARY_WWW" "$SECONDARY_DOMAIN" "$SECONDARY_WWW"; do
+            echo "### $domain" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            "$VERCEL_BIN" domains inspect "$domain" --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG" 2>&1 | tee /tmp/domain-inspect.txt
+            cat /tmp/domain-inspect.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Re-read project domains and require exact final intent
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN.trim();
+          const teamId = process.env.VERCEL_TEAM_ID.trim();
+          const projectId = process.env.WEB_PROJECT_ID.trim();
+          const primary = process.env.PRIMARY_DOMAIN.trim();
+          const expected = new Map([
+            [primary, null],
+            [process.env.PRIMARY_WWW.trim(), primary],
+            [process.env.SECONDARY_DOMAIN.trim(), primary],
+            [process.env.SECONDARY_WWW.trim(), primary],
+          ]);
+          const endpoint = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}/domains`);
+          endpoint.searchParams.set('teamId', teamId);
+          const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+          if (!response.ok) throw new Error(`Unable to list Web domains (${response.status})`);
+          const body = await response.json();
+          const domains = Array.isArray(body?.domains) ? body.domains : [];
+          for (const [name, redirect] of expected) {
+            const row = domains.find((value) => value?.name === name);
+            if (!row) throw new Error(`${name} missing from Web project after configuration`);
+            if ((row.redirect ?? null) !== redirect) throw new Error(`${name} final redirect mismatch`);
+            if (redirect && Number(row.redirectStatusCode) !== 308) throw new Error(`${name} must use 308 permanent redirect`);
+          }
+          console.log('production domain project/redirect intent PASS');
+          NODE

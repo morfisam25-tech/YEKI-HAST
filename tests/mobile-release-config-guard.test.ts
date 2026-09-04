@@ -14,6 +14,21 @@ test('mobile app has stable Android and iOS application identifiers', () => {
   assert.equal(appConfig.expo.ios.bundleIdentifier, 'app.yekihast.mobile');
 });
 
+test('first store release identity is explicit and phone-first', () => {
+  assert.equal(appConfig.expo.name, 'یکی هست');
+  assert.equal(appConfig.expo.slug, 'yeki-hast');
+  assert.equal(appConfig.expo.version, '1.0.0');
+  assert.equal(appConfig.expo.scheme, 'yekihast');
+  assert.equal(appConfig.expo.orientation, 'portrait');
+  assert.equal(appConfig.expo.ios.supportsTablet, false);
+});
+
+test('Expo project linkage is explicit but carries no account credential', () => {
+  assert.equal(appConfig.expo.owner, 'saimorfis-team');
+  assert.equal(appConfig.expo.extra?.eas?.projectId, '58b9f62d-db82-421a-ad59-edccac70c316');
+  assert.doesNotMatch(JSON.stringify(appConfig), /EXPO_TOKEN|APPLE_ID|ASC_API_KEY|GOOGLE_SERVICE_ACCOUNT/);
+});
+
 test('Android app-data backup stays disabled for sensitive account and session data', () => {
   assert.equal(appConfig.expo.android.allowBackup, false);
   assert.equal(appConfig.expo.plugins?.[0]?.[0], 'expo-secure-store');

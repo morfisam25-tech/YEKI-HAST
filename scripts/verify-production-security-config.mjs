@@ -73,6 +73,18 @@ function publicHttpsUrl(name) {
   return value;
 }
 
+function requirePooledProductionDatabase(name) {
+  const value = required(name);
+  let url;
+  try { url = new URL(value); }
+  catch { throw new Error(`${name} must be a valid URL`); }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error(`${name} must be PostgreSQL`);
+  if (!url.hostname.endsWith('.us-east-1.aws.neon.tech') || !url.hostname.split('.')[0].endsWith('-pooler')) {
+    throw new Error(`${name} must use the approved pooled Neon endpoint before production Caller can open`);
+  }
+  integer('DB_POOL_MAX', 2, 1, 2);
+}
+
 function e164(name) {
   const value = required(name);
   if (!/^\+[1-9]\d{7,14}$/.test(value)) throw new Error(`${name} must be valid E.164`);
@@ -166,6 +178,7 @@ if (callerClosedBetaEnabled) {
   if (!boolean('COMMERCIAL_HOSTING_APPROVED')) {
     throw new Error('COMMERCIAL_HOSTING_APPROVED must be true before production Caller can open');
   }
+  requirePooledProductionDatabase('DATABASE_URL');
   publicHttpsUrl('PRIVACY_POLICY_URL');
   publicHttpsUrl('TERMS_OF_SERVICE_URL');
   publicHttpsUrl('ACCOUNT_DELETION_URL');

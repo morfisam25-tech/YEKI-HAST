@@ -61,7 +61,7 @@ async function ensurePendingDeletionRequest(userId: string): Promise<{ requestId
 
 async function tryCompleteDeletion(userId: string, requestId: string): Promise<'completed' | 'review_required'> {
   try {
-    return await withTransaction(async (client) => {
+    return await withTransaction<'completed'>(async (client) => {
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:account_deletion:' || $1::text, 0))",
         [userId],
@@ -125,8 +125,7 @@ async function tryCompleteDeletion(userId: string, requestId: string): Promise<'
       // Therefore a clean Technical Beta account is physically deleted now,
       // while a retention-sensitive account fails this transaction atomically
       // and stays pending from ensurePendingDeletionRequest().
-      const deleted = await client.query('DELETE FROM app.users WHERE id=$1 RETURNING id', [userId]);
-      if (!deleted.rowCount) return 'completed';
+      await client.query('DELETE FROM app.users WHERE id=$1 RETURNING id', [userId]);
       return 'completed';
     });
   } catch (error) {

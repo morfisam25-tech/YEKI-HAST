@@ -8,13 +8,15 @@ export async function listAdminAccountDeletionRequests(req: IncomingMessage, res
 
   const result = await query<{
     user_id: string;
-    processing_state: string | null;
+    processing_state: string;
   }>(`
     SELECT entity_id::text AS user_id,
            metadata->>'processingState' AS processing_state
     FROM app.audit_logs
     WHERE action='account_deletion_requested'
       AND entity_type='user'
+      AND entity_id IS NOT NULL
+      AND metadata->>'processingState'='pending'
     ORDER BY entity_id::text
     LIMIT 500
   `);
@@ -23,7 +25,7 @@ export async function listAdminAccountDeletionRequests(req: IncomingMessage, res
     ok: true,
     requests: result.rows.map((row) => ({
       userId: row.user_id,
-      processingState: row.processing_state || 'unknown',
+      processingState: row.processing_state,
     })),
     piiIncluded: false,
   });

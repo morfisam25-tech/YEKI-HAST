@@ -3,7 +3,12 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
-type Step = 'email' | 'code' | 'confirm' | 'requested';
+type Step = 'email' | 'code' | 'confirm' | 'completed' | 'requested';
+
+type DeletionResponse = {
+  deletionCompleted?: boolean;
+  reviewRequired?: boolean;
+};
 
 function normalizeEmail(value: string): string | null {
   const email = value.trim().toLowerCase();
@@ -82,18 +87,19 @@ export default function DeleteAccountPage() {
     setError('');
     try {
       const response = await postJson('/api/account/deletion-request');
-      if (!response.ok) {
+      if (!response.ok && response.status !== 202) {
         if (response.status === 401) {
           setStep('email');
           throw new Error('session_expired');
         }
         throw new Error('delete_request_failed');
       }
-      setStep('requested');
+      const payload = await response.json() as DeletionResponse;
+      setStep(payload.deletionCompleted ? 'completed' : 'requested');
     } catch (cause) {
       setError(cause instanceof Error && cause.message === 'session_expired'
         ? 'نشست منقضی شده است. دوباره با ایمیل وارد شوید.'
-        : 'ثبت درخواست حذف انجام نشد. کمی بعد دوباره تلاش کنید.');
+        : 'حذف حساب انجام نشد. کمی بعد دوباره تلاش کنید.');
     } finally {
       setBusy(false);
     }
@@ -118,16 +124,15 @@ export default function DeleteAccountPage() {
           <p className="kicker">مدیریت حساب</p>
           <h1 id="delete-title">حذف حساب</h1>
           <p className="lead">
-            برای ثبت درخواست حذف، ابتدا مالکیت ایمیل حساب را با کد یک‌بارمصرف تأیید کنید.
-            بعد از ثبت درخواست، همه نشست‌های فعال همان لحظه باطل می‌شوند.
+            برای حذف حساب، ابتدا مالکیت ایمیل را با کد یک‌بارمصرف تأیید کنید.
+            حساب‌های فاقد سابقه‌ای که نگهداری آن ضروری است همان‌جا حذف می‌شوند و همه نشست‌ها بسته می‌شوند.
           </p>
           <div className="after-login">
             <h2>درباره فرایند حذف</h2>
             <p>
-              ثبت درخواست به معنی حذف فوری همه سوابق نیست. داده‌هایی که نگهداری آن‌ها برای
-              تسویه مالی، ایمنی، رسیدگی به گزارش‌ها یا الزامات نگهداری ضروری باشد ابتدا طبق
-              فرایند مربوط بررسی می‌شود. این صفحه وضعیت «حذف کامل شد» را تا قبل از انجام واقعی
-              آن نمایش نمی‌دهد.
+              اگر سابقه‌ای وجود داشته باشد که نگهداری آن برای تسویه مالی، ایمنی، رسیدگی به گزارش‌ها یا الزام معتبر دیگری
+              ضروری است، نشست‌ها فوراً باطل می‌شوند و درخواست برای بررسی نگهداری ضروری ثبت می‌شود. سیستم فقط وقتی
+              «حذف کامل شد» را نمایش می‌دهد که حذف واقعی حساب انجام شده باشد.
             </p>
           </div>
         </div>
@@ -185,9 +190,9 @@ export default function DeleteAccountPage() {
             <form onSubmit={requestDeletion} className="login-form">
               <div>
                 <p className="form-eyebrow">مرحله نهایی</p>
-                <h2>ثبت درخواست حذف حساب</h2>
+                <h2>حذف حساب</h2>
                 <p className="helper">
-                  با ثبت درخواست، همه نشست‌های فعال حساب باطل می‌شوند و ادامه پردازش حذف برای بررسی نگهداری‌های ضروری ثبت می‌شود.
+                  با تأیید این مرحله، سیستم حذف واقعی حساب را همان لحظه انجام می‌دهد؛ فقط سوابقی که به دلیل معتبر قابل حذف فوری نیستند وارد بررسی نگهداری می‌شوند.
                 </p>
               </div>
               <label htmlFor="confirmation">برای تأیید بنویسید: حذف حساب</label>
@@ -200,9 +205,20 @@ export default function DeleteAccountPage() {
               />
               {error && <p className="error" role="alert">{error}</p>}
               <button type="submit" disabled={busy || confirmation.trim() !== 'حذف حساب'}>
-                {busy ? 'در حال ثبت…' : 'ثبت درخواست حذف'}
+                {busy ? 'در حال حذف…' : 'حذف حساب'}
               </button>
             </form>
+          )}
+
+          {step === 'completed' && (
+            <div className="verified-state">
+              <p className="form-eyebrow">حذف انجام شد</p>
+              <h2>حساب حذف شد.</h2>
+              <p className="helper">
+                شناسه‌های ورود، نشست‌ها و داده‌های وابسته‌ای که نگهداری آن‌ها لازم نبود حذف شدند. برای استفاده دوباره باید حساب تازه‌ای بسازید.
+              </p>
+              <a href="/">برگشت به صفحه اصلی</a>
+            </div>
           )}
 
           {step === 'requested' && (
@@ -210,7 +226,7 @@ export default function DeleteAccountPage() {
               <p className="form-eyebrow">درخواست ثبت شد</p>
               <h2>نشست‌های حساب بسته شدند.</h2>
               <p className="helper">
-                درخواست حذف ثبت شده است. حذف یا ناشناس‌سازی نهایی فقط پس از بررسی سوابقی که نگهداری‌شان ضروری است انجام می‌شود.
+                یک یا چند سابقه نیازمند بررسی نگهداری است. حساب دیگر نشست فعال ندارد و درخواست حذف برای تکمیل فرایند ثبت شده است.
               </p>
               <a href="/">برگشت به صفحه اصلی</a>
             </div>

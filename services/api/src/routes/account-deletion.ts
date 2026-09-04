@@ -1,11 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { withTransaction } from '../../../../packages/db/src/client.ts';
+import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
-import { sendJson } from '../lib/http.ts';
+import { HttpError, sendJson } from '../lib/http.ts';
 
 type PendingRequest = {
   id: string;
 };
+
+async function requireSelfServiceDeletableAccount(userId: string): Promise<void> {
+  const activeAdmin = await query(`
+    SELECT 1 FROM app.admin_users
+    WHERE user_id=$1 AND is_active=true
+    LIMIT 1
+  `, [userId]);
+  if (activeAdmin.rowCount) throw new HttpError(409, 'admin_account_deletion_requires_transfer');
+}
 
 async function ensurePendingDeletionRequest(userId: string): Promise<{ requestId: string; alreadyRequested: boolean }> {
   return withTransaction(async (client) => {
@@ -58,14 +67,13 @@ async function tryCompleteDeletion(userId: string, requestId: string): Promise<'
         [userId],
       );
 
-      // Never let self-service deletion silently remove an active operations
-      // administrator. Admin ownership/role transfer is an explicit manual gate.
+      // Defense in depth against a role change racing the preflight check.
       const activeAdmin = await client.query(`
         SELECT 1 FROM app.admin_users
         WHERE user_id=$1 AND is_active=true
         LIMIT 1
       `, [userId]);
-      if (activeAdmin.rowCount) return 'review_required';
+      if (activeAdmin.rowCount) throw new HttpError(409, 'admin_account_deletion_requires_transfer');
 
       const identities = await client.query<{ email_hash: string | null; phone_hash: string | null }>(`
         SELECT e.email_hash::text, c.phone_hash::text
@@ -130,6 +138,7 @@ async function tryCompleteDeletion(userId: string, requestId: string): Promise<'
 
 export async function requestAccountDeletion(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
+  await requireSelfServiceDeletableAccount(userId);
   const { requestId, alreadyRequested } = await ensurePendingDeletionRequest(userId);
   const outcome = await tryCompleteDeletion(userId, requestId);
   const deletionCompleted = outcome === 'completed';

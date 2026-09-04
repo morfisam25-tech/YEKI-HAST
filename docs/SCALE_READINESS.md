@@ -50,6 +50,7 @@ These are correctness properties, not throughput benchmark results.
 ### Listener polling fan-out
 
 - The mobile listener active-call card no longer uses a fixed five-second interval while idle.
+- It now uses an **adaptive/jittered schedule** rather than one synchronized fixed cadence.
 - Foreground listeners with no active call use a jittered 20–30 second cadence.
 - Once an active call exists, the cadence tightens to a jittered 3–5 seconds.
 - Polling stops while the app is backgrounded and immediately refreshes when the app returns to the foreground.

@@ -48,6 +48,8 @@ test('scale documentation does not falsely claim an executed load benchmark', ()
   assert.match(scaleDoc, /100 simultaneously active calls/);
   assert.match(scaleDoc, /adaptive\/jittered schedule/);
   assert.match(scaleDoc, /no enabled production telephony adapter/);
-  assert.match(listenerCard, /setInterval/);
-  assert.match(listenerCard, /5_000/);
+  assert.match(listenerCard, /setTimeout/);
+  assert.doesNotMatch(listenerCard, /setInterval/);
+  assert.match(listenerCard, /ACTIVE_POLL_BASE_MS = 3_000/);
+  assert.match(listenerCard, /IDLE_POLL_BASE_MS = 20_000/);
 });

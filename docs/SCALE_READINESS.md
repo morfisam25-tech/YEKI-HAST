@@ -47,13 +47,21 @@ These are correctness properties, not throughput benchmark results.
 - NextPay provider requests have bounded timeouts.
 - Browser backend proxies have bounded upstream timeouts.
 
-## Known capacity work before Caller opens
+### Listener polling fan-out
 
-### Listener polling
+- The mobile listener active-call card no longer uses a fixed five-second interval while idle.
+- It now uses an **adaptive/jittered schedule** rather than one synchronized fixed cadence.
+- Foreground listeners with no active call use a jittered 20–30 second cadence.
+- Once an active call exists, the cadence tightens to a jittered 3–5 seconds.
+- Polling stops while the app is backgrounded and immediately refreshes when the app returns to the foreground.
+- A per-component in-flight guard prevents overlapping active-call reads.
+- Jitter prevents large groups of listener clients from synchronizing onto the same request boundary after app/resume or network events.
 
-The current mobile listener active-call card polls every five seconds while foregrounded, including when idle. This is safe for a small beta but is a fan-out source at thousands of concurrently foregrounded listeners. Before a broad Caller launch, replace the fixed cadence with an adaptive/jittered schedule (slower while idle, faster only while a call is active) or a push/event-driven equivalent, then load-test the resulting read path.
+This materially reduces idle polling fan-out, but it is still a polling design. The read path must be included in the synthetic concurrency benchmark before the 1,000-calls/day envelope is called certified. A provider/push-driven state notification path remains a possible later optimization if measured load requires it.
 
 Presence heartbeat is already much slower (30 seconds) and is foreground-aware, but it must be included in the same load model.
+
+## Known capacity work before Caller opens
 
 ### Email OTP burst serialization
 

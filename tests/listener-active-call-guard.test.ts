@@ -31,11 +31,20 @@ test('listener active call endpoint stays outside the Caller closed-beta gate', 
   assert.doesNotMatch(line, /requireCallerClosedBetaEnabled/);
 });
 
-test('mobile listener work mode polls active call only while foregrounded and exposes Safety Exit', () => {
+test('mobile listener work mode uses foreground-only adaptive jittered polling and exposes Safety Exit', () => {
   assert.match(api, /getListenerActiveCall/);
   assert.match(api, /\/v1\/listener\/calls\/active/);
-  assert.match(card, /setInterval/);
-  assert.match(card, /5_000/);
+  assert.match(card, /setTimeout/);
+  assert.match(card, /clearTimeout/);
+  assert.doesNotMatch(card, /setInterval/);
+  assert.match(card, /ACTIVE_POLL_BASE_MS = 3_000/);
+  assert.match(card, /ACTIVE_POLL_JITTER_MS = 2_000/);
+  assert.match(card, /IDLE_POLL_BASE_MS = 20_000/);
+  assert.match(card, /IDLE_POLL_JITTER_MS = 10_000/);
+  assert.match(card, /Math\.random\(\)/);
+  assert.match(card, /appStateRef\.current !== 'active'/);
+  assert.match(card, /Boolean\(activeCallIdRef\.current\)/);
+  assert.match(card, /refreshInFlight/);
   assert.match(card, /AppState/);
   assert.match(card, /safetyExitCall/);
   assert.match(card, /activeCall\.telephonyReady/);

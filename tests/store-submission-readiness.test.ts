@@ -56,7 +56,7 @@ test('account deletion is discoverable in app and truthfully completable from th
   assert.match(deletionPage, /\/api\/account\/deletion-request/);
   assert.match(deletionPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
   assert.match(deletionPage, /حساب حذف شد/);
-  assert.match(deletionPage, /همه نشست‌ها همان لحظه باطل می‌شوند/);
+  assert.match(deletionPage, /نشست‌ها فوراً باطل می‌شوند/);
 });
 
 test('current mobile package has no known analytics or advertising SDK that would invalidate privacy draft', () => {

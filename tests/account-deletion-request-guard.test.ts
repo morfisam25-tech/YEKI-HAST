@@ -16,9 +16,13 @@ test('active operations administrators are rejected before request or session si
   assert.match(route, /FROM app\.admin_users/);
   assert.match(route, /user_id=\$1 AND is_active=true/);
   assert.match(route, /admin_account_deletion_requires_transfer/);
-  const preflight = route.indexOf('requireSelfServiceDeletableAccount(userId)');
-  const request = route.indexOf('ensurePendingDeletionRequest(userId)');
-  assert.ok(preflight > -1 && request > preflight, 'admin preflight must precede deletion request/revocation');
+  const handlerStart = route.indexOf('export async function requestAccountDeletion');
+  const preflight = route.indexOf('await requireSelfServiceDeletableAccount(userId)', handlerStart);
+  const request = route.indexOf('await ensurePendingDeletionRequest(userId)', handlerStart);
+  assert.ok(
+    handlerStart > -1 && preflight > handlerStart && request > preflight,
+    'admin preflight must precede deletion request/revocation',
+  );
 });
 
 test('deletion revocation commits before destructive completion is attempted', () => {

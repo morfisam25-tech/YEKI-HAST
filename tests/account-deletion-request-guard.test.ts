@@ -11,6 +11,16 @@ test('authenticated deletion request is wired into the API', () => {
   assert.match(route, /requireAuth\(req\)/);
 });
 
+test('active operations administrators are rejected before request or session side effects', () => {
+  assert.match(route, /requireSelfServiceDeletableAccount/);
+  assert.match(route, /FROM app\.admin_users/);
+  assert.match(route, /user_id=\$1 AND is_active=true/);
+  assert.match(route, /admin_account_deletion_requires_transfer/);
+  const preflight = route.indexOf('await requireSelfServiceDeletableAccount(userId)');
+  const request = route.indexOf('await ensurePendingDeletionRequest(userId)');
+  assert.ok(preflight > -1 && request > preflight, 'admin preflight must precede deletion request/revocation');
+});
+
 test('deletion revocation commits before destructive completion is attempted', () => {
   assert.match(route, /ensurePendingDeletionRequest/);
   assert.match(route, /UPDATE private_data\.auth_sessions/);
@@ -33,12 +43,6 @@ test('retention-sensitive FK conflicts fail closed into review instead of fake c
   assert.match(route, /deletionCompleted \? 200 : 202/);
   assert.match(route, /deletionCompleted,/);
   assert.match(route, /reviewRequired: !deletionCompleted/);
-});
-
-test('active operations administrators cannot self-delete silently', () => {
-  assert.match(route, /FROM app\.admin_users/);
-  assert.match(route, /user_id=\$1 AND is_active=true/);
-  assert.match(route, /if \(activeAdmin\.rowCount\) return 'review_required'/);
 });
 
 test('request stays idempotent only while a prior deletion request is pending', () => {

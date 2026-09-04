@@ -36,6 +36,17 @@ const terminationLockCodes = new Set([
   'call_termination_in_progress',
 ]);
 
+const ACTIVE_POLL_BASE_MS = 3_000;
+const ACTIVE_POLL_JITTER_MS = 2_000;
+const IDLE_POLL_BASE_MS = 20_000;
+const IDLE_POLL_JITTER_MS = 10_000;
+
+function nextPollDelayMs(hasActiveCall: boolean): number {
+  const base = hasActiveCall ? ACTIVE_POLL_BASE_MS : IDLE_POLL_BASE_MS;
+  const jitter = hasActiveCall ? ACTIVE_POLL_JITTER_MS : IDLE_POLL_JITTER_MS;
+  return base + Math.floor(Math.random() * (jitter + 1));
+}
+
 function statusLabel(status: ListenerActiveCall['status']): string {
   const labels: Record<ListenerActiveCall['status'], string> = {
     requested: 'درخواست تماس ثبت شده',
@@ -127,20 +138,50 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
   }
 
   useEffect(() => {
-    refresh().catch(() => undefined);
-    refreshRecent().catch(() => undefined);
-    const timer = setInterval(() => {
-      if (appStateRef.current === 'active') refresh().catch(() => undefined);
-    }, 5_000);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const clearTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+
+    const scheduleNext = () => {
+      clearTimer();
+      if (cancelled || appStateRef.current !== 'active') return;
+      timer = setTimeout(() => {
+        timer = null;
+        void pollAndReschedule();
+      }, nextPollDelayMs(Boolean(activeCallIdRef.current)));
+    };
+
+    const pollAndReschedule = async () => {
+      if (cancelled || appStateRef.current !== 'active') return;
+      await refresh().catch(() => undefined);
+      scheduleNext();
+    };
+
+    void (async () => {
+      await refresh().catch(() => undefined);
+      await refreshRecent().catch(() => undefined);
+      scheduleNext();
+    })();
+
     const subscription = AppState.addEventListener('change', (nextState) => {
       appStateRef.current = nextState;
+      clearTimer();
       if (nextState === 'active') {
-        refresh().catch(() => undefined);
-        refreshRecent().catch(() => undefined);
+        void (async () => {
+          await refresh().catch(() => undefined);
+          await refreshRecent().catch(() => undefined);
+          scheduleNext();
+        })();
       }
     });
+
     return () => {
-      clearInterval(timer);
+      cancelled = true;
+      clearTimer();
       subscription.remove();
     };
   }, [token]);

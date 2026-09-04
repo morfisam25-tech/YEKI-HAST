@@ -60,6 +60,17 @@ function validateDatabaseUrl(value) {
   }
 }
 
+function pooledRuntimeDatabaseUrl(value) {
+  const url = new URL(value);
+  if (!url.hostname.endsWith('.us-east-1.aws.neon.tech')) {
+    throw new Error('PRODUCTION_DATABASE_URL must use the approved Neon aws-us-east-1 endpoint');
+  }
+  const labels = url.hostname.split('.');
+  if (!labels[0].endsWith('-pooler')) labels[0] = `${labels[0]}-pooler`;
+  url.hostname = labels.join('.');
+  return url.toString();
+}
+
 function validateEmail(value, name = 'email') {
   const parts = value.toLowerCase().split('@');
   if (parts.length !== 2 || !parts[0] || !parts[1] || !parts[1].includes('.') || /\s|[\r\n]/.test(value)) {
@@ -127,6 +138,11 @@ if (!/^[0-9a-f]{40}$/.test(releaseSha)) throw new Error('GITHUB_SHA must be a fu
 
 const databaseUrl = required('PRODUCTION_DATABASE_URL');
 validateDatabaseUrl(databaseUrl);
+// Release/migration guards continue to verify the exact approved direct Neon
+// endpoint. Runtime traffic is deliberately routed through the equivalent
+// PgBouncer hostname so Vercel instance bursts cannot fan out raw Postgres
+// connections. Credentials, database name and query parameters are unchanged.
+const runtimeDatabaseUrl = pooledRuntimeDatabaseUrl(databaseUrl);
 
 // Technical beta uses one source-locked Google Workspace identity. The service-account
 // credential is accepted only as a raw secret and runtime code can exchange it only at
@@ -174,8 +190,11 @@ function setSensitive(key, value) {
   entries.push({ key, value: String(value), type: 'sensitive', target: ['production'] });
 }
 
-setSensitive('DATABASE_URL', databaseUrl);
-setPlain('DB_POOL_MAX', '10');
+setSensitive('DATABASE_URL', runtimeDatabaseUrl);
+// Keep each Vercel runtime instance intentionally small. The Neon PgBouncer
+// endpoint supplies the cross-instance pooling layer; local Pool still reuses a
+// couple of connections inside a warm instance without creating a connection storm.
+setPlain('DB_POOL_MAX', '2');
 setPlain('YEKI_HAST_RELEASE_SHA', releaseSha);
 
 setPlain('EMAIL_PROVIDER', 'gmail_api');

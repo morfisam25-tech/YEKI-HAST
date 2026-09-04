@@ -15,13 +15,26 @@ function normalizedDatabaseUrl(connectionString: string): string {
   return url.toString();
 }
 
+function poolMax(): number {
+  const fallback = process.env.NODE_ENV === 'production' ? 2 : 10;
+  const raw = process.env.DB_POOL_MAX?.trim();
+  const value = raw ? Number(raw) : fallback;
+  if (!Number.isInteger(value) || value < 1 || value > 10) {
+    throw new Error('DB_POOL_MAX must be an integer between 1 and 10');
+  }
+  return value;
+}
+
 export function getPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is required');
 
   pool ??= new Pool({
     connectionString: normalizedDatabaseUrl(connectionString),
-    max: Number(process.env.DB_POOL_MAX ?? 10),
+    // Vercel may create many runtime instances during bursts. Keep each process
+    // deliberately small; production is routed through Neon PgBouncer by the
+    // controlled environment sync before Caller traffic is ever opened.
+    max: poolMax(),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });

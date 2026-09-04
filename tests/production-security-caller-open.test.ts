@@ -35,6 +35,8 @@ function baseEnv(): NodeJS.ProcessEnv {
     BOOTSTRAP_ADMIN_EXPIRES_AT: '',
     CALLER_CLOSED_BETA_ENABLED: 'true',
     COMMERCIAL_HOSTING_APPROVED: 'true',
+    DATABASE_URL: 'postgresql://test:test@ep-test-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require',
+    DB_POOL_MAX: '2',
     CALLER_MINIMUM_AGE: '18',
     CALLER_AGE_POLICY_VERSION: 'test-v1',
     PRIVACY_POLICY_URL: 'https://example.test/privacy',
@@ -80,4 +82,20 @@ test('caller-open production security config fails closed when account deletion 
   const result = runVerifier(env);
   assert.notEqual(result.status, 0);
   assert.match(`${result.stderr}\n${result.stdout}`, /ACCOUNT_DELETION_URL is required/);
+});
+
+test('caller-open production security config rejects a direct Neon runtime connection', () => {
+  const env = baseEnv();
+  env.DATABASE_URL = 'postgresql://test:test@ep-test.us-east-1.aws.neon.tech/neondb?sslmode=require';
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /pooled Neon endpoint/);
+});
+
+test('caller-open production security config rejects a per-instance pool above two connections', () => {
+  const env = baseEnv();
+  env.DB_POOL_MAX = '3';
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /DB_POOL_MAX is invalid/);
 });

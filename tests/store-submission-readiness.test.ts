@@ -8,6 +8,7 @@ const mobileRoot = await readFile(new URL('../apps/mobile/RootApp.tsx', import.m
 const privacyPage = await readFile(new URL('../apps/web/app/privacy/page.tsx', import.meta.url), 'utf8');
 const deletionPage = await readFile(new URL('../apps/web/app/account/delete/page.tsx', import.meta.url), 'utf8');
 const submissionPacket = await readFile(new URL('../docs/STORE_SUBMISSION_ANSWERS.md', import.meta.url), 'utf8');
+const platformRequirements = await readFile(new URL('../docs/STORE_PLATFORM_REQUIREMENTS.md', import.meta.url), 'utf8');
 
 const allMobileDeps = {
   ...(mobilePackage.dependencies ?? {}),
@@ -29,6 +30,13 @@ test('store-facing mobile identity remains pinned to the first release', () => {
   assert.equal(appConfig.expo.android.package, 'app.yekihast.mobile');
   assert.equal(appConfig.expo.ios.bundleIdentifier, 'app.yekihast.mobile');
   assert.equal(appConfig.expo.scheme, 'yekihast');
+});
+
+test('current Expo framework line matches the recorded 2026 Store platform baseline', () => {
+  assert.match(mobilePackage.dependencies?.expo ?? '', /^~57\./);
+  assert.match(platformRequirements, /API level 36/);
+  assert.match(platformRequirements, /Xcode 26/);
+  assert.match(platformRequirements, /SDK 57/);
 });
 
 test('privacy policy explicitly covers current mobile listener beta data', () => {

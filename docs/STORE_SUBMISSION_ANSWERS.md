@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-09-04
 
-This file is the copy/paste packet for the first Android/iOS Store submission. It is based on the committed Email-first Technical Beta behavior and must be re-checked against the exact signed build before submission.
+This is the copy/paste packet for the first Android/iOS Store submission. Re-check every answer against the exact signed build before filing.
 
 ## Product identity
 
@@ -12,14 +12,14 @@ This file is the copy/paste packet for the first Android/iOS Store submission. I
 - iOS bundle ID: `app.yekihast.mobile`
 - Expo slug: `yeki-hast`
 - Deep-link scheme: `yekihast`
-- Primary language for first submission: Persian (`fa`)
+- Primary language: Persian (`fa`)
 - Suggested Store category: `Lifestyle`
 
-Do not change the application IDs after Store records are created unless there is a proven collision that cannot be resolved.
+Do not change the application IDs after Store records are created unless a proven collision makes it unavoidable.
 
 ## Current public URLs
 
-Until the custom domain is connected and smoke-tested, use the already verified public URLs:
+Until the custom domain is connected and smoke-tested, use the verified Vercel URLs:
 
 - Website: `https://web-unique-6ff0.vercel.app`
 - Privacy policy: `https://web-unique-6ff0.vercel.app/privacy`
@@ -27,7 +27,7 @@ Until the custom domain is connected and smoke-tested, use the already verified 
 - Terms: `https://web-unique-6ff0.vercel.app/terms`
 - Support email: `sales@uniqueholding.com.tr`
 
-When `yekihast.app` is connected, update these fields only after the custom-domain routes pass the same public smoke checks.
+When `yekihast.app` is connected, replace these only after the same routes pass public smoke checks on the custom domain.
 
 ## Google Play listing draft
 
@@ -56,7 +56,7 @@ Google Play currently limits title to 30 characters, short description to 80 cha
 ### Contact / support
 
 - Support email: `sales@uniqueholding.com.tr`
-- Website: current verified Web URL above; replace with custom domain only after verification.
+- Website: current verified Web URL above; replace with the custom domain only after verification.
 
 ## Apple App Store listing draft
 
@@ -88,57 +88,51 @@ Apple currently limits app name and subtitle to 30 characters, promotional text 
 
 `گفتگو,شنونده,صحبت,همراهی,مکالمه,انسانی`
 
-Re-check the byte counter in App Store Connect before saving because the 100-byte limit is not the same as a 100-character limit for non-ASCII text.
+Re-check the App Store Connect byte counter before saving because its 100-byte limit is not the same as 100 Persian characters.
 
-### Support URL
+### URLs
 
-Use the current verified Website URL until the custom domain is live.
-
-### Privacy Policy URL
-
-Use the current verified Privacy URL until the custom domain is live.
-
-### User Privacy Choices URL
-
-Use the current verified account-deletion URL.
+- Support URL: current verified Website URL until the custom domain is live.
+- Privacy Policy URL: current verified Privacy URL until the custom domain is live.
+- User Privacy Choices URL: current verified account-deletion URL.
 
 ## Google Play Data Safety — draft for exact current build
 
-This section is a filing draft, not a substitute for the Play Console questionnaire. Answer from the exact signed build and all active production services.
+This is a filing draft, not a substitute for the Play Console questionnaire. Answer from the exact signed build and active production services.
 
-### Does the app collect or share required user data?
+### Does the app collect user data?
 
-`Yes, the app collects user data.`
+`Yes.`
 
-Current submitted scope has no advertising SDK, analytics SDK, contact-book access, location collection, microphone capture, camera capture or payment SDK in the mobile package. Re-check dependencies before submission.
+Current mobile scope has no advertising SDK, analytics SDK, contact-book access, location collection, microphone capture, camera capture or payment SDK. Re-check dependencies before submission.
 
 ### Data types currently collected
 
 1. **Personal info — Email address**
    - Collected: Yes
-   - Shared with third parties for independent advertising/sale: No
+   - Shared for independent advertising/sale: No
    - Purpose: account management, authentication, security, support
    - Required for authenticated use: Yes
 
-2. **Personal info — Name / user-provided profile identifier**
-   - Current field is a listener nickname, not a verified legal name.
-   - Collected: Yes for listener application path
-   - Purpose: app functionality / profile
+2. **Personal info — User-provided profile identifier**
+   - Listener nickname; it is not a verified legal name.
+   - Collected for listener application flow.
+   - Purpose: app functionality / profile.
 
-3. **Personal info — Other info**
+3. **Personal info — Other profile info**
    - Declared gender
    - Selected languages and proficiency
    - Optional short introduction
    - Listener application/training state
    - Purpose: app functionality / listener onboarding
 
-4. **App activity / account state**
-   - Authentication/session state and listener workflow status are processed to restore the user journey and secure the account.
-   - Re-check the exact Play Console category wording at filing time before mapping these server-side records to a Data Safety subtype.
+4. **App/account activity**
+   - Authentication/session state and listener workflow state are processed to restore the user journey and secure the account.
+   - Re-check the exact Play Console subtype wording at filing time.
 
 ### Data not currently collected by the submitted mobile build
 
-Do not declare these as active current collection merely because future code/schema exists:
+Do not declare these as active merely because future schema/code exists:
 
 - precise or approximate device location;
 - contacts/address book;
@@ -150,97 +144,98 @@ Do not declare these as active current collection merely because future code/sch
 - health data;
 - advertising identifiers for ad targeting.
 
-If any of these features are opened before submission, this packet and the privacy policy must be updated first.
+If any of these features are opened before submission, update this packet and Privacy first.
 
 ### Data deletion
 
-- In-app path: the mobile footer exposes `حذف حساب` and opens the direct account deletion resource.
-- External web resource: `/account/delete` allows the account owner to verify the account email by OTP and initiate an authenticated deletion request.
-- A deletion request revokes active sessions immediately; final deletion/anonymization remains subject to documented retention requirements for records that must legitimately be retained.
+- In-app path: the persistent mobile footer exposes `حذف حساب` and opens the direct account-deletion resource.
+- External web resource: `/account/delete` verifies account ownership by email OTP and requires the explicit phrase `حذف حساب`.
+- Active operations admins are blocked from self-service deletion before any destructive or session side effect, so the production owner cannot accidentally lock out operations.
+- For a normal account with no retention-protected operational history, the server physically deletes the `app.users` account row. The database cascades account-owned email/phone identities, sessions, listener application/training/assessment, KYC, device/role and related beta rows; identity-linked OTP challenge rows are explicitly removed as well.
+- The response reports `deletionCompleted=true` only after physical account deletion succeeds (or the account is already gone).
+- If a legitimate retention-sensitive FK exists (for example later financial/call/safety history), the destructive transaction rolls back atomically, sessions remain revoked from the already-committed first phase, and the request stays pending for retention review. The UI does not claim completion in that case.
 
-Google Play requires both an in-app path and an external web resource for apps that allow account creation. The current source provides both initiation paths.
+This provides both the in-app initiation path and the public external deletion resource required for account-creating apps.
 
 ## Apple App Privacy — draft for exact current build
 
-App Store Connect requires a privacy policy URL and an accurate disclosure of data collected by the app and integrated third-party partners.
+App Store Connect requires a privacy policy URL and accurate disclosure of data collected by the app and integrated third-party partners.
 
 ### Data linked to the user
 
 Draft disclosure for the current build:
 
 - **Contact Info / Email Address** — authentication, account management, support and security.
-- **User Content / Other User Content or Other Data** — user-provided listener short introduction, if App Store Connect presents the applicable subtype.
-- **Other Data / Profile information** — listener nickname, declared gender, languages/proficiency and application/training state. Map to the closest current App Store Connect data types at filing time; do not misclassify a nickname as a verified legal identity.
+- **User Content / Other User Content or Other Data** — optional listener short introduction, if the current App Store Connect subtype applies.
+- **Other Data / Profile information** — listener nickname, declared gender, languages/proficiency and application/training state. Map to the closest current App Store Connect types at filing time; do not describe a nickname as verified legal identity.
 
 ### Tracking
 
 Draft answer: `No`.
 
-There is currently no advertising or cross-app tracking SDK in the mobile package and the current app does not request a tracking authorization surface. Re-check the exact signed build before filing.
+There is currently no advertising or cross-app tracking SDK in the mobile package and no tracking-authorization surface. Re-check the exact signed build before filing.
 
-### Third-party sharing
+### Third-party processing
 
-Do not answer from architecture assumptions. At filing time include every active production processor whose code/service receives user data for the submitted behavior. Gmail delivery of authentication email and production hosting/database are operational processors, not advertising partners; the final App Privacy answers must still reflect the exact data handling required by Apple's questionnaire.
+Do not answer from architecture assumptions. At filing time include every active production processor that receives user data for submitted behavior. Gmail authentication-email delivery and production hosting/database are operational processors, not advertising partners; final answers must still match Apple's current questionnaire definitions.
 
 ## Account deletion evidence for review
 
-The app supports account creation/authentication by email. The source therefore intentionally provides a visible account deletion path.
-
-Reviewer path:
+Reviewer path for a normal clean Technical Beta account:
 
 1. Open the app.
 2. Scroll to the persistent legal/support footer.
 3. Tap `حذف حساب`.
-4. The app opens the public account deletion page.
+4. The app opens the public account-deletion page.
 5. Enter the account email and request the email OTP.
 6. Verify the OTP.
 7. Type `حذف حساب` and submit.
-8. The server records the deletion request and revokes active sessions.
+8. The server revokes sessions and attempts physical deletion immediately.
+9. A clean beta account returns completion and the page displays `حساب حذف شد.`
+10. Reusing the same email later creates a new account rather than restoring the deleted account.
 
-Do not tell a Store reviewer that deletion is instantaneous if retained records still require review. Do not replace this path with a support-only email.
+A retention-protected account receives the pending/review state rather than a false completion message. Do not replace this path with support-only email.
 
 ## Store reviewer note
 
 `یکی هست` is being submitted as an Email-first Technical Beta. Reviewers can evaluate app launch, production bootstrap, email authentication, secure session persistence, listener profile/onboarding/training flow, and direct Privacy/Terms/Account Deletion/Support links. Caller voice, payment, KYC, payout, telephony and production phone/SMS flows are intentionally disabled/fail-closed in this build. No mock provider or development OTP is required or offered.
 
-If the review account requires access to an email inbox for OTP, create a dedicated reviewer test account only through an approved Store-account workflow; never put an OTP, password, private key or production secret in source or public listing metadata.
+If review requires an inbox-accessible test account, create a dedicated reviewer account only through the approved Store-account workflow; never put an OTP, password, private key or production secret in source or public listing metadata.
 
 ## Screenshot capture plan
 
-Screenshots must show actual in-app experience; do not submit speculative future Caller/payment screens.
+Use real in-app screens only; do not submit speculative future Caller/payment screens.
 
-Capture at least these four portrait states on a clean test account:
+Capture at least four portrait states on a clean test account:
 
 1. Home — brand, human-listening proposition and listener CTA.
-2. Email authentication — the real email login surface with no live OTP exposed in the screenshot.
-3. Listener profile — nickname/gender/language selection with safe dummy data.
-4. Listener training/application — an actual current training/onboarding screen.
+2. Email authentication — real login surface, with no live OTP visible.
+3. Listener profile — nickname/gender/language selection using safe dummy data.
+4. Listener training/application — a real current training/onboarding state.
 
 Optional fifth screenshot:
 
 5. Legal/support footer — Privacy, Terms, Account Deletion and Support visible.
 
-Google Play currently requires at least two screenshots and recommends at least four 1080px+ portrait screenshots for app recommendation surfaces. Apple accepts one to ten screenshots and requires valid device-size screenshots; for an iPhone-only first release, capture the highest accepted iPhone size available in the Store tooling and let App Store Connect scale when allowed.
-
-Never capture real user email, OTP, session identifiers, admin data or production secrets in Store screenshots.
+Google Play currently requires at least two screenshots and recommends at least four 1080px+ portrait screenshots for recommendation surfaces. Apple accepts one to ten screenshots and requires valid device-size screenshots. Never expose a real user email, OTP, session identifier, admin data or secret.
 
 ## Artwork still required
 
 The source still lacks final approved production raster artwork. Before signed builds:
 
-- Android/Expo launcher source: approved square PNG, ideally 1024x1024 source quality.
-- Google Play listing icon: 512x512 PNG per Play requirements.
-- Android adaptive foreground/background artwork if the chosen icon needs adaptive treatment.
-- iOS app icon generated into the native asset catalog through the Expo build pipeline.
-- Screenshot frames/background copy only after raw screenshots are captured from the signed or release-equivalent build.
+- approved square launcher source, ideally 1024x1024 PNG;
+- Google Play listing icon, 512x512 PNG;
+- Android adaptive foreground/background artwork if needed;
+- iOS app icon generated into the native asset catalog through the Expo build pipeline;
+- screenshot framing/copy only after raw release-equivalent screenshots exist.
 
-Do not add a random placeholder icon merely to satisfy a build. First Store binaries should carry the approved brand asset.
+Do not ship a random placeholder icon merely to satisfy a build.
 
 ## Submission-day blockers only
 
-After this packet, the remaining non-source blockers are deliberately narrow:
+After source prep, remaining external blockers are:
 
-1. Custom domain purchase and connection, if the custom domain is to be used in Store metadata on day one.
+1. Custom domain purchase/connection if it will be used in Store metadata on day one.
 2. Approved final icon/artwork.
 3. Expo/EAS account access verification for the declared project.
 4. Google Play developer account and app record.
@@ -248,12 +243,12 @@ After this packet, the remaining non-source blockers are deliberately narrow:
 6. Real Android and Apple signing credentials.
 7. Signed production builds from an exact clean SHA.
 8. Real-device smoke test of those exact signed builds.
-9. Final Data Safety/App Privacy/age-rating questionnaire completion in the Store consoles.
-10. Upload screenshots, metadata and exact tested binaries, then submit.
+9. Final Data Safety/App Privacy/age-rating questionnaires in the Store consoles.
+10. Screenshots, metadata and exact tested binaries uploaded and submitted.
 
-No production DB migration, API redeploy or provider-gate opening is required merely to create the first Store records or signed beta binaries.
+No production DB migration or provider-gate opening is required merely to create the first Store records or signed beta binaries. Production API/Web deployment is required whenever this Store-readiness source differs from the live production SHA.
 
-## Official requirement references used for this packet
+## Official requirement references
 
 - Google Play store listing fields and limits: https://support.google.com/googleplay/android-developer/answer/9859152
 - Google Play preview asset requirements: https://support.google.com/googleplay/android-developer/answer/9866151

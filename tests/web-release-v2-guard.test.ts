@@ -9,7 +9,7 @@ test('Web V2 stages before custom-domain promotion and verifies the exact protec
   assert.match(workflow, /Require exact staged deployment READY and protected/);
   assert.match(workflow, /Authenticated smoke exact staged deployment/);
   assert.match(workflow, /vercel\.app/);
-  assert.match(workflow, /vercel curl/);
+  assert.match(workflow, /"\$VERCEL_BIN" curl "\$path" --deployment "\$WEB_EXACT_DEPLOYMENT_URL"/);
 });
 
 test('skip-domain invariant is checked against the real primary custom domain rather than the project vercel.app alias', () => {

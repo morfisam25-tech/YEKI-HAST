@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type CONFIGURE-YEKI-HAST-DOMAINS to attach the purchased domains to UNIQUE Web'
+        description: 'Type CONFIGURE-YEKI-HAST-DOMAINS to attach the registered domains to UNIQUE Web'
         required: true
         type: string
 
@@ -69,7 +69,7 @@ jobs:
           test -x "$VERCEL_BIN"
           "$VERCEL_BIN" --version
 
-      - name: Attach exact purchased domains and canonical redirects to UNIQUE Web
+      - name: Attach exact registered domains and canonical redirects to UNIQUE Web
         shell: bash
         run: |
           set -euo pipefail

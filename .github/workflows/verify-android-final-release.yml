@@ -1,0 +1,178 @@
+name: Verify Android Final Release
+
+on:
+  push:
+    branches:
+      - release/android-final-packet-20260905
+
+permissions:
+  contents: read
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  EAS_CLI_VERSION: 23.2.0
+  BUNDLETOOL_VERSION: 1.18.3
+  EAS_BUILD_ID: eb2b0ad7-dcf1-4dbb-8ca2-876e60ed8209
+  EXPECTED_PROJECT_ID: 58b9f62d-db82-421a-ad59-edccac70c316
+  EXPECTED_BUILD_SOURCE: cee6d1f545e166ff27b8b71e5c7f422af9e7cb1a
+  EXPECTED_PACKAGE: app.yekihast.mobile
+  EXPECTED_VERSION: 1.0.0
+  EXPECTED_VERSION_CODE: '3'
+  EXPECTED_TARGET_SDK: '36'
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Require Expo token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXPO_TOKEN"
+          echo 'EXPO_TOKEN presence PASS'
+
+      - name: Attest exact EAS build metadata
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@${EAS_CLI_VERSION} build:list --platform android --limit 20 --json --non-interactive > /tmp/eas-builds.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const builds = JSON.parse(fs.readFileSync('/tmp/eas-builds.json','utf8'));
+          const b = builds.find((item) => item.id === process.env.EAS_BUILD_ID);
+          if (!b) throw new Error(`Missing EAS build ${process.env.EAS_BUILD_ID}`);
+          const checks = {
+            status: [b.status, 'FINISHED'],
+            platform: [b.platform, 'ANDROID'],
+            distribution: [b.distribution, 'STORE'],
+            projectId: [b.app?.id, process.env.EXPECTED_PROJECT_ID],
+            package: [b.appIdentifier, process.env.EXPECTED_PACKAGE],
+            version: [b.appVersion, process.env.EXPECTED_VERSION],
+            versionCode: [String(b.appBuildVersion ?? ''), process.env.EXPECTED_VERSION_CODE],
+            profile: [b.buildProfile, 'production'],
+            source: [b.gitCommitHash, process.env.EXPECTED_BUILD_SOURCE],
+          };
+          for (const [name,[actual,expected]] of Object.entries(checks)) {
+            if (actual !== expected) throw new Error(`${name}: ${actual} != ${expected}`);
+            console.log(`${name} PASS: ${actual}`);
+          }
+          const url = b.artifacts?.applicationArchiveUrl ?? b.artifacts?.buildUrl;
+          if (!url || !url.endsWith('.aab')) throw new Error(`Missing AAB URL: ${url}`);
+          fs.writeFileSync('/tmp/aab-url.txt', url);
+          fs.writeFileSync('/tmp/eas-build-id.txt', b.id + '\n');
+          NODE
+
+      - name: Download exact signed AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android-release-packet
+          curl --fail --location --retry 3 --output android-release-packet/yeki-hast-1.0.0-vc3.aab "$(cat /tmp/aab-url.txt)"
+          test -s android-release-packet/yeki-hast-1.0.0-vc3.aab
+          file android-release-packet/yeki-hast-1.0.0-vc3.aab
+          sha256sum android-release-packet/yeki-hast-1.0.0-vc3.aab | tee android-release-packet/AAB_SHA256.txt
+
+      - name: Verify archive and signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=android-release-packet/yeki-hast-1.0.0-vc3.aab
+          unzip -t "$AAB" >/tmp/unzip-test.txt
+          tail -n 2 /tmp/unzip-test.txt
+          unzip -l "$AAB" | grep -q 'base/manifest/AndroidManifest.xml'
+          jarsigner -verify -verbose "$AAB" >/tmp/jarsigner.txt 2>&1
+          grep -q 'jar verified' /tmp/jarsigner.txt
+          grep 'jar verified' /tmp/jarsigner.txt
+          echo 'AAB archive/signature PASS'
+
+      - name: Verify exact manifest policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=android-release-packet/yeki-hast-1.0.0-vc3.aab
+          BUNDLETOOL=/tmp/bundletool-all-${BUNDLETOOL_VERSION}.jar
+          curl --fail --location --retry 3 \
+            --output "$BUNDLETOOL" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar "$BUNDLETOOL" dump manifest --bundle="$AAB" > android-release-packet/AndroidManifest.xml
+          MANIFEST=android-release-packet/AndroidManifest.xml
+          grep -F 'package="app.yekihast.mobile"' "$MANIFEST"
+          grep -F 'android:versionCode="3"' "$MANIFEST"
+          grep -F 'android:versionName="1.0.0"' "$MANIFEST"
+          grep -E 'android:targetSdkVersion="36"' "$MANIFEST"
+          grep -E 'android:minSdkVersion="24"' "$MANIFEST"
+          grep -o 'android.permission.[A-Z0-9_]*' "$MANIFEST" | sort -u | grep '^android.permission.' > android-release-packet/DECLARED_PERMISSIONS.txt || true
+          cat android-release-packet/DECLARED_PERMISSIONS.txt
+          PROHIBITED='android.permission.(DUMP|SYSTEM_ALERT_WINDOW|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS|WRITE_CONTACTS|READ_CALL_LOG|WRITE_CALL_LOG|READ_SMS|RECEIVE_SMS|SEND_SMS|AD_ID)'
+          if grep -Eq "$PROHIBITED" "$MANIFEST"; then
+            echo '::error::A prohibited Android permission is present in the final Store AAB.'
+            exit 1
+          fi
+          grep -q '^android.permission.INTERNET$' android-release-packet/DECLARED_PERMISSIONS.txt
+          echo 'PACKAGE=app.yekihast.mobile' > android-release-packet/RELEASE_IDENTITY.txt
+          echo 'VERSION=1.0.0' >> android-release-packet/RELEASE_IDENTITY.txt
+          echo 'VERSION_CODE=3' >> android-release-packet/RELEASE_IDENTITY.txt
+          echo 'TARGET_SDK=36' >> android-release-packet/RELEASE_IDENTITY.txt
+          echo 'EAS_BUILD_ID=eb2b0ad7-dcf1-4dbb-8ca2-876e60ed8209' >> android-release-packet/RELEASE_IDENTITY.txt
+          echo 'EAS_SOURCE=cee6d1f545e166ff27b8b71e5c7f422af9e7cb1a' >> android-release-packet/RELEASE_IDENTITY.txt
+          echo 'Android manifest policy PASS'
+
+      - name: Generate and verify Google Play visual assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/mobile/scripts/generate-artwork.mjs
+          node apps/mobile/scripts/generate-play-feature-graphic.mjs
+          cp apps/mobile/assets/generated/play-store-icon.png android-release-packet/app-icon-512.png
+          cp apps/mobile/assets/store/play-feature-graphic-1024x500.png android-release-packet/feature-graphic-1024x500.png
+          python3 - <<'PY'
+          import pathlib, struct
+          checks = {
+              pathlib.Path('android-release-packet/app-icon-512.png'): (512,512),
+              pathlib.Path('android-release-packet/feature-graphic-1024x500.png'): (1024,500),
+          }
+          for p, expected in checks.items():
+              d=p.read_bytes(); assert d[:8] == b'\x89PNG\r\n\x1a\n'
+              wh=struct.unpack('>II', d[16:24]); print(p, wh, 'color_type', d[25], 'bytes', len(d))
+              assert wh == expected
+              assert len(d) < 15*1024*1024
+          assert pathlib.Path('android-release-packet/feature-graphic-1024x500.png').read_bytes()[25] == 2
+          print('Google Play visual assets PASS')
+          PY
+
+      - name: Finalize packet checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd android-release-packet && sha256sum app-icon-512.png feature-graphic-1024x500.png AndroidManifest.xml DECLARED_PERMISSIONS.txt RELEASE_IDENTITY.txt > SHA256SUMS.txt)
+          cat android-release-packet/RELEASE_IDENTITY.txt
+          cat android-release-packet/AAB_SHA256.txt
+          echo 'ANDROID_FINAL_RELEASE_PACKET=PASS'
+
+      - name: Upload final Android release packet
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-android-final-release-v1.0.0-vc3
+          path: android-release-packet/
+          if-no-files-found: error
+          retention-days: 90

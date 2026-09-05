@@ -121,14 +121,27 @@ jobs:
           grep -F 'android:versionName="1.0.0"' "$MANIFEST"
           grep -E 'android:targetSdkVersion="36"' "$MANIFEST"
           grep -E 'android:minSdkVersion="24"' "$MANIFEST"
-          grep -o 'android.permission.[A-Z0-9_]*' "$MANIFEST" | sort -u | grep '^android.permission.' > android-release-packet/DECLARED_PERMISSIONS.txt || true
-          cat android-release-packet/DECLARED_PERMISSIONS.txt
+
+          # Only <uses-permission> entries are permissions requested by the app.
+          # android.permission.DUMP can also appear as android:permission on AndroidX
+          # receivers, where it protects the receiver rather than granting DUMP to us.
+          grep '<uses-permission' "$MANIFEST" \
+            | grep -o 'android:name="android.permission.[A-Z0-9_]*"' \
+            | sed 's/^android:name="//;s/"$//' \
+            | sort -u > android-release-packet/REQUESTED_PERMISSIONS.txt || true
+          cat android-release-packet/REQUESTED_PERMISSIONS.txt
+
           PROHIBITED='android.permission.(DUMP|SYSTEM_ALERT_WINDOW|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS|WRITE_CONTACTS|READ_CALL_LOG|WRITE_CALL_LOG|READ_SMS|RECEIVE_SMS|SEND_SMS|AD_ID)'
-          if grep -Eq "$PROHIBITED" "$MANIFEST"; then
-            echo '::error::A prohibited Android permission is present in the final Store AAB.'
+          if grep -Eq "$PROHIBITED" android-release-packet/REQUESTED_PERMISSIONS.txt; then
+            echo '::error::A prohibited requested Android permission is present in the final Store AAB.'
             exit 1
           fi
-          grep -q '^android.permission.INTERNET$' android-release-packet/DECLARED_PERMISSIONS.txt
+          grep -q '^android.permission.INTERNET$' android-release-packet/REQUESTED_PERMISSIONS.txt
+
+          # Record protected components separately so receiver guards are not mistaken
+          # for app-requested privileges during later audits.
+          grep 'android:permission="android.permission.' "$MANIFEST" > android-release-packet/PROTECTED_COMPONENTS.txt || true
+
           echo 'PACKAGE=app.yekihast.mobile' > android-release-packet/RELEASE_IDENTITY.txt
           echo 'VERSION=1.0.0' >> android-release-packet/RELEASE_IDENTITY.txt
           echo 'VERSION_CODE=3' >> android-release-packet/RELEASE_IDENTITY.txt
@@ -164,7 +177,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd android-release-packet && sha256sum app-icon-512.png feature-graphic-1024x500.png AndroidManifest.xml DECLARED_PERMISSIONS.txt RELEASE_IDENTITY.txt > SHA256SUMS.txt)
+          (cd android-release-packet && sha256sum app-icon-512.png feature-graphic-1024x500.png AndroidManifest.xml REQUESTED_PERMISSIONS.txt PROTECTED_COMPONENTS.txt RELEASE_IDENTITY.txt > SHA256SUMS.txt)
           cat android-release-packet/RELEASE_IDENTITY.txt
           cat android-release-packet/AAB_SHA256.txt
           echo 'ANDROID_FINAL_RELEASE_PACKET=PASS'

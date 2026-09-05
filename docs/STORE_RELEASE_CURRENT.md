@@ -2,134 +2,165 @@
 
 Last verified: 2026-09-05
 
-This file is the current Store-release override for older packet sections. Use it together with `STORE_SUBMISSION_ANSWERS.md` and `MOBILE_STORE_RELEASE.md`, but prefer the live values below whenever older files conflict.
+This file is the authoritative current Store-release status. When older Store docs conflict with it, use this file and `GOOGLE_PLAY_FINAL_PACKET.md`.
 
-## Production runtime already verified
+## Production runtime — VERIFIED
 
 - Repository: `morfisam25-tech/YEKI-HAST`
-- Current mobile/artwork `main`: `459559fa9970620ffefa429528ee88c818daa23a`
-- Foundation QA on that `main`: Actions run `33941231568` — SUCCESS, including Android export and iOS export.
-- Web production release V2: Actions run `33931970953` / run #2 — SUCCESS
-- Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY
-- Web production source SHA: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`
-- Production API remains `https://yeki-hast-unique-6ff0.vercel.app`; no redundant API/Admin/DB release is required for Store preparation.
+- Current runtime/config `main`: `501c5227ea288a451301f5ce7e81ae7b652539f6`
+- `main` includes the Android Store permission hardening merged through PR #26.
+- Web production release V2: Actions run `33931970953` — SUCCESS.
+- Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY.
+- Production API: `https://yeki-hast-unique-6ff0.vercel.app`.
+- No API/Admin/DB redeploy is required merely for Store metadata preparation.
 
-## Public Store URLs — use these now
+## Public Store URLs — USE THESE
 
 - Website: `https://yekihast.app`
-- Privacy policy: `https://yekihast.app/privacy`
+- Privacy: `https://yekihast.app/privacy`
 - Terms: `https://yekihast.app/terms`
-- Account deletion / privacy choices: `https://yekihast.app/account/delete`
-- Support email: `sales@uniqueholding.com.tr`
+- Account deletion: `https://yekihast.app/account/delete`
+- Support: `sales@uniqueholding.com.tr`
 
-Verified redirect policy:
+Primary-domain `/`, `/privacy`, `/terms`, and `/account/delete` were production-smoke-tested. Secondary/www domains redirect to the primary domain.
 
-- `https://www.yekihast.app` -> `https://yekihast.app` with HTTP 308
-- `https://yeki-hast.com` -> `https://yekihast.app` with HTTP 308
-- `https://www.yeki-hast.com` -> `https://yekihast.app` with HTTP 308
+## Account deletion — STORE-READY
 
-The primary domain returned HTTP 200 for `/`, `/privacy`, `/terms`, and `/account/delete` after production promotion.
+- clean account -> physical deletion;
+- retention-sensitive account -> `202 review_required`;
+- active operations admin -> `409` before destructive side effects;
+- public reviewer-facing deletion page -> `https://yekihast.app/account/delete`.
 
-## Account deletion status
-
-The current production deletion path is real and Store-usable:
-
-- clean account -> physical deletion
-- retention-sensitive account -> `202 review_required`
-- active operations admin -> `409` before destructive side effects
-- reviewer-facing page: `https://yekihast.app/account/delete`
-
-Do not describe the current implementation as support-only or deletion-request-only.
+Do not describe the current implementation as support-only or request-only deletion.
 
 ## Mobile identity
 
-- App name: `یکی هست`
+- App: `یکی هست`
 - Version: `1.0.0`
 - Android package: `app.yekihast.mobile`
 - iOS bundle ID: `app.yekihast.mobile`
 - Expo owner: `saimorfis-team`
 - EAS project ID: `58b9f62d-db82-421a-ad59-edccac70c316`
-- Expo SDK baseline: `~57.0.9`
-- Android API target baseline: 36
+- Expo SDK: `~57.0.9`
+- Android target baseline: API 36
 - iOS/Xcode baseline: 26
 
 ## Expo / EAS access — VERIFIED
 
-Read-only verification run `33941384314` succeeded after installing the `EXPO_TOKEN` repository secret.
-
-Verified facts:
+Verification run `33941384314` succeeded.
 
 - authenticated Expo identity: `saimorfi`;
-- account access: owner of both `saimorfi` and `saimorfis-team`;
-- declared project resolves exactly to `@saimorfis-team/yeki-hast`;
-- EAS project ID matches `58b9f62d-db82-421a-ad59-edccac70c316`;
-- Expo plan: Free;
-- current billing period build allowance observed on 2026-09-05: 15 Android + 15 iOS, 0 used before the production Android build;
-- estimated overage at verification time: $0.
-
-Do not create a replacement Expo project.
+- owner access to `saimorfi` and `saimorfis-team`;
+- exact EAS project: `@saimorfis-team/yeki-hast`;
+- project ID matches the value above;
+- Expo plan observed: Free;
+- no replacement Expo project or credential is needed.
 
 ## Production artwork — LOCKED
 
-The final app-icon direction is approved: black/graphite three-dimensional tile with warm gold/ivory opposing conversation bubbles and no text inside the Store icon.
+Approved direction: black/graphite 3D tile with warm gold/ivory opposing conversation bubbles and no text.
 
-The repository does not commit generated raster binaries. Instead it commits the deterministic generator at `apps/mobile/scripts/generate-artwork.mjs`, which produces:
+Deterministic generator: `apps/mobile/scripts/generate-artwork.mjs`.
 
-- `app-icon.png` — 1024x1024, used by iOS and the standard Android icon;
-- `android-adaptive-foreground.png` — 1024x1024 transparent adaptive foreground;
-- `android-monochrome.png` — 1024x1024 Android themed-icon mark;
-- `play-store-icon.png` — 512x512 listing asset.
+Generated release assets include:
 
-`apps/mobile/app.json` is wired to those generated outputs. The mobile package runs the generator before Android/iOS exports and through `eas-build-pre-install`, so EAS receives the artwork before native prebuild/signing. A Foundation regression test verifies the PNG signatures/dimensions and config wiring.
+- app icon 1024×1024;
+- Android adaptive foreground 1024×1024;
+- Android monochrome mark 1024×1024;
+- Google Play listing icon 512×512;
+- Google Play feature graphic 1024×500 opaque PNG.
 
-The icon-design decision is closed unless a Store platform itself rejects the asset for a concrete technical reason.
+Do not reopen the icon direction unless a Store returns a concrete technical rejection.
 
-## Android signed Store binary — COMPLETE
+## Android signed Store binary — FINAL BINARY COMPLETE
 
-A real signed Android production Store build completed successfully on EAS.
+The old versionCode 2 AAB is superseded. Use only the hardened versionCode 3 release.
 
-- EAS build ID: `6881d817-6578-4725-8afd-933b91dd62f8`
-- Platform: Android
-- Distribution: Store
-- Build profile: `production`
-- App version: `1.0.0`
-- Version code: `2`
-- Package: `app.yekihast.mobile`
-- Build source commit: `1e9484bc34191bbcbb51bfea9e38934f191fff7d`
-- That commit differs from mobile/artwork `main` only by the one-off GitHub workflow used to invoke the build; app/runtime source is the verified `459559fa9970620ffefa429528ee88c818daa23a` baseline.
-- EAS used the existing remote Android keystore: `Build Credentials 9ASUP-JZQW (default)`.
-- Build completed FINISHED and produced an `.aab` Store archive.
+Final build facts:
 
-Do not generate or replace the Android signing key unless Google Play or credential evidence later proves it is necessary.
+- GitHub build workflow run: `33946371769` — SUCCESS;
+- source commit: `cee6d1f545e166ff27b8b71e5c7f422af9e7cb1a`;
+- runtime/config parent: `501c5227ea288a451301f5ce7e81ae7b652539f6`;
+- app version: `1.0.0`;
+- versionCode: `3`;
+- package: `app.yekihast.mobile`;
+- distribution: Store;
+- profile: production;
+- final AAB SHA-256: `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3`;
+- existing EAS-managed Android signing key retained.
 
-## iOS signed Store binary — BLOCKED ONLY ON APPLE SIGNING SETUP
+Exact AAB verification has confirmed:
 
-The production iOS build was attempted from the same verified mobile/artwork baseline using the `production` EAS profile.
+- archive/signature integrity;
+- package identity;
+- Android 16 / targetSdkVersion 36;
+- no requested camera, microphone, location, contacts, SMS/call-log or advertising-ID permission;
+- unused overlay and legacy external-storage permissions were removed before this build.
 
-Observed result:
+Do not rebuild Android unless app/runtime source changes or Google Play returns an evidence-backed binary problem.
 
-- EAS project identity and Expo auth: PASS;
-- remote iOS credentials were found on the Expo server;
-- remote build number incremented from 1 to 2 during the failed setup attempt;
-- EAS stopped before creating an IPA with: `Distribution Certificate is not validated for non-interactive builds` and `Credentials are not set up. Run this command again in interactive mode.`
+## Android Store screenshots — ACTIVE FINAL QA
 
-This is now an external Apple signing-credential setup blocker, not an application-code blocker. The next authorized Apple/EAS interactive credential setup should configure/validate the production Distribution Certificate and distribution Provisioning Profile for bundle ID `app.yekihast.mobile`. After that, rerun the production iOS build; because remote app versioning is enabled, expect the next build number to advance again.
+The first Linux emulator attempt failed because the GitHub-hosted Linux runner had no KVM hardware acceleration and the API 36 emulator timed out before boot. This was an infrastructure limitation, not an app failure.
 
-## Remaining blockers
+The screenshot workflow was moved to an accelerated macOS ARM64 runner. Current run:
 
-1. Complete the one-time interactive Apple/EAS production signing setup for iOS.
-2. Build the signed production iOS IPA after credentials validate.
-3. Create/connect the Google Play developer account and app record if not already present.
-4. Create/connect the Apple Developer/App Store Connect app record if not already present.
-5. Smoke-test the exact signed artifacts on their real distribution paths.
-6. Capture release-equivalent screenshots with no real email, OTP, session, admin or secret data.
-7. File Google Play Data Safety, Apple App Privacy, age/content rating and final listing metadata from the exact submitted build behavior.
-8. Upload the exact tested binaries and submit to the selected testing/public tracks.
+- Actions run: `33947827376`;
+- exact input: final versionCode 3 AAB with the SHA-256 above;
+- state at last verification: in progress.
+
+The screenshots must come from the actual final AAB and must not expose real email, OTP, session/admin data or secrets. No speculative Caller/payment/KYC screenshots are allowed.
+
+## Google Play filing packet — READY
+
+Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for:
+
+- listing copy;
+- reviewer access path;
+- Data Safety evidence baseline;
+- SDK/permission/ads baseline;
+- policy/content questionnaire baseline;
+- exact Android binary identity;
+- external-only Play Console steps.
+
+The repository-side Google Play preparation is therefore reduced to finishing the screenshot QA. The remaining Play work after that requires an actual Google Play developer account / console.
+
+## Google Play developer account evidence
+
+Connected Gmail accounts were searched for clear Google Play Console / developer-account registration evidence. No reliable existing developer-account registration confirmation was found. Generic consumer Google Play emails are not evidence of a Play Console developer account.
+
+Therefore do not assume a developer account already exists. Account creation/verification and any registration fee remain external owner-controlled steps.
+
+## iOS / Apple — INTENTIONALLY PARKED
+
+The last production iOS attempt reached remote credentials and stopped because the Distribution Certificate was not validated for non-interactive builds. Apple setup is intentionally parked while Android is completed first.
+
+Do not perform Apple purchases, membership enrollment, credential changes or iOS retries until the owner resumes the Apple phase.
+
+## Remaining work, in order
+
+### Android-first
+
+1. Finish exact-AAB screenshot capture/QC.
+2. Confirm or create the Google Play developer account and complete required identity/organization verification.
+3. Pay any Google registration fee only after explicit owner approval.
+4. Create the Play app record for `app.yekihast.mobile`.
+5. Upload the exact versionCode 3 AAB and locked Store assets.
+6. File listing/App access/Data Safety/content rating/target audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
+7. Run Play pre-launch/review checks and fix only evidence-backed findings.
+8. Submit to the selected track after the exact uploaded artifact passes the desired smoke gate.
+
+### Apple later
+
+1. Resume one-time interactive Apple/EAS production signing setup.
+2. Build signed iOS IPA.
+3. Complete App Store Connect filing and submission.
 
 ## Do not do
 
-- Do not rerun Production DB migrations for Store preparation.
+- Do not rerun Production DB migrations.
 - Do not redeploy API/Admin without a real source/config change requiring it.
-- Do not open Caller/payment/KYC/payout/telephony/SMS gates just to satisfy a Store listing.
-- Do not place Expo, Apple, Google or signing credentials in source, logs or chat.
-- Do not use Evidence Axis resources, projects or secrets for Listener.
+- Do not open Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
+- Do not replace Android signing credentials.
+- Do not put Expo/Apple/Google/signing secrets in source, logs or chat.
+- Do not touch Evidence Axis.

@@ -1,112 +1,129 @@
 # Launch Status — یکی هست
 
-Last reviewed: 2026-09-03
+Last verified: 2026-09-05
 
-This file is the repository source of truth for current launch state. Re-check live GitHub, Vercel, Neon and provider state before trusting older chat notes.
+This file is the repository source of truth for the current technical release. Re-check live GitHub/Vercel/provider state before trusting older chat notes.
 
 ## Executive status
 
-**Technical Beta production release: PASS for the currently opened scope.**
+**Email-first Technical Beta production release: PASS for the currently opened scope.**
 
-The production database, API, Gmail Email OTP path, public Web and protected Admin have all passed their guarded production gates. There is no known code/runtime blocker remaining for the current Email-first Technical Beta scope.
+Production DB, API, Gmail Email OTP, public Web, custom domains and protected Admin are healthy for the released scope. Caller voice, payment, KYC, payout, telephony and production phone/SMS remain intentionally fail-closed.
 
-This does **not** mean full commercial launch, Caller voice, payments, KYC, payouts, telephony, production phone/SMS OTP or native app-store release are open. Those capabilities remain intentionally fail-closed behind their own external/provider/commercial gates.
+Native Store release is not yet complete because signed binaries, developer-account records and final production artwork still require external account/credential or visual-approval work.
 
 ## Current source and QA
 
-- Current `main`: `9b7629915a8d753e70e97973e3ff035c86823171`.
-- Foundation QA run `#927` / Actions run `33818814010`: **SUCCESS**.
-- The full QA gate passed: dependency lock validation, runtime syntax, Foundation tests, invariant validator, Email-first production security verifier, workspace typecheck, Web build, Admin build, Android export, iOS export, API bundle and artifact upload.
-- Production Vercel scope remains pinned to Team `UNIQUE` only. Evidence Axis is excluded from Listener release workflows.
-- Automatic Vercel Git deployment remains disabled; production mutations are guarded manual workflows.
-- Release tooling remains locked to Node `22.23.1`, npm `10.9.8` and the committed dependency lock.
+- Current verified `main`: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`.
+- Foundation QA on this exact `main`: Actions run `33930845617` — **SUCCESS**.
+- QA passed dependency lock validation, runtime syntax, Foundation tests, invariant validation, Email-first production security verification, workspace typecheck, Web/Admin builds, Android/iOS exports, API bundle and artifact upload.
+- Vercel production scope remains Team `UNIQUE` only (`team_GmseY3ibD05FWemVhLElL3hI`).
+- Evidence Axis is excluded from Listener release workflows.
 
 ## Production database — PASS
 
-- Production project: `weathered-bar-87205560` — `yeki-hast-production`.
-- Region: `aws-us-east-1` (N. Virginia).
-- Default branch: `production` (`br-plain-paper-aucjl3y6`).
+- Neon project: `weathered-bar-87205560` / `yeki-hast-production`.
+- Branch: `production` (`br-plain-paper-aucjl3y6`).
 - Database: `neondb`.
-- Production migration run `#5` / Actions run `33572791927`: **SUCCESS**.
-- Exact target guard, migration-history verification and post-migration read-only verifier: **PASS**.
-- Official repository migrations `0001_initial.sql` and `0002_email_auth.sql` are present in production history.
-- Test-only Neon projects must never be used for production.
+- Region: `aws-us-east-1`.
+- Official migrations `0001_initial.sql` and `0002_email_auth.sql` are recorded.
+- Migration + verification previously passed.
+- **Do not rerun migrations for Store preparation.**
 
 ## Production API — PASS
 
-- Vercel team: `UNIQUE` (`team_GmseY3ibD05FWemVhLElL3hI`).
-- API project: `prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy`.
+- Project: `prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy`.
 - Canonical API: `https://yeki-hast-unique-6ff0.vercel.app`.
-- Proven production source: `bfc820a17567aaed7df793ad3121794dc59cd8d7c`.
-- Proven production deployment: `dpl_8Tez3zqFLJcnjgzvpgxU6Z9LZ3YB` — READY.
-- Controlled API deploy run `#8` / Actions run `33673505914`: **SUCCESS**.
-- Production DB verification: PASS.
-- `/health`: PASS.
-- `/ready`: PASS.
-- `/v1/bootstrap`: expected safe behavior PASS.
-- Real Email OTP E2E through Gmail API: PASS, including delivery/readback, verification, authenticated session, logout and revocation checks.
+- Current live release SHA reported by `/health`: `005809afa503803e5c3405e42d1de73b63931479`.
+- Verified live after the Web/domain release:
+  - `/health`: HTTP 200
+  - `/ready`: HTTP 200
+  - `/v1/bootstrap`: HTTP 200
+- No API runtime source changed during the final Web workflow fixes, so no redundant API redeploy was performed.
 
-## Google Workspace / Gmail production auth — PASS
+## Gmail production auth — PASS
 
-- Gmail API is enabled for the production Google Cloud project.
+- Gmail API enabled.
 - Service account: `yeki-hast-production-mail@yeki-hast-production.iam.gserviceaccount.com`.
-- Workspace domain-wide delegation is configured.
+- Workspace DWD configured.
 - OAuth client ID: `116733941915896907799`.
-- Authorized scopes are exactly:
-  - `https://www.googleapis.com/auth/gmail.send`
-  - `https://www.googleapis.com/auth/gmail.readonly`
-- Repository Secret `PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON` is installed.
-- Production sender/impersonated identity remains `sales@uniqueholding.com.tr` with sender name `یکی هست`.
-- SMTP/App Password is not part of the production release path.
+- Authorized scopes are exactly `gmail.send` and `gmail.readonly`.
+- Production sender: `sales@uniqueholding.com.tr`.
+- Sender name: `یکی هست`.
+- Real Email OTP E2E previously passed.
 
-## Production Web/Admin — PASS
-
-Frontend application source was built from release source `39b3e58a352db6b61338739b4d20f19c2006f125`. Later `main` changes through `9b762991...` changed only release verification workflow/test metadata for this frontend cutover; the verifier explicitly confirmed frontend/runtime source equivalence before promotion.
-
-### Web
+## Production Web — PASS
 
 - Project: `prj_afhSiMYpsCfIAxuOmotLAWBvTMDg`.
-- Canonical: `https://web-unique-6ff0.vercel.app`.
-- Exact verified V4 deployment: `https://web-gax4jiw5k-unique-6ff0.vercel.app`.
-- Exact deployment identity/READY: PASS.
-- Protected pre-promotion authenticated smoke: PASS.
-- Promoted to public production: PASS.
-- Public canonical smoke: PASS for:
-  - `/`
-  - `/privacy`
-  - `/terms`
-  - `/account/delete`
+- Vercel canonical: `https://web-unique-6ff0.vercel.app`.
+- Primary product domain: `https://yekihast.app`.
+- Final Web release workflow: `Deploy Production Web V2`.
+- Successful production run: Actions run `33931970953` / run #2 — **SUCCESS**.
+- Exact promoted deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF`.
+- Exact deployment source SHA: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`.
+- Deployment state: READY.
 
-### Admin
+The guarded release passed:
+
+- successful Foundation QA attestation for the source;
+- protected staged deployment;
+- exact staged deployment identity/READY/protection check;
+- authenticated staged smoke;
+- proof that the primary custom domain stayed on the previous deployment during staging;
+- promotion only after staged verification;
+- post-promotion deployment/domain-policy verification;
+- public canonical surface verification;
+- rollback was not needed.
+
+### Public domain policy — PASS
+
+Primary:
+
+- `https://yekihast.app` — HTTP 200.
+
+Permanent redirects:
+
+- `https://www.yekihast.app` -> `https://yekihast.app` — HTTP 308.
+- `https://yeki-hast.com` -> `https://yekihast.app` — HTTP 308.
+- `https://www.yeki-hast.com` -> `https://yekihast.app` — HTTP 308.
+
+Custom-domain smoke passed for:
+
+- `/`
+- `/privacy`
+- `/terms`
+- `/account/delete`
+
+## Production Admin — PASS
 
 - Project: `prj_l18v3f003ORfiN6hKxYwJbvVPzzC`.
 - Canonical: `https://admin-unique-6ff0.vercel.app`.
-- Exact verified V4 deployment: `https://admin-4xoi0aw5d-unique-6ff0.vercel.app`.
-- Exact deployment identity/READY: PASS.
-- Authenticated Admin SSR smoke: PASS.
-- Promoted: PASS.
-- Canonical Admin protection after promotion: PASS.
+- Last checked production deployment: `dpl_6TTNLifqhE6uCZTqw26KCXB35F6U` — READY.
+- The final Web-only release did not redeploy Admin.
 
-### Final frontend verification
+## Account deletion — PASS for Store-facing behavior
 
-- Workflow: `Verify and Promote V4 Frontends`.
-- Run `#2` / Actions run `33820757590`: **SUCCESS**.
-- Both exact staged URLs were confirmed protected before authenticated smoke.
-- Admin smoke: PASS.
-- Web smoke: PASS.
-- Admin promotion: PASS; canonical remained protected.
-- Web promotion: PASS; canonical public surfaces verified.
-- Rollback step was not needed and was skipped.
+Current production behavior:
 
-## Current Technical Beta scope
+- clean account -> physical deletion;
+- retention-sensitive account -> `202 review_required`;
+- active operations admin -> `409` before destructive side effects;
+- public deletion resource -> `https://yekihast.app/account/delete`.
+
+The production admin account must not be used as a destructive deletion test target.
+
+Older notes describing the implementation as deletion-request-only are superseded.
+
+## Current released scope
 
 ### Open / technically released
 
-- Email-first authentication through real Gmail API production transport.
-- Production API and database for the released Email-first scope.
-- Public Web landing/support/legal/account-deletion-request surfaces.
+- Email-first authentication through real Gmail API transport.
+- Secure account sessions.
+- Production API and DB for the released Email-first scope.
+- Public Web landing, legal/support and account-deletion surfaces.
 - Protected Admin operations shell.
-- Listener onboarding/training/assessment foundations only to the extent already source- and production-gated.
+- Listener onboarding/training/assessment foundations to the extent exposed by the current gates.
 
 ### Intentionally closed / fail-closed
 
@@ -115,39 +132,52 @@ Frontend application source was built from release source `39b3e58a352db6b613387
 - KYC provider flow.
 - Payout provider flow.
 - Telephony.
-- Production SMS/phone OTP until a real approved provider/template gate is satisfied.
-- Any commercial feature that depends on a still-closed provider.
+- Production SMS/phone OTP until its real provider/template gate is satisfied.
 
-These are not defects in the Technical Beta release; they are deliberately closed capabilities and must not be represented as production-ready.
+## Mobile / Store readiness
 
-## External/non-code gates still remaining
+Mobile identity remains:
 
-These do not require another API/DB/frontend redeploy unless their scope changes source or configuration:
+- name: `یکی هست`
+- version: `1.0.0`
+- Android package: `app.yekihast.mobile`
+- iOS bundle ID: `app.yekihast.mobile`
+- Expo owner: `saimorfis-team`
+- EAS project ID: `58b9f62d-db82-421a-ad59-edccac70c316`
+- Expo SDK baseline: `~57.0.9`
+- Android API target baseline: 36
+- iOS/Xcode baseline: 26
 
-1. **Administrative/legal/licensing process** for operating the service — handled separately from this repository release.
-2. **Commercial hosting eligibility** must be re-checked against the then-current Vercel plan/terms before paid traffic is opened. No plan purchase/upgrade is authorized by this document.
-3. **Caller/payment/KYC/payout/telephony/SMS** each require their real provider contract/configuration/credentials and live verification before opening.
-4. **Native store release** still requires real Expo/EAS linkage where applicable, approved production artwork, Android signing/store credentials, Apple signing/App Store credentials, final metadata/privacy declarations and a verified signed production build.
-5. **Final destructive account deletion/anonymization** remains blocked until retention rules are defined for financial ledger, payment/payout, safety, disputes and other retained/open records. The current production surface implements the safe deletion-request stage only.
+Android and iOS source exports pass Foundation QA. Signed Store binaries have not yet been produced.
 
-## Repository governance note
+Current Store URL/remaining-blocker override: `docs/STORE_RELEASE_CURRENT.md`.
 
-- As last read on 2026-09-03, GitHub branch `main` reports `protected: false`.
-- This did not invalidate the guarded Technical Beta production release because all production mutation workflows independently require `main`, exact manual confirmation, target guards and QA lineage.
-- Branch protection is nevertheless recommended repository hardening and should be enabled when repository governance is configured; it is not a reason to mutate the already-verified production runtime.
+## Remaining Store blockers
 
-## Release conclusion
+1. Final approved production icon/artwork.
+2. Authenticated access verification for the declared Expo/EAS project.
+3. Google Play developer account/app record.
+4. Apple Developer/App Store Connect account/app record.
+5. Real Android signing credential.
+6. Real Apple distribution/signing credential and provisioning profile.
+7. Signed AAB/IPA from an exact clean release SHA.
+8. Real distribution-path smoke of those exact signed artifacts.
+9. Release-equivalent screenshots.
+10. Final Google Play Data Safety, Apple App Privacy, rating and listing forms.
+11. Upload and submission of the exact tested artifacts.
 
-For the defined **Email-first Technical Beta** scope, the technical production release is complete and verified.
+No DB migration, API redeploy, Admin redeploy or closed-provider opening is required merely to continue Store preparation.
 
-Do not rerun database migration, API deployment or frontend deployment merely to obtain another green check. Reopen a production release only when new source/configuration/provider evidence changes the released scope.
+## Repository governance
+
+- `main` was last observed with branch protection disabled.
+- Guarded production workflows still enforce exact branch/target/manual-confirmation/QA lineage independently.
+- Branch protection remains recommended repository hardening but is not a reason to mutate the verified runtime.
 
 ## Non-negotiable rules
 
-- Do not touch Evidence Axis from Listener release workflows.
-- No production mutation outside the guarded exact Listener targets.
-- Never use test-only Neon projects for production.
-- Never guess provider behavior.
-- Never expose secrets, private identity data, banking data, OTPs or session material.
-- Closed provider capabilities stay fail-closed.
-- Never mark a new launch gate green unless it actually ran and passed.
+- Do not touch Evidence Axis from Listener workflows.
+- Never expose secrets, tokens, signing material, OTPs or session data.
+- Closed provider capabilities remain fail-closed.
+- Never mark a release gate green unless it actually ran and passed.
+- Do not create replacement production credentials/projects merely because account access has not yet been verified.

@@ -148,7 +148,33 @@ Ready/locked:
 - feature graphic — 1024×500 opaque PNG, generated and QC'd;
 - icon direction is closed unless Google Play itself returns a concrete technical rejection.
 
-Screenshots are being generated from the exact final versionCode 3 AAB in the dedicated Store screenshot workflow. Do not substitute speculative Caller/payment/KYC screens and do not expose real email, OTP, session/admin data or secrets.
+## Screenshot package and capture policy
+
+GitHub-hosted Android emulators are not a valid path for this release environment:
+
+- Linux exact-AAB capture run `33947024183` failed because usable KVM acceleration was unavailable;
+- macOS ARM64 exact-AAB capture run `33947827376` failed with `HVF error: HV_UNSUPPORTED` before Android could boot.
+
+These are hosted virtualization failures, not app failures. Do not retry that infrastructure path.
+
+A physical-device screenshot kit was successfully generated from the exact final versionCode 3 AAB:
+
+- kit run: `33948412172` — SUCCESS;
+- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc3`;
+- artifact ID: `9964042649`;
+- artifact digest: `sha256:3053fa2d2f8d8555d8cb79799d20cd10d67d82af17897736999799bc3eada4e3`;
+- expiry: 2026-12-04.
+
+The kit includes an installable APK derived from the exact Store AAB, Windows ADB helpers, checksums, and safety instructions. The APK is re-signed with a disposable screenshot-only key. It is only for visual capture and MUST NOT be uploaded to Google Play.
+
+Capture on a real Android phone at 1080×1920 or higher. Recommended real states:
+
+1. Home / brand proposition + listener CTA.
+2. Listener introduction.
+3. Email sign-in with no personal email or OTP visible.
+4. Caller-closed informational screen; after a safe test login, a listener profile/training screen can replace it if visually stronger.
+
+Do not substitute speculative Caller/payment/KYC screens and never expose real email, OTP, session/admin data or secrets.
 
 ## Content/policy questionnaire baseline
 
@@ -169,18 +195,21 @@ For IARC/content rating and target-audience questions, answer the exact Play Con
 
 These are not app-code blockers:
 
-1. Confirm/create the Google Play developer account and complete identity/organization verification.
-2. Pay any Google developer registration fee only after explicit owner approval.
-3. Create the Play app record for package `app.yekihast.mobile`.
-4. Upload this exact final versionCode 3 AAB.
-5. Fill Store listing, App access, Data Safety, Content rating, Target audience, Ads and other required declarations from this packet.
-6. Upload the locked icon/feature graphic and the final release-equivalent screenshots.
-7. Run Play pre-launch/review checks and fix only evidence-backed findings.
-8. Submit to the chosen testing/public track only after the exact artifact passes the desired smoke gate.
+1. Capture/QC the final physical-device screenshots using the prepared kit.
+2. Confirm/create the Google Play developer account and complete identity/organization verification.
+3. Pay any Google developer registration fee only after explicit owner approval.
+4. Create the Play app record for package `app.yekihast.mobile`.
+5. Upload this exact final versionCode 3 AAB.
+6. Fill Store listing, App access, Data Safety, Content rating, Target audience, Ads and other required declarations from this packet.
+7. Upload the locked icon/feature graphic and final physical-device screenshots.
+8. Run Play pre-launch/review checks and fix only evidence-backed findings.
+9. Submit to the chosen testing/public track only after the exact artifact passes the desired smoke gate.
 
 ## Do not do
 
 - Do not rebuild Android because only listing text/graphics changed.
+- Do not retry hosted Android emulator screenshot runs for this release.
+- Do not upload the screenshot-only APK to Google Play.
 - Do not replace the Android signing key.
 - Do not reopen Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
 - Do not rerun Production DB migrations.

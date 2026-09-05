@@ -1,0 +1,160 @@
+name: Capture Android Store Screenshots
+
+on:
+  push:
+    branches:
+      - release/android-store-screenshots-20260905
+
+permissions:
+  contents: read
+
+env:
+  EAS_AAB_URL: https://expo.dev/artifacts/eas/2_8FV7kmOXXB9pJzyWYXGBc0BpbGwOtMg8C-inbmWgE.aab
+  EXPECTED_AAB_SHA256: 1dadfc076951ca6496a94358551de384c728a4a6a83e64247070a87d0e41e6bc
+  BUNDLETOOL_VERSION: 1.18.3
+  PACKAGE: app.yekihast.mobile
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout evidence source
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download and verify exact production AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output /tmp/yeki-hast.aab "$EAS_AAB_URL"
+          echo "$EXPECTED_AAB_SHA256  /tmp/yeki-hast.aab" | sha256sum --check
+          curl --fail --location --retry 3 \
+            --output /tmp/bundletool.jar \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          echo 'Exact production AAB PASS'
+
+      - name: Generate screenshot-only universal APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -noprompt \
+            -keystore /tmp/screenshot.jks \
+            -storepass android \
+            -keypass android \
+            -alias screenshot \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname 'CN=Screenshot QA,O=Yeki Hast,C=TR'
+          java -jar /tmp/bundletool.jar build-apks \
+            --bundle=/tmp/yeki-hast.aab \
+            --output=/tmp/yeki-hast.apks \
+            --mode=universal \
+            --ks=/tmp/screenshot.jks \
+            --ks-pass=pass:android \
+            --ks-key-alias=screenshot \
+            --key-pass=pass:android
+          unzip -p /tmp/yeki-hast.apks universal.apk > /tmp/yeki-hast-universal.apk
+          test -s /tmp/yeki-hast-universal.apk
+          echo 'Universal screenshot APK PASS'
+
+      - name: Install Android 16 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platform-tools' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          echo no | avdmanager create avd --force --name yeki_api36 --package 'system-images;android-36;google_apis;x86_64'
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+
+      - name: Boot emulator and capture actual app screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p store-screenshots
+          nohup "$ANDROID_HOME/emulator/emulator" \
+            -avd yeki_api36 \
+            -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
+            -gpu swiftshader_indirect \
+            >/tmp/emulator.log 2>&1 &
+
+          adb wait-for-device
+          for i in $(seq 1 60); do
+            if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1' ]; then break; fi
+            sleep 5
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1'
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell wm size 1080x1920
+          adb shell wm density 420
+
+          adb install -r /tmp/yeki-hast-universal.apk
+          adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+          sleep 12
+
+          capture() {
+            local name="$1"
+            adb exec-out screencap -p > "store-screenshots/${name}.png"
+            test -s "store-screenshots/${name}.png"
+          }
+
+          tap_text() {
+            local needle="$1"
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb pull /sdcard/window.xml /tmp/window.xml >/dev/null
+            local coords
+            coords="$(python3 - "$needle" <<'PY'
+          import re, sys, xml.etree.ElementTree as ET
+          needle = sys.argv[1]
+          root = ET.parse('/tmp/window.xml').getroot()
+          for node in root.iter('node'):
+              values = [node.attrib.get('text',''), node.attrib.get('content-desc','')]
+              if any(needle in value for value in values if value):
+                  m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds',''))
+                  if m:
+                      x1,y1,x2,y2 = map(int,m.groups())
+                      print((x1+x2)//2, (y1+y2)//2)
+                      raise SystemExit(0)
+          raise SystemExit(f'UI text not found: {needle}')
+          PY
+          )"
+            adb shell input tap $coords
+            sleep 2
+          }
+
+          capture 01-home
+          tap_text 'می‌خوام شنونده بشم'
+          capture 02-listener-intro
+          tap_text 'ادامه با ایمیل'
+          capture 03-email-auth
+
+          adb shell pm clear "$PACKAGE" >/dev/null
+          adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+          sleep 10
+          tap_text 'اطلاعات شروع Caller'
+          capture 04-caller-closed
+
+          file store-screenshots/*.png
+          python3 - <<'PY'
+          import struct, pathlib
+          for path in sorted(pathlib.Path('store-screenshots').glob('*.png')):
+              data = path.read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n', path
+              w,h = struct.unpack('>II', data[16:24])
+              print(path.name, w, h)
+              assert w == 1080 and h == 1920, (path,w,h)
+          PY
+
+      - name: Upload Play screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-play-screenshots-1080x1920
+          path: store-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 30

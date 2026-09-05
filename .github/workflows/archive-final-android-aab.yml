@@ -1,0 +1,44 @@
+name: Archive Final Android AAB
+
+on:
+  push:
+    branches:
+      - release/archive-final-android-aab-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AAB_URL: https://expo.dev/artifacts/eas/N_O0IVKRoZqvrc6Dgd8s72XF0VS52-y3TmZ4cF4trLA.aab
+      EXPECTED_SHA256: 8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3
+    steps:
+      - name: Download exact final Store AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output yeki-hast-1.0.0-vc3-final.aab "$AAB_URL"
+          test -s yeki-hast-1.0.0-vc3-final.aab
+
+      - name: Verify locked checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum yeki-hast-1.0.0-vc3-final.aab | awk '{print $1}')"
+          echo "AAB_SHA256=$actual"
+          test "$actual" = "$EXPECTED_SHA256"
+          printf '%s  %s\n' "$actual" 'yeki-hast-1.0.0-vc3-final.aab' > yeki-hast-1.0.0-vc3-final.sha256
+          echo 'FINAL_ANDROID_AAB_ARCHIVE_CHECKSUM=PASS'
+
+      - name: Upload locked final AAB archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-final-android-aab-v1.0.0-vc3
+          path: |
+            yeki-hast-1.0.0-vc3-final.aab
+            yeki-hast-1.0.0-vc3-final.sha256
+          if-no-files-found: error
+          retention-days: 90

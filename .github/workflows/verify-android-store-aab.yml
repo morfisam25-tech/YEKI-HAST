@@ -108,7 +108,7 @@ jobs:
           grep 'jar verified' /tmp/jarsigner.txt
           echo 'AAB jarsigner verification PASS'
 
-      - name: Verify package and target SDK from exact AAB manifest
+      - name: Verify package target SDK and permission surface
         shell: bash
         run: |
           set -euo pipefail
@@ -119,7 +119,13 @@ jobs:
           java -jar "$BUNDLETOOL" dump manifest --bundle=/tmp/yeki-hast.aab > /tmp/aab-manifest.xml
           grep -F 'package="app.yekihast.mobile"' /tmp/aab-manifest.xml
           grep -E 'targetSdkVersion="36"|targetSdkVersion="0x24"' /tmp/aab-manifest.xml
-          echo 'AAB package/targetSdk=36 PASS'
+          echo 'Declared permissions:'
+          grep -o 'android.permission.[A-Z0-9_]*' /tmp/aab-manifest.xml | sort -u || true
+          if grep -Eq 'android.permission.(RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS|WRITE_CONTACTS|READ_CALL_LOG|WRITE_CALL_LOG|READ_SMS|RECEIVE_SMS|SEND_SMS|AD_ID)' /tmp/aab-manifest.xml; then
+            echo '::error::Unexpected sensitive permission found in exact Store AAB.'
+            exit 1
+          fi
+          echo 'AAB package/targetSdk=36/sensitive-permission audit PASS'
 
       - name: Final Android Store artifact summary
         shell: bash
@@ -131,4 +137,5 @@ jobs:
           echo "VERSION=$EXPECTED_VERSION"
           echo "VERSION_CODE=$EXPECTED_BUILD_VERSION"
           echo "TARGET_SDK=$EXPECTED_TARGET_SDK"
+          echo "SENSITIVE_PERMISSIONS=ABSENT"
           cat /tmp/yeki-hast.aab.sha256

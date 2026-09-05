@@ -28,6 +28,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Android SDK command-line tools
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
       - name: Download and verify exact production AAB
         shell: bash
         run: |
@@ -87,7 +90,10 @@ jobs:
             if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1' ]; then break; fi
             sleep 5
           done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = '1'
+          if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" != '1' ]; then
+            cat /tmp/emulator.log
+            exit 1
+          fi
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
@@ -143,7 +149,9 @@ jobs:
           file store-screenshots/*.png
           python3 - <<'PY'
           import struct, pathlib
-          for path in sorted(pathlib.Path('store-screenshots').glob('*.png')):
+          paths = sorted(pathlib.Path('store-screenshots').glob('*.png'))
+          assert len(paths) == 4, len(paths)
+          for path in paths:
               data = path.read_bytes()
               assert data[:8] == b'\x89PNG\r\n\x1a\n', path
               w,h = struct.unpack('>II', data[16:24])

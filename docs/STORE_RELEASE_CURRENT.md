@@ -8,7 +8,7 @@ This file is the authoritative current Store-release status. When older Store do
 
 - Repository: `morfisam25-tech/YEKI-HAST`
 - Current runtime/config baseline: `501c5227ea288a451301f5ce7e81ae7b652539f6`
-- Current docs-only `main` after Android final packet: `a513a8b2fdfc1e1a682e1a6e71d716eb85ba3019`
+- Current docs-only `main` before this archive-status update: `c8b94641a53be96e6c6edb0078d59c317f057121`
 - Runtime baseline includes the Android Store permission hardening merged through PR #26.
 - Web production release V2: Actions run `33931970953` — SUCCESS.
 - Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY.
@@ -99,6 +99,20 @@ Exact AAB verification confirmed:
 - unused overlay and legacy external-storage permissions were removed before this build.
 
 Do not rebuild Android unless app/runtime source changes or Google Play returns an evidence-backed binary problem.
+
+## Final AAB archival backup — READY
+
+To avoid depending only on the temporary Expo artifact lifetime, the exact final Store AAB was copied into a checksum-verified GitHub Actions artifact without rebuilding the app.
+
+- archive workflow run: `33948905582` — SUCCESS;
+- archive artifact: `yeki-hast-final-android-aab-v1.0.0-vc3`;
+- artifact ID: `9964172388`;
+- artifact digest: `sha256:d619a72f7d571db7d566134fe766b615d33a15adc73cf5033da6908ab4c1680d`;
+- artifact expiry: `2026-12-04`;
+- archive contains the exact `.aab` plus its SHA-256 file;
+- workflow verified the AAB checksum equals the locked Store checksum `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3` before upload.
+
+This archive is a preservation copy of the already-built Store binary, not a new build. Upload the `.aab`, not the outer GitHub artifact ZIP, to Google Play.
 
 ## Android Store screenshots — HOSTED EMULATOR BLOCKED, LOCAL KIT READY
 

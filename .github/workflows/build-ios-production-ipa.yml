@@ -1,0 +1,76 @@
+name: Build iOS Production IPA
+
+on:
+  push:
+    branches:
+      - release/ios-production-ipa-20260905
+
+permissions:
+  contents: read
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  EAS_CLI_VERSION: 23.2.0
+
+jobs:
+  build-ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+
+      - name: Setup release Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate locked production artwork
+        run: npm --workspace @yeki-hast/mobile run generate:artwork
+
+      - name: Require Expo token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXPO_TOKEN"
+          echo "EXPO_TOKEN presence PASS"
+
+      - name: Verify EAS project identity
+        working-directory: apps/mobile
+        run: |
+          npx --yes eas-cli@${EAS_CLI_VERSION} whoami
+          npx --yes eas-cli@${EAS_CLI_VERSION} project:info
+
+      - name: Build signed iOS production IPA
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@${EAS_CLI_VERSION} build \
+            --platform ios \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json | tee /tmp/eas-ios-build.json
+
+      - name: Summarize exact build
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const raw = fs.readFileSync('/tmp/eas-ios-build.json', 'utf8');
+          const start = raw.indexOf('[');
+          const data = JSON.parse(start >= 0 ? raw.slice(start) : raw);
+          const build = Array.isArray(data) ? data[0] : data;
+          if (!build?.id) throw new Error('Missing EAS build id');
+          console.log(`EAS_BUILD_ID=${build.id}`);
+          console.log(`STATUS=${build.status}`);
+          console.log(`PLATFORM=${build.platform}`);
+          console.log(`APP_VERSION=${build.appVersion ?? ''}`);
+          console.log(`BUILD_VERSION=${build.appBuildVersion ?? ''}`);
+          console.log(`GIT_COMMIT=${build.gitCommitHash ?? ''}`);
+          console.log(`ARTIFACT=${build.artifacts?.applicationArchiveUrl ?? build.artifacts?.buildUrl ?? ''}`);
+          if (build.status !== 'FINISHED') throw new Error(`iOS build not finished: ${build.status}`);
+          NODE

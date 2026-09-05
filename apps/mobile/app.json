@@ -7,6 +7,7 @@
     "scheme": "yekihast",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/generated/app-icon.png",
     "plugins": [
       [
         "expo-secure-store",
@@ -17,11 +18,18 @@
     ],
     "android": {
       "package": "app.yekihast.mobile",
-      "allowBackup": false
+      "allowBackup": false,
+      "icon": "./assets/generated/app-icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/generated/android-adaptive-foreground.png",
+        "monochromeImage": "./assets/generated/android-monochrome.png",
+        "backgroundColor": "#0B0B0B"
+      }
     },
     "ios": {
       "bundleIdentifier": "app.yekihast.mobile",
       "supportsTablet": false,
+      "icon": "./assets/generated/app-icon.png",
       "config": {
         "usesNonExemptEncryption": false
       }

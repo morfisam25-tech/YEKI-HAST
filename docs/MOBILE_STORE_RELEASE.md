@@ -1,128 +1,154 @@
-# یکی هست — Mobile Store Release Packet
+# یکی هست — Mobile Store Release Handoff
 
-Last reviewed: 2026-09-03
+Last reconciled: 2026-09-05
 
-This packet is the handoff for Android/iOS account setup, signing, signed builds, store metadata, and submission. It intentionally separates source readiness from external developer-account and artwork work.
+This document is the cross-platform Store handoff/index. It no longer describes pre-build readiness. When facts conflict, use `STORE_RELEASE_CURRENT.md` first, then the platform-specific final packet.
 
-## Release target
+## Product identity
 
-- Product: `یکی هست`
-- First store-facing version: `1.0.0`
-- Expo slug: `yeki-hast`
-- Deep-link scheme: `yekihast`
-- Android application ID: `app.yekihast.mobile`
-- iOS bundle identifier: `app.yekihast.mobile`
-- Orientation: portrait
-- iPad/tablet support: not declared for the first iOS release (`supportsTablet: false`)
-- Production API target used by EAS profiles: `https://yeki-hast-unique-6ff0.vercel.app`
-
-## Expo / EAS source linkage
-
-The repository declares:
-
+- App: `یکی هست`
+- Version: `1.0.0`
+- Android package: `app.yekihast.mobile`
+- iOS bundle ID: `app.yekihast.mobile`
 - Expo owner: `saimorfis-team`
 - EAS project ID: `58b9f62d-db82-421a-ad59-edccac70c316`
-- Preview profile: internal distribution
-- Production profile: production environment with automatic remote build-number/version-code increment
-- Production submit profile: present and contains no embedded credential
-- Exact build Node: `22.23.1`
+- Production API: `https://yeki-hast-unique-6ff0.vercel.app`
+- Primary product domain: `https://yekihast.app`
 
-The owner/project ID is a source declaration, not proof that the future account session has access to that project. When the Expo account is opened/connected, verify ownership with EAS before creating signing credentials or a production build. Do not create a replacement Expo project unless that check proves the existing linkage is invalid.
+Application IDs are locked unless a Store returns a concrete collision/rejection.
 
-## Already ready in the app
+## Public policy/support surfaces — verified
 
-- Production API base is explicit in EAS preview/production profiles.
-- Email authentication uses the production API.
-- Session persistence uses `expo-secure-store`.
-- Android application backup is disabled for the app's account/session surface.
-- iOS non-exempt encryption declaration is currently `false`, matching the current SecureStore-only app crypto surface.
-- Mobile entrypoint uses `RootApp`, which exposes the legal/support footer returned by production bootstrap.
-- The app exposes Privacy, Terms, Account Deletion and Support actions.
-- The app states that the service is not therapy, professional advice, or emergency service and does not invent a hotline.
-- Caller, payment, KYC, payout, telephony and production phone/SMS capabilities remain fail-closed when their production gates are not open.
-- Foundation QA exports both Android and iOS JavaScript bundles from committed source.
-
-## Current public support/policy surfaces
-
-Until a custom product domain is connected, the verified public Web surfaces are:
-
-- Website: `https://web-unique-6ff0.vercel.app`
-- Privacy: `https://web-unique-6ff0.vercel.app/privacy`
-- Terms: `https://web-unique-6ff0.vercel.app/terms`
-- Account deletion: `https://web-unique-6ff0.vercel.app/account/delete`
+- Website: `https://yekihast.app`
+- Privacy: `https://yekihast.app/privacy`
+- Terms: `https://yekihast.app/terms`
+- Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-A future custom domain may replace the public-facing URLs after it is connected and independently smoke-tested. Do not break the already-working URLs just to obtain a prettier Store listing URL.
+Do not use the older Vercel Web URLs for Store metadata.
 
-## Current Technical Beta data surface
+## Expo / EAS — verified
 
-Store privacy/data-safety declarations must be based on the behavior actually submitted. For the current Email-first Technical Beta, the user-facing source can handle:
+Expo/EAS access is no longer an unresolved source declaration.
 
-- email address for authentication;
-- session/authentication state;
-- listener nickname;
-- declared gender;
-- selected languages/proficiency;
-- optional listener short introduction;
-- listener training/application state.
+Verified project/account identity:
 
-The closed Technical Beta gates must not be described as active production collection. In particular, identity/KYC, payment/payout, phone verification and telephony data should only be added to Store declarations when those features are genuinely opened in the submitted build/runtime and the corresponding policy review is updated.
+- authenticated Expo identity had owner access to `saimorfis-team`;
+- project resolves to `@saimorfis-team/yeki-hast`;
+- EAS project ID matches `58b9f62d-db82-421a-ad59-edccac70c316`;
+- Expo Free plan was verified before production builds;
+- repository Actions secret `EXPO_TOKEN` is present and must never be exposed in chat/logs/source.
 
-## Store listing draft for the current beta scope
+Do not create a replacement Expo project.
 
-These are drafting inputs, not claims that a Store listing already exists.
+## Production artwork — complete/locked
 
-### App name
+The final icon direction is approved and wired through the deterministic mobile artwork generator.
 
-`یکی هست`
+Generated release assets include:
 
-### Short description
+- standard 1024×1024 app icon;
+- Android adaptive foreground;
+- Android monochrome/themed mark;
+- Google Play 512×512 listing icon;
+- Google Play 1024×500 opaque feature graphic is also prepared/QC'd.
 
-`نسخه آزمایشی پلتفرم گفت‌وگوی انسانی؛ ورود با ایمیل و مسیر ثبت‌نام شنونده.`
+Artwork is not a current blocker. Do not reopen the icon decision unless a Store gives a concrete technical rejection.
 
-### Full description draft
+## Android — current release path
 
-`یکی هست` یک پلتفرم گفت‌وگوی انسانی است. در نسخه فنی فعلی، کاربران می‌توانند با ایمیل وارد شوند و مسیر ثبت‌نام، پروفایل و آموزش شنونده را طی کنند. بخش Caller و قابلیت‌های مالی/تماس فقط زمانی باز می‌شوند که گیت‌های تولیدی مربوط به آن‌ها واقعاً آماده باشند.
+Android is the active first Store path.
 
-این سرویس جایگزین درمان، مشاوره تخصصی یا خدمات اضطراری نیست.
+Final signed Android Store artifact:
 
-### Review note draft
+- app version: `1.0.0`;
+- versionCode: `3`;
+- package: `app.yekihast.mobile`;
+- target SDK: Android 16 / API 36;
+- final AAB SHA-256: `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3`;
+- existing EAS-managed Android keystore retained;
+- exact AAB integrity/package/version/target-SDK/permission checks passed.
 
-Current submission scope is an Email-first Technical Beta. Caller voice, payment, KYC, payout, telephony and production phone/SMS flows are intentionally disabled/fail-closed. Reviewers can evaluate the app launch, production bootstrap, Email authentication, session persistence, listener application/training flow, and the in-app Privacy/Terms/Account Deletion/Support links. No reviewer should be instructed to use a mock provider or development OTP.
+The earlier versionCode `2` AAB is superseded. Do not upload it.
 
-## External items still required before a signed Store build
+Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for final Store copy/Data Safety/reviewer answers.
 
-These cannot be honestly completed from repository source alone:
+## Android screenshot path
 
-1. Verify access to the declared Expo/EAS owner/project.
-2. Add approved production app icon/artwork. The repository currently contains no final PNG app-icon/adaptive-icon/splash asset.
-3. Create/connect the Google Play developer account.
-4. Create/connect the Apple Developer / App Store Connect account.
-5. Create or let EAS manage the real Android signing credential.
-6. Create or let EAS manage the real Apple signing/distribution credential and provisioning profile.
-7. Create a signed Android production build and install/test it on a real Android device.
-8. Create a signed iOS production build and test it through the Apple distribution path available to the account.
-9. Complete Google Play Data Safety and Apple App Privacy using the actual submitted production behavior.
-10. Add screenshots/store artwork and final listing metadata in each Store.
-11. Submit to the desired testing/public track and resolve any Store-review findings with evidence, not by weakening runtime safety gates.
+Hosted GitHub Android emulator capture is closed for this release because both tested runner paths failed at virtualization level before Android booted:
 
-## Exact account-day verification sequence
+- Linux: no usable KVM acceleration;
+- macOS ARM64: `HVF_UNSUPPORTED`.
 
-When the accounts are available, use the existing repository linkage first:
+Do not retry those workflows.
 
-1. Authenticate to Expo/EAS and verify the signed-in account.
-2. Verify that `saimorfis-team/yeki-hast` resolves to EAS project ID `58b9f62d-db82-421a-ad59-edccac70c316`.
-3. Verify Android package and iOS bundle ID are still available/registered as `app.yekihast.mobile` before changing either identifier.
-4. Add approved icon/splash artwork and rerun full Foundation QA including both mobile exports.
-5. Create a preview/internal Android build first and smoke-test launch, bootstrap, Email OTP, session restore/logout and legal links on a real phone.
-6. Create signed production Android/iOS builds from a clean committed release SHA.
-7. Record the build IDs, Store version/build numbers and tested SHA in `docs/LAUNCH_STATUS.md`.
-8. Only then submit those exact signed artifacts.
+Physical-device screenshot kit:
+
+- source: exact final versionCode `3` AAB;
+- Actions run: `33948412172` — SUCCESS;
+- artifact name: `yeki-hast-android-screenshot-kit-v1.0.0-vc3`;
+- includes release-equivalent installable screenshot APK, Windows ADB helpers, checksums and capture instructions;
+- screenshot-only APK uses a disposable QA key and MUST NOT be uploaded to Google Play.
+
+Remaining screenshot work is physical-device capture/QC only.
+
+## Google Play account — owner/external gate
+
+Use `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md`.
+
+Before signup:
+
+1. owner confirms exact legal publishing entity;
+2. if publishing as a real business, use the correct Organization path and matching D-U-N-S/payments-profile/company evidence;
+3. verify contact/developer email and phone;
+4. stop before any registration payment until explicit owner approval;
+5. after account activation, create app record for `app.yekihast.mobile`, upload the exact versionCode `3` AAB, complete Console forms, upload real screenshots/locked graphics, then run Play review/pre-launch checks.
+
+No Store-account action requires rebuilding the Android binary.
+
+## iOS — parked on external signing setup
+
+iOS source/export is not being discarded; it is intentionally parked while Android-first work closes.
+
+Known state:
+
+- EAS project identity/auth passed;
+- remote iOS credentials were found;
+- production build reached credential setup;
+- build stopped with `Distribution Certificate is not validated for non-interactive builds`;
+- one-time interactive Apple/EAS Distribution Certificate + provisioning-profile validation is required;
+- no signed IPA was produced from that attempt.
+
+Do not resume Apple setup, create replacement credentials, enroll/pay for Apple Developer membership, or rerun iOS production without explicit owner direction.
+
+When Apple work resumes, use the exact current source and recheck App Store Connect privacy/listing forms against the successful signed IPA.
+
+## Current Technical Beta behavior
+
+Store claims must match active behavior:
+
+- email OTP authentication is active;
+- listener profile/onboarding/training/assessment is active;
+- Privacy/Terms/Account Deletion/Support are exposed;
+- Caller voice, payment, KYC, payout, telephony and production phone/SMS remain disabled/fail-closed;
+- do not market closed capabilities as active.
+
+## Current source-of-truth map
+
+- `docs/STORE_RELEASE_CURRENT.md` — overall live Store status.
+- `docs/GOOGLE_PLAY_FINAL_PACKET.md` — authoritative Android filing packet.
+- `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md` — developer-account/organization gate.
+- `docs/STORE_SUBMISSION_ANSWERS.md` — compatibility pointer, not an independent filing source.
+- this file — cross-platform handoff/index.
 
 ## Do not do
 
-- Do not embed Expo, Apple, Google or signing secrets in `app.json`, `eas.json`, source, logs or chat.
-- Do not change application IDs casually after Store records are created.
-- Do not create a second Expo project merely because account access has not yet been checked.
-- Do not claim Caller/payment/KYC/payout/telephony are production-ready while their gates are closed.
-- Do not rerun the production DB migration or API deploy just to prepare Store binaries.
+- Do not rerun Production DB migrations for Store work.
+- Do not redeploy API/Admin without an actual runtime/config reason.
+- Do not replace Android signing credentials.
+- Do not rebuild Android merely for listing/account/screenshot changes.
+- Do not retry hosted emulator capture workflows.
+- Do not upload the screenshot-only APK to Google Play.
+- Do not open Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
+- Do not expose Expo/Apple/Google/signing credentials or OTPs.
+- Do not touch Evidence Axis.

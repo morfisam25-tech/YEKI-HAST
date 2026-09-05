@@ -2,16 +2,15 @@
 
 Last verified: 2026-09-05
 
-This file is the current Store-release override for older packet sections that still mention the pre-domain Vercel Web URL. Use this file together with `STORE_SUBMISSION_ANSWERS.md` and `MOBILE_STORE_RELEASE.md`, but prefer the live values below whenever those older files conflict.
+This file is the current Store-release override for older packet sections. Use it together with `STORE_SUBMISSION_ANSWERS.md` and `MOBILE_STORE_RELEASE.md`, but prefer the live values below whenever older files conflict.
 
-## Exact release source
+## Production runtime already verified
 
 - Repository: `morfisam25-tech/YEKI-HAST`
-- Current verified `main`: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`
-- Foundation QA on this `main`: Actions run `33930845617` — SUCCESS
 - Web production release V2: Actions run `33931970953` / run #2 — SUCCESS
-- Web deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY
-- Web deployment source SHA: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`
+- Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY
+- Web production source SHA: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`
+- Production API remains `https://yeki-hast-unique-6ff0.vercel.app`; no redundant API/Admin/DB release is required for Store artwork preparation.
 
 ## Public Store URLs — use these now
 
@@ -29,19 +28,6 @@ Verified redirect policy:
 
 The primary domain returned HTTP 200 for `/`, `/privacy`, `/terms`, and `/account/delete` after production promotion.
 
-## API status relevant to Store submission
-
-Production API remains `https://yeki-hast-unique-6ff0.vercel.app`.
-
-Verified live on 2026-09-05:
-
-- `/health`: HTTP 200
-- `/ready`: HTTP 200
-- `/v1/bootstrap`: HTTP 200
-- Current API release SHA reported by `/health`: `005809afa503803e5c3405e42d1de73b63931479`
-
-No API source change was required for the Web-domain release, so no redundant API redeploy was performed.
-
 ## Account deletion status
 
 The current production deletion path is real and Store-usable:
@@ -51,7 +37,7 @@ The current production deletion path is real and Store-usable:
 - active operations admin -> `409` before destructive side effects
 - reviewer-facing page: `https://yekihast.app/account/delete`
 
-Do not describe the current implementation as a support-only deletion request or as deletion-request-only. Older launch notes that still say final deletion is blocked are stale.
+Do not describe the current implementation as support-only or deletion-request-only.
 
 ## Mobile identity
 
@@ -67,21 +53,33 @@ Do not describe the current implementation as a support-only deletion request or
 
 Android and iOS source exports pass Foundation QA. This is not evidence of signed Store binaries.
 
+## Production artwork — LOCKED
+
+The final app-icon direction is approved: black/graphite three-dimensional tile with warm gold/ivory opposing conversation bubbles and no text inside the Store icon.
+
+The repository does not commit generated raster binaries. Instead it commits the deterministic generator at `apps/mobile/scripts/generate-artwork.mjs`, which produces:
+
+- `app-icon.png` — 1024x1024, used by iOS and the standard Android icon;
+- `android-adaptive-foreground.png` — 1024x1024 transparent adaptive foreground;
+- `android-monochrome.png` — 1024x1024 Android themed-icon mark;
+- `play-store-icon.png` — 512x512 listing asset.
+
+`apps/mobile/app.json` is wired to those generated outputs. The mobile package runs the generator before Android/iOS exports and through `eas-build-pre-install`, so EAS receives the artwork before native prebuild/signing. A Foundation regression test verifies the PNG signatures/dimensions and config wiring.
+
+The icon-design decision is closed unless a Store platform itself rejects the asset for a concrete technical reason.
+
 ## Remaining blockers before signed binaries
 
-These require external account/credential access or approved visual assets:
-
-1. Approve and commit final production icon/artwork.
-2. Verify authenticated access to the declared Expo/EAS project; do not create a replacement project unless the existing linkage is proven invalid.
-3. Create/connect the Google Play developer account and app record.
-4. Create/connect the Apple Developer/App Store Connect account and app record.
-5. Create or let EAS manage the real Android signing credential.
-6. Create or let EAS manage the real Apple distribution/signing credential and provisioning profile.
-7. Build signed Android AAB and iOS IPA from an exact clean release SHA.
-8. Smoke-test the exact signed artifacts on the real distribution paths.
-9. Capture release-equivalent screenshots with no real email, OTP, session, admin or secret data.
-10. File Google Play Data Safety, Apple App Privacy, age/content rating and final listing metadata from the exact submitted build behavior.
-11. Upload the exact tested binaries and submit to the selected testing/public tracks.
+1. Verify authenticated access to the declared Expo/EAS project; do not create a replacement project unless the existing linkage is proven invalid.
+2. Create/connect the Google Play developer account and app record.
+3. Create/connect the Apple Developer/App Store Connect account and app record.
+4. Create or let EAS manage the real Android signing credential.
+5. Create or let EAS manage the real Apple distribution/signing credential and provisioning profile.
+6. Build signed Android AAB and iOS IPA from an exact clean release SHA.
+7. Smoke-test the exact signed artifacts on the real distribution paths.
+8. Capture release-equivalent screenshots with no real email, OTP, session, admin or secret data.
+9. File Google Play Data Safety, Apple App Privacy, age/content rating and final listing metadata from the exact submitted build behavior.
+10. Upload the exact tested binaries and submit to the selected testing/public tracks.
 
 ## Do not do
 

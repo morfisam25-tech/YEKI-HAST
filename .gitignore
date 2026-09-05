@@ -10,3 +10,4 @@ dist-api
 .DS_Store
 *.log
 coverage
+apps/mobile/assets/generated/

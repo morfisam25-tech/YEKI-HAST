@@ -1,0 +1,112 @@
+name: Verify Android Store AAB
+
+on:
+  push:
+    branches:
+      - release/android-store-qa-20260905
+
+permissions:
+  contents: read
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  EAS_CLI_VERSION: 23.2.0
+  EAS_BUILD_ID: 6881d817-6578-4725-8afd-933b91dd62f8
+  EXPECTED_PROJECT_ID: 58b9f62d-db82-421a-ad59-edccac70c316
+  EXPECTED_PACKAGE: app.yekihast.mobile
+  EXPECTED_VERSION: 1.0.0
+  EXPECTED_BUILD_VERSION: '2'
+
+jobs:
+  verify-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout store source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+
+      - name: Setup Java for jarsigner
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Require Expo token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXPO_TOKEN"
+          echo "EXPO_TOKEN presence PASS"
+
+      - name: Read exact EAS build metadata
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@${EAS_CLI_VERSION} build:view "$EAS_BUILD_ID" --json > /tmp/eas-build.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const b = JSON.parse(fs.readFileSync('/tmp/eas-build.json','utf8'));
+          const checks = {
+            id: [b.id, process.env.EAS_BUILD_ID],
+            status: [b.status, 'FINISHED'],
+            platform: [b.platform, 'ANDROID'],
+            distribution: [b.distribution, 'STORE'],
+            projectId: [b.app?.id, process.env.EXPECTED_PROJECT_ID],
+            package: [b.appIdentifier, process.env.EXPECTED_PACKAGE],
+            version: [b.appVersion, process.env.EXPECTED_VERSION],
+            buildVersion: [String(b.appBuildVersion ?? ''), process.env.EXPECTED_BUILD_VERSION],
+            profile: [b.buildProfile, 'production'],
+          };
+          for (const [name,[actual,expected]] of Object.entries(checks)) {
+            if (actual !== expected) throw new Error(`${name} mismatch: ${actual} != ${expected}`);
+            console.log(`${name} PASS: ${actual}`);
+          }
+          const url = b.artifacts?.applicationArchiveUrl ?? b.artifacts?.buildUrl;
+          if (!url || !url.endsWith('.aab')) throw new Error(`AAB artifact missing: ${url}`);
+          fs.writeFileSync('/tmp/aab-url.txt', url);
+          console.log('AAB artifact metadata PASS');
+          NODE
+
+      - name: Download exact AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output /tmp/yeki-hast.aab "$(cat /tmp/aab-url.txt)"
+          test -s /tmp/yeki-hast.aab
+          file /tmp/yeki-hast.aab
+          sha256sum /tmp/yeki-hast.aab | tee /tmp/yeki-hast.aab.sha256
+
+      - name: Verify AAB archive integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t /tmp/yeki-hast.aab >/tmp/unzip-test.txt
+          tail -n 2 /tmp/unzip-test.txt
+          unzip -l /tmp/yeki-hast.aab | grep -q 'base/manifest/AndroidManifest.xml'
+          echo 'AAB ZIP structure PASS'
+
+      - name: Verify AAB JAR signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          jarsigner -verify -verbose /tmp/yeki-hast.aab >/tmp/jarsigner.txt 2>&1
+          grep -q 'jar verified' /tmp/jarsigner.txt
+          grep 'jar verified' /tmp/jarsigner.txt
+          echo 'AAB jarsigner verification PASS'
+
+      - name: Final Android Store artifact summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_STORE_AAB=PASS"
+          echo "EAS_BUILD_ID=$EAS_BUILD_ID"
+          echo "PACKAGE=$EXPECTED_PACKAGE"
+          echo "VERSION=$EXPECTED_VERSION"
+          echo "VERSION_CODE=$EXPECTED_BUILD_VERSION"
+          cat /tmp/yeki-hast.aab.sha256

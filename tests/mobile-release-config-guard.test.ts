@@ -34,6 +34,21 @@ test('Android app-data backup stays disabled for sensitive account and session d
   assert.equal(appConfig.expo.plugins?.[0]?.[0], 'expo-secure-store');
 });
 
+test('Android Store build blocks permissions not used by the current Technical Beta', () => {
+  assert.deepEqual(
+    appConfig.expo.android.blockedPermissions,
+    [
+      'android.permission.DUMP',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+    ],
+  );
+  assert.ok(!appConfig.expo.android.blockedPermissions.includes('android.permission.INTERNET'));
+  assert.ok(!appConfig.expo.android.blockedPermissions.includes('android.permission.USE_BIOMETRIC'));
+  assert.ok(!appConfig.expo.android.blockedPermissions.includes('android.permission.USE_FINGERPRINT'));
+});
+
 test('iOS export-compliance declaration matches the current SecureStore-only mobile crypto surface', () => {
   assert.equal(appConfig.expo.ios.config?.usesNonExemptEncryption, false);
   assert.ok(packageJson.dependencies?.['expo-secure-store']);

@@ -11,11 +11,13 @@ permissions:
 env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
   EAS_CLI_VERSION: 23.2.0
+  BUNDLETOOL_VERSION: 1.18.3
   EAS_BUILD_ID: 6881d817-6578-4725-8afd-933b91dd62f8
   EXPECTED_PROJECT_ID: 58b9f62d-db82-421a-ad59-edccac70c316
   EXPECTED_PACKAGE: app.yekihast.mobile
   EXPECTED_VERSION: 1.0.0
   EXPECTED_BUILD_VERSION: '2'
+  EXPECTED_TARGET_SDK: '36'
 
 jobs:
   verify-aab:
@@ -34,7 +36,7 @@ jobs:
       - name: Install locked workspace dependencies
         run: npm ci
 
-      - name: Setup Java for jarsigner
+      - name: Setup Java for Android bundle inspection
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -106,6 +108,19 @@ jobs:
           grep 'jar verified' /tmp/jarsigner.txt
           echo 'AAB jarsigner verification PASS'
 
+      - name: Verify package and target SDK from exact AAB manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLETOOL=/tmp/bundletool-all-${BUNDLETOOL_VERSION}.jar
+          curl --fail --location --retry 3 \
+            --output "$BUNDLETOOL" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar "$BUNDLETOOL" dump manifest --bundle=/tmp/yeki-hast.aab > /tmp/aab-manifest.xml
+          grep -F 'package="app.yekihast.mobile"' /tmp/aab-manifest.xml
+          grep -E 'targetSdkVersion="36"|targetSdkVersion="0x24"' /tmp/aab-manifest.xml
+          echo 'AAB package/targetSdk=36 PASS'
+
       - name: Final Android Store artifact summary
         shell: bash
         run: |
@@ -115,4 +130,5 @@ jobs:
           echo "PACKAGE=$EXPECTED_PACKAGE"
           echo "VERSION=$EXPECTED_VERSION"
           echo "VERSION_CODE=$EXPECTED_BUILD_VERSION"
+          echo "TARGET_SDK=$EXPECTED_TARGET_SDK"
           cat /tmp/yeki-hast.aab.sha256

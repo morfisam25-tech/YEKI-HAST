@@ -1,0 +1,66 @@
+name: Build Google Play Listing Assets
+
+on:
+  push:
+    branches:
+      - release/google-play-assets-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+
+      - name: Generate app icon family
+        run: node apps/mobile/scripts/generate-artwork.mjs
+
+      - name: Generate Google Play feature graphic
+        run: node apps/mobile/scripts/generate-play-feature-graphic.mjs
+
+      - name: Verify Google Play asset requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, struct
+          files = {
+              pathlib.Path('apps/mobile/assets/generated/play-store-icon.png'): (512, 512, 6),
+              pathlib.Path('apps/mobile/assets/store/play-feature-graphic-1024x500.png'): (1024, 500, 2),
+          }
+          for path, expected in files.items():
+              data = path.read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n', path
+              w,h = struct.unpack('>II', data[16:24])
+              color_type = data[25]
+              print(path, w, h, 'color_type', color_type, 'bytes', len(data))
+              assert (w,h,color_type) == expected, (path,(w,h,color_type),expected)
+              assert len(data) < 15 * 1024 * 1024, (path,len(data))
+          print('GOOGLE_PLAY_ASSETS=PASS')
+          PY
+
+      - name: Stage asset packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p google-play-assets
+          cp apps/mobile/assets/generated/play-store-icon.png google-play-assets/app-icon-512.png
+          cp apps/mobile/assets/store/play-feature-graphic-1024x500.png google-play-assets/feature-graphic-1024x500.png
+          sha256sum google-play-assets/* | tee google-play-assets/SHA256SUMS.txt
+
+      - name: Upload Google Play listing assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-play-listing-assets
+          path: google-play-assets/
+          if-no-files-found: error
+          retention-days: 90

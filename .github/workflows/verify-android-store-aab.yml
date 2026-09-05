@@ -48,10 +48,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes eas-cli@${EAS_CLI_VERSION} build:view "$EAS_BUILD_ID" --json > /tmp/eas-build.json
+          npx --yes eas-cli@${EAS_CLI_VERSION} build:list --platform android --limit 20 --json --non-interactive > /tmp/eas-builds.json
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const b = JSON.parse(fs.readFileSync('/tmp/eas-build.json','utf8'));
+          const builds = JSON.parse(fs.readFileSync('/tmp/eas-builds.json','utf8'));
+          const b = builds.find((item) => item.id === process.env.EAS_BUILD_ID);
+          if (!b) throw new Error(`EAS build not found: ${process.env.EAS_BUILD_ID}`);
           const checks = {
             id: [b.id, process.env.EAS_BUILD_ID],
             status: [b.status, 'FINISHED'],

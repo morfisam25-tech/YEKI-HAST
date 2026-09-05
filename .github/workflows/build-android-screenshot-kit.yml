@@ -1,0 +1,174 @@
+name: Build Android Screenshot Kit
+
+on:
+  push:
+    branches:
+      - release/android-screenshot-kit-20260905
+
+permissions:
+  contents: read
+
+env:
+  FINAL_AAB_URL: https://expo.dev/artifacts/eas/N_O0IVKRoZqvrc6Dgd8s72XF0VS52-y3TmZ4cF4trLA.aab
+  FINAL_AAB_SHA256: 8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3
+  BUNDLETOOL_VERSION: 1.18.3
+  PACKAGE: app.yekihast.mobile
+
+jobs:
+  package-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact release documentation
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build installable screenshot APK from exact final AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/yeki-screenshot-kit
+          curl --fail --location --retry 3 --output /tmp/yeki-final.aab "$FINAL_AAB_URL"
+          echo "$FINAL_AAB_SHA256  /tmp/yeki-final.aab" | sha256sum --check
+
+          curl --fail --location --retry 3 \
+            --output /tmp/bundletool.jar \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+
+          keytool -genkeypair -noprompt \
+            -keystore /tmp/screenshot-only.jks \
+            -storepass android \
+            -keypass android \
+            -alias screenshot-only \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname 'CN=Screenshot Only,O=Yeki Hast,C=TR'
+
+          java -jar /tmp/bundletool.jar build-apks \
+            --bundle=/tmp/yeki-final.aab \
+            --output=/tmp/yeki-final.apks \
+            --mode=universal \
+            --ks=/tmp/screenshot-only.jks \
+            --ks-pass=pass:android \
+            --ks-key-alias=screenshot-only \
+            --key-pass=pass:android
+
+          unzip -p /tmp/yeki-final.apks universal.apk > /tmp/yeki-screenshot-kit/yeki-hast-v1.0.0-vc3-screenshot-only.apk
+          test -s /tmp/yeki-screenshot-kit/yeki-hast-v1.0.0-vc3-screenshot-only.apk
+          sha256sum /tmp/yeki-screenshot-kit/yeki-hast-v1.0.0-vc3-screenshot-only.apk > /tmp/yeki-screenshot-kit/SCREENSHOT_APK_SHA256.txt
+          printf '%s  %s\n' "$FINAL_AAB_SHA256" 'FINAL_STORE_AAB_v1.0.0_vc3' > /tmp/yeki-screenshot-kit/FINAL_STORE_AAB_SHA256.txt
+
+      - name: Add Windows helper scripts and safety notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/yeki-screenshot-kit/README.txt <<'TXT'
+          یکی هست — Android Screenshot Kit
+          =================================
+
+          Purpose
+          -------
+          This kit exists only to capture real Google Play screenshots from the exact final Android 1.0.0 / versionCode 3 AAB payload.
+
+          IMPORTANT
+          ---------
+          - The Google Play upload binary is the original signed AAB, NOT this APK.
+          - This APK was deterministically derived from the exact final AAB and re-signed with a disposable screenshot-only key solely so it can be installed on a local Android device.
+          - Never upload this screenshot-only APK to Google Play.
+          - Never expose a real email address, OTP, session identifier, admin data, or secret in screenshots.
+          - Caller/payment/KYC screens that are closed in production must not be fabricated for Store screenshots.
+
+          Exact Store binary identity
+          ---------------------------
+          App: یکی هست
+          Package: app.yekihast.mobile
+          Version: 1.0.0
+          Version code: 3
+          Final AAB SHA-256: 8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3
+
+          Recommended real screens
+          ------------------------
+          1. Home screen.
+          2. Listener introduction.
+          3. Email sign-in screen with no personal email/OTP visible.
+          4. Caller-closed informational state OR, preferably after a safe test login, Listener profile/training using dummy data.
+
+          Device target
+          -------------
+          Capture portrait screenshots at 1080x1920 or higher. A normal physical Android phone is preferred over another hosted emulator attempt.
+
+          Windows use
+          -----------
+          When the owner resumes, use Google's official Android Platform Tools (ADB), connect an Android phone with USB debugging enabled, then run INSTALL_AND_OPEN.cmd from this folder. The helper script never changes PowerShell ExecutionPolicy and never asks for a secret.
+          TXT
+
+          cat > /tmp/yeki-screenshot-kit/INSTALL_AND_OPEN.cmd <<'CMD'
+          @echo off
+          setlocal
+          cd /d "%~dp0"
+          set "ADB=adb.exe"
+          if exist "%~dp0platform-tools\adb.exe" set "ADB=%~dp0platform-tools\adb.exe"
+          where "%ADB%" >nul 2>nul
+          if errorlevel 1 (
+            echo ADB was not found.
+            echo Put Google's official platform-tools folder next to this file, or add adb.exe to PATH.
+            pause
+            exit /b 1
+          )
+          "%ADB%" devices
+          echo.
+          echo If your phone shows an Allow USB debugging prompt, approve it, then press any key here.
+          pause >nul
+          "%ADB%" install -r "%~dp0yeki-hast-v1.0.0-vc3-screenshot-only.apk"
+          if errorlevel 1 exit /b 1
+          "%ADB%" shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
+          echo.
+          echo App opened. Capture only safe Store-ready screens.
+          pause
+          CMD
+
+          cat > /tmp/yeki-screenshot-kit/CAPTURE_CURRENT_SCREEN.cmd <<'CMD'
+          @echo off
+          setlocal
+          cd /d "%~dp0"
+          set "ADB=adb.exe"
+          if exist "%~dp0platform-tools\adb.exe" set "ADB=%~dp0platform-tools\adb.exe"
+          where "%ADB%" >nul 2>nul
+          if errorlevel 1 (
+            echo ADB was not found.
+            pause
+            exit /b 1
+          )
+          if not exist "%~dp0screenshots" mkdir "%~dp0screenshots"
+          for /f "tokens=1-4 delims=/ " %%a in ('date /t') do set D=%%d-%%b-%%c
+          for /f "tokens=1-2 delims=: " %%a in ('time /t') do set T=%%a%%b
+          set "OUT=%~dp0screenshots\screen-%RANDOM%-%T%.png"
+          "%ADB%" exec-out screencap -p > "%OUT%"
+          if errorlevel 1 exit /b 1
+          echo Saved: %OUT%
+          pause
+          CMD
+
+      - name: Verify kit contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/yeki-screenshot-kit/yeki-hast-v1.0.0-vc3-screenshot-only.apk
+          test -s /tmp/yeki-screenshot-kit/README.txt
+          test -s /tmp/yeki-screenshot-kit/INSTALL_AND_OPEN.cmd
+          test -s /tmp/yeki-screenshot-kit/CAPTURE_CURRENT_SCREEN.cmd
+          unzip -t /tmp/yeki-screenshot-kit/yeki-hast-v1.0.0-vc3-screenshot-only.apk >/dev/null
+          echo 'ANDROID_SCREENSHOT_KIT=PASS'
+          ls -lh /tmp/yeki-screenshot-kit
+
+      - name: Upload Android screenshot kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeki-hast-android-screenshot-kit-v1.0.0-vc3
+          path: /tmp/yeki-screenshot-kit/*
+          if-no-files-found: error
+          retention-days: 90

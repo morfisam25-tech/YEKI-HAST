@@ -7,12 +7,13 @@ This file is the authoritative current Store-release status. When older Store do
 ## Production runtime — VERIFIED
 
 - Repository: `morfisam25-tech/YEKI-HAST`
-- Current runtime/config `main`: `501c5227ea288a451301f5ce7e81ae7b652539f6`
-- `main` includes the Android Store permission hardening merged through PR #26.
+- Current runtime/config baseline: `501c5227ea288a451301f5ce7e81ae7b652539f6`
+- Current docs-only `main` after Android final packet: `a513a8b2fdfc1e1a682e1a6e71d716eb85ba3019`
+- Runtime baseline includes the Android Store permission hardening merged through PR #26.
 - Web production release V2: Actions run `33931970953` — SUCCESS.
 - Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY.
 - Production API: `https://yeki-hast-unique-6ff0.vercel.app`.
-- No API/Admin/DB redeploy is required merely for Store metadata preparation.
+- No API/Admin/DB redeploy is required merely for Store metadata or screenshot preparation.
 
 ## Public Store URLs — USE THESE
 
@@ -89,7 +90,7 @@ Final build facts:
 - final AAB SHA-256: `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3`;
 - existing EAS-managed Android signing key retained.
 
-Exact AAB verification has confirmed:
+Exact AAB verification confirmed:
 
 - archive/signature integrity;
 - package identity;
@@ -99,17 +100,36 @@ Exact AAB verification has confirmed:
 
 Do not rebuild Android unless app/runtime source changes or Google Play returns an evidence-backed binary problem.
 
-## Android Store screenshots — ACTIVE FINAL QA
+## Android Store screenshots — HOSTED EMULATOR BLOCKED, LOCAL KIT READY
 
-The first Linux emulator attempt failed because the GitHub-hosted Linux runner had no KVM hardware acceleration and the API 36 emulator timed out before boot. This was an infrastructure limitation, not an app failure.
+This is not an app-code failure.
 
-The screenshot workflow was moved to an accelerated macOS ARM64 runner. Current run:
+Two exact-AAB hosted screenshot attempts were made and both failed before the app could run because GitHub-hosted virtualization could not boot the Android 16 emulator:
 
-- Actions run: `33947827376`;
-- exact input: final versionCode 3 AAB with the SHA-256 above;
-- state at last verification: in progress.
+1. Linux run `33947024183`: no usable KVM acceleration; emulator stayed offline and timed out.
+2. macOS ARM64 run `33947827376`: emulator exited with `HVF error: HV_UNSUPPORTED` / `failed to initialize HVF`, then ADB never saw a device.
 
-The screenshots must come from the actual final AAB and must not expose real email, OTP, session/admin data or secrets. No speculative Caller/payment/KYC screenshots are allowed.
+Do not spend more GitHub Actions budget retrying hosted Android emulators for this release.
+
+A local/physical-device screenshot kit has therefore been prepared from the exact final versionCode 3 AAB:
+
+- kit workflow run: `33948412172` — SUCCESS;
+- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc3`;
+- artifact ID: `9964042649`;
+- artifact digest: `sha256:3053fa2d2f8d8555d8cb79799d20cd10d67d82af17897736999799bc3eada4e3`;
+- artifact expiry: 2026-12-04;
+- exact Store AAB checksum was verified before the installable screenshot APK was derived;
+- the screenshot APK is re-signed with a disposable screenshot-only key and MUST NOT be uploaded to Google Play.
+
+The kit contains:
+
+- installable release-equivalent screenshot APK;
+- Windows install/open helper;
+- Windows current-screen capture helper;
+- exact AAB/APK checksum files;
+- screenshot safety/readme instructions.
+
+When the owner resumes, use a physical Android phone with Google's official ADB/platform-tools. No Store binary rebuild is required. Capture at least four real 1080×1920-or-higher portrait screens and never expose real email, OTP, session/admin data or secrets.
 
 ## Google Play filing packet — READY
 
@@ -123,7 +143,7 @@ Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for:
 - exact Android binary identity;
 - external-only Play Console steps.
 
-The repository-side Google Play preparation is therefore reduced to finishing the screenshot QA. The remaining Play work after that requires an actual Google Play developer account / console.
+Repository-side Android preparation is complete except for physical-device screenshot capture/QC. The remaining release work after screenshots requires an actual Google Play developer account / console.
 
 ## Google Play developer account evidence
 
@@ -141,7 +161,7 @@ Do not perform Apple purchases, membership enrollment, credential changes or iOS
 
 ### Android-first
 
-1. Finish exact-AAB screenshot capture/QC.
+1. Capture/QC release-equivalent screenshots on a real/local Android device using the prepared exact-AAB screenshot kit.
 2. Confirm or create the Google Play developer account and complete required identity/organization verification.
 3. Pay any Google registration fee only after explicit owner approval.
 4. Create the Play app record for `app.yekihast.mobile`.
@@ -158,9 +178,11 @@ Do not perform Apple purchases, membership enrollment, credential changes or iOS
 
 ## Do not do
 
+- Do not retry GitHub-hosted Android emulator screenshot runs for this release.
 - Do not rerun Production DB migrations.
 - Do not redeploy API/Admin without a real source/config change requiring it.
 - Do not open Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
 - Do not replace Android signing credentials.
+- Do not upload the screenshot-only APK to Google Play.
 - Do not put Expo/Apple/Google/signing secrets in source, logs or chat.
 - Do not touch Evidence Axis.

@@ -20,7 +20,7 @@ env:
 jobs:
   verify-aab:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout store source
         uses: actions/checkout@v4
@@ -29,9 +29,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.23.1'
+          cache: npm
+
+      - name: Install locked workspace dependencies
+        run: npm ci
 
       - name: Setup Java for jarsigner
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'

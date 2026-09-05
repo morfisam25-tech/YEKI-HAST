@@ -19,6 +19,12 @@
     "android": {
       "package": "app.yekihast.mobile",
       "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.DUMP",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "icon": "./assets/generated/app-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/generated/android-adaptive-foreground.png",

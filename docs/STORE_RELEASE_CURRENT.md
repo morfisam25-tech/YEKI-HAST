@@ -7,10 +7,12 @@ This file is the current Store-release override for older packet sections. Use i
 ## Production runtime already verified
 
 - Repository: `morfisam25-tech/YEKI-HAST`
+- Current mobile/artwork `main`: `459559fa9970620ffefa429528ee88c818daa23a`
+- Foundation QA on that `main`: Actions run `33941231568` — SUCCESS, including Android export and iOS export.
 - Web production release V2: Actions run `33931970953` / run #2 — SUCCESS
 - Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY
 - Web production source SHA: `94b6a697a74eda5f70b5cb22a6fa511dc9b2c365`
-- Production API remains `https://yeki-hast-unique-6ff0.vercel.app`; no redundant API/Admin/DB release is required for Store artwork preparation.
+- Production API remains `https://yeki-hast-unique-6ff0.vercel.app`; no redundant API/Admin/DB release is required for Store preparation.
 
 ## Public Store URLs — use these now
 
@@ -51,7 +53,21 @@ Do not describe the current implementation as support-only or deletion-request-o
 - Android API target baseline: 36
 - iOS/Xcode baseline: 26
 
-Android and iOS source exports pass Foundation QA. This is not evidence of signed Store binaries.
+## Expo / EAS access — VERIFIED
+
+Read-only verification run `33941384314` succeeded after installing the `EXPO_TOKEN` repository secret.
+
+Verified facts:
+
+- authenticated Expo identity: `saimorfi`;
+- account access: owner of both `saimorfi` and `saimorfis-team`;
+- declared project resolves exactly to `@saimorfis-team/yeki-hast`;
+- EAS project ID matches `58b9f62d-db82-421a-ad59-edccac70c316`;
+- Expo plan: Free;
+- current billing period build allowance observed on 2026-09-05: 15 Android + 15 iOS, 0 used before the production Android build;
+- estimated overage at verification time: $0.
+
+Do not create a replacement Expo project.
 
 ## Production artwork — LOCKED
 
@@ -68,18 +84,47 @@ The repository does not commit generated raster binaries. Instead it commits the
 
 The icon-design decision is closed unless a Store platform itself rejects the asset for a concrete technical reason.
 
-## Remaining blockers before signed binaries
+## Android signed Store binary — COMPLETE
 
-1. Verify authenticated access to the declared Expo/EAS project; do not create a replacement project unless the existing linkage is proven invalid.
-2. Create/connect the Google Play developer account and app record.
-3. Create/connect the Apple Developer/App Store Connect account and app record.
-4. Create or let EAS manage the real Android signing credential.
-5. Create or let EAS manage the real Apple distribution/signing credential and provisioning profile.
-6. Build signed Android AAB and iOS IPA from an exact clean release SHA.
-7. Smoke-test the exact signed artifacts on the real distribution paths.
-8. Capture release-equivalent screenshots with no real email, OTP, session, admin or secret data.
-9. File Google Play Data Safety, Apple App Privacy, age/content rating and final listing metadata from the exact submitted build behavior.
-10. Upload the exact tested binaries and submit to the selected testing/public tracks.
+A real signed Android production Store build completed successfully on EAS.
+
+- EAS build ID: `6881d817-6578-4725-8afd-933b91dd62f8`
+- Platform: Android
+- Distribution: Store
+- Build profile: `production`
+- App version: `1.0.0`
+- Version code: `2`
+- Package: `app.yekihast.mobile`
+- Build source commit: `1e9484bc34191bbcbb51bfea9e38934f191fff7d`
+- That commit differs from mobile/artwork `main` only by the one-off GitHub workflow used to invoke the build; app/runtime source is the verified `459559fa9970620ffefa429528ee88c818daa23a` baseline.
+- EAS used the existing remote Android keystore: `Build Credentials 9ASUP-JZQW (default)`.
+- Build completed FINISHED and produced an `.aab` Store archive.
+
+Do not generate or replace the Android signing key unless Google Play or credential evidence later proves it is necessary.
+
+## iOS signed Store binary — BLOCKED ONLY ON APPLE SIGNING SETUP
+
+The production iOS build was attempted from the same verified mobile/artwork baseline using the `production` EAS profile.
+
+Observed result:
+
+- EAS project identity and Expo auth: PASS;
+- remote iOS credentials were found on the Expo server;
+- remote build number incremented from 1 to 2 during the failed setup attempt;
+- EAS stopped before creating an IPA with: `Distribution Certificate is not validated for non-interactive builds` and `Credentials are not set up. Run this command again in interactive mode.`
+
+This is now an external Apple signing-credential setup blocker, not an application-code blocker. The next authorized Apple/EAS interactive credential setup should configure/validate the production Distribution Certificate and distribution Provisioning Profile for bundle ID `app.yekihast.mobile`. After that, rerun the production iOS build; because remote app versioning is enabled, expect the next build number to advance again.
+
+## Remaining blockers
+
+1. Complete the one-time interactive Apple/EAS production signing setup for iOS.
+2. Build the signed production iOS IPA after credentials validate.
+3. Create/connect the Google Play developer account and app record if not already present.
+4. Create/connect the Apple Developer/App Store Connect app record if not already present.
+5. Smoke-test the exact signed artifacts on their real distribution paths.
+6. Capture release-equivalent screenshots with no real email, OTP, session, admin or secret data.
+7. File Google Play Data Safety, Apple App Privacy, age/content rating and final listing metadata from the exact submitted build behavior.
+8. Upload the exact tested binaries and submit to the selected testing/public tracks.
 
 ## Do not do
 

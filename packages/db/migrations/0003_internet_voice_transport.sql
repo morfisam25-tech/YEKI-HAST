@@ -105,6 +105,53 @@ CREATE TRIGGER call_sessions_initial_hold_ledger
 AFTER INSERT ON app.call_sessions
 FOR EACH ROW EXECUTE FUNCTION app.record_initial_call_hold();
 
+-- Internet Voice no-answer is a zero-charge terminal path. The route releases reserved_minor
+-- before marking the call missed; this trigger records that same release in the append-only
+-- HOLD ledger inside the transaction. Restrict it to the explicit no-answer reason so a future
+-- generic missed-call transition cannot claim money was released when it was not.
+CREATE OR REPLACE FUNCTION app.record_internet_voice_no_answer_hold_release()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_wallet_id uuid;
+BEGIN
+  IF NEW.status::text <> 'missed'
+     OR OLD.status::text = 'missed'
+     OR NEW.transport::text <> 'internet_voice'
+     OR NEW.ended_reason IS DISTINCT FROM 'internet_voice_no_answer'
+     OR NEW.authorized_minor <= 0 THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT id INTO v_wallet_id
+  FROM app.wallets
+  WHERE user_id=NEW.caller_user_id AND currency_code=NEW.currency_code
+  LIMIT 1;
+
+  IF v_wallet_id IS NULL THEN
+    RAISE EXCEPTION 'wallet_missing_for_no_answer_hold_release';
+  END IF;
+
+  INSERT INTO app.wallet_hold_events(
+    wallet_id, call_session_id, currency_code, event_type,
+    amount_minor, reason_code, idempotency_key, metadata
+  ) VALUES (
+    v_wallet_id, NEW.id, NEW.currency_code, 'release',
+    NEW.authorized_minor, 'internet_voice_no_answer',
+    'call:' || NEW.id::text || ':hold:no_answer_release',
+    jsonb_build_object('chargedMinor', 0, 'terminalStatus', 'missed')
+  ) ON CONFLICT (idempotency_key) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS call_sessions_no_answer_hold_release_ledger ON app.call_sessions;
+CREATE TRIGGER call_sessions_no_answer_hold_release_ledger
+AFTER UPDATE OF status ON app.call_sessions
+FOR EACH ROW EXECUTE FUNCTION app.record_internet_voice_no_answer_hold_release();
+
 -- Wave 1 has exactly 10/30/60 minute initial choices. Extensions are UPDATEs after the call
 -- connects and therefore are intentionally outside this INSERT-only guard.
 CREATE OR REPLACE FUNCTION app.enforce_wave1_initial_session_cap()

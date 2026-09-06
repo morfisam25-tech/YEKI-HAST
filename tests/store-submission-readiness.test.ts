@@ -71,10 +71,11 @@ test('current mobile package has no known analytics or advertising SDK that woul
 
 test('store submission packet is pinned to real current identifiers and public policy surfaces', () => {
   assert.match(submissionPacket, /app\.yekihast\.mobile/);
-  assert.match(submissionPacket, /https:\/\/web-unique-6ff0\.vercel\.app\/privacy/);
-  assert.match(submissionPacket, /https:\/\/web-unique-6ff0\.vercel\.app\/account\/delete/);
+  assert.match(submissionPacket, /https:\/\/yekihast\.app\/privacy/);
+  assert.match(submissionPacket, /https:\/\/yekihast\.app\/account\/delete/);
   assert.match(submissionPacket, /Email-first Technical Beta/);
   assert.match(submissionPacket, /Caller voice, payment, KYC, payout, telephony/);
-  assert.match(submissionPacket, /Google Play Data Safety/);
-  assert.match(submissionPacket, /Apple App Privacy/);
+  assert.match(submissionPacket, /GOOGLE_PLAY_FINAL_PACKET\.md/);
+  assert.match(submissionPacket, /Android reviewer\/Data Safety baseline/);
+  assert.match(submissionPacket, /Apple \/ iOS — parked, not deleted/);
 });

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+const callerPage = await readFile(new URL('../apps/web/app/talk/page.tsx', import.meta.url), 'utf8');
+const callerProxy = await readFile(new URL('../apps/web/app/api/caller/[...path]/route.ts', import.meta.url), 'utf8');
+
+test('Web Caller proxy keeps the session token server-side and allow-lists Caller operations', () => {
+  assert.match(callerProxy, /WEB_SESSION_COOKIE/);
+  assert.match(callerProxy, /authorization: `Bearer \$\{token\}`/);
+  assert.match(callerProxy, /browserMutationAllowed/);
+  assert.match(callerProxy, /\^listeners\$/);
+  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|end\|safety-exit\)/);
+  assert.doesNotMatch(callerProxy, /localStorage|sessionStorage/);
+});
+
+test('Web Caller implements the locked 10/30/60 maximum choices and explicit age confirmation', () => {
+  assert.match(callerPage, /\(\[600, 1800, 3600\] as const\)/);
+  assert.match(callerPage, /maxSeconds: capSeconds/);
+  assert.match(callerPage, /ageConfirmed/);
+  assert.match(callerPage, /caller\/age-gate/);
+});
+
+test('Web Caller uses browser WebRTC and server signaling rather than PSTN dispatch', () => {
+  assert.match(callerPage, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(callerPage, /new RTCPeerConnection/);
+  assert.match(callerPage, /createOffer/);
+  assert.match(callerPage, /kind: 'offer'/);
+  assert.match(callerPage, /kind: 'ice'/);
+  assert.match(callerPage, /kind: 'media_connected'/);
+  assert.doesNotMatch(callerPage, /\/dispatch|provider_bridge|phoneNumber/);
+});
+
+test('Web Caller handles 90-second no-answer, actual connected timing, warnings and extensions', () => {
+  assert.match(callerPage, /voice\/no-answer/);
+  assert.match(callerPage, /noAnswerSeconds/);
+  assert.match(callerPage, /connectedAt/);
+  assert.match(callerPage, /remaining <= 60 \? 60 : remaining <= 120 \? 120/);
+  assert.match(callerPage, /extend\(15\)/);
+  assert.match(callerPage, /extend\(30\)/);
+  assert.match(callerPage, /voice\/end/);
+});

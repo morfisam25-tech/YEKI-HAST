@@ -21,6 +21,7 @@ const ALLOWED_PATHS = [
   /^calls\/active$/,
   /^calls\/request$/,
   new RegExp(`^calls\/${UUID}$`),
+  new RegExp(`^calls\/${UUID}\/cancel$`),
   new RegExp(`^calls\/${UUID}\/voice\/(start|config|signals|no-answer|extend|end|safety-exit)$`),
   /^safety\/(report|block)$/,
 ];

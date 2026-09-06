@@ -44,10 +44,12 @@ function normalizeSignalPayload(value: unknown): unknown {
   return value;
 }
 
-function internetVoiceBridgeId(callId: string): string {
-  // Transitional compatibility only: the existing schema names this column provider_bridge_id.
-  // Domain/API behavior treats it as an opaque transport session id.
+function internetVoiceSessionId(callId: string): string {
   return `iv:${callId}`;
+}
+
+async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTransaction>[0]>[0]) {
+  await client.query('DELETE FROM app.internet_voice_signals WHERE expires_at<=now()');
 }
 
 export async function startInternetVoiceCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
@@ -62,11 +64,11 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
       caller_user_id: string;
       listener_user_id: string | null;
       status: string;
-      telephony_provider: string | null;
-      provider_bridge_id: string | null;
+      transport: string | null;
+      transport_session_id: string | null;
     }>(`
       SELECT id::text, caller_user_id::text, listener_user_id::text, status::text,
-             telephony_provider, provider_bridge_id
+             transport::text, transport_session_id
       FROM app.call_sessions
       WHERE id=$1 AND caller_user_id=$2
       FOR UPDATE
@@ -75,24 +77,24 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     if (!row) throw new HttpError(404, 'call_not_found');
     if (!row.listener_user_id) throw new HttpError(409, 'call_not_dispatchable');
 
-    const expectedBridgeId = internetVoiceBridgeId(row.id);
-    if (row.telephony_provider === 'internet_voice' && row.provider_bridge_id === expectedBridgeId) {
+    const expectedSessionId = internetVoiceSessionId(row.id);
+    if (row.transport === 'internet_voice' && row.transport_session_id === expectedSessionId) {
       if (!ACTIVE_STATUSES.includes(row.status as (typeof ACTIVE_STATUSES)[number])) {
         throw new HttpError(409, 'call_not_active');
       }
-      return { idempotent: true, status: row.status, listenerUserId: row.listener_user_id };
+      return { idempotent: true, status: row.status };
     }
     if (row.status !== 'routing') throw new HttpError(409, 'call_cannot_start_voice');
-    if (row.provider_bridge_id || row.telephony_provider) throw new HttpError(409, 'call_transport_already_claimed');
+    if (row.transport_session_id || row.transport) throw new HttpError(409, 'call_transport_already_claimed');
 
     const expiresAt = new Date(Date.now() + NO_ANSWER_SECONDS * 1000).toISOString();
     const updated = await client.query(`
       UPDATE app.call_sessions
-      SET status='calling_listener', telephony_provider='internet_voice',
-          provider_bridge_id=$2, updated_at=now()
-      WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
+      SET status='calling_listener', transport='internet_voice',
+          transport_session_id=$2, updated_at=now()
+      WHERE id=$1 AND status='routing' AND transport IS NULL AND transport_session_id IS NULL
       RETURNING id
-    `, [row.id, expectedBridgeId]);
+    `, [row.id, expectedSessionId]);
     if (!updated.rowCount) throw new HttpError(409, 'call_voice_start_conflict');
 
     await client.query(`
@@ -105,7 +107,7 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
       noAnswerSeconds: NO_ANSWER_SECONDS,
     })]);
 
-    return { idempotent: false, status: 'calling_listener', listenerUserId: row.listener_user_id };
+    return { idempotent: false, status: 'calling_listener' };
   });
 
   sendJson(res, result.idempotent ? 200 : 202, {
@@ -129,16 +131,16 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
       caller_user_id: string;
       listener_user_id: string | null;
       status: string;
-      telephony_provider: string | null;
+      transport: string | null;
     }>(`
-      SELECT caller_user_id::text, listener_user_id::text, status::text, telephony_provider
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text
       FROM app.call_sessions
       WHERE id=$1
     `, [rawCallId]);
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     const role = participantRole(row, userId);
-    if (row.telephony_provider !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
+    if (row.transport !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
     if (!ACTIVE_STATUSES.includes(row.status as (typeof ACTIVE_STATUSES)[number])) throw new HttpError(409, 'call_not_active');
     return { role, status: row.status };
   });
@@ -169,9 +171,9 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
       caller_user_id: string;
       listener_user_id: string | null;
       status: string;
-      telephony_provider: string | null;
+      transport: string | null;
     }>(`
-      SELECT caller_user_id::text, listener_user_id::text, status::text, telephony_provider
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text
       FROM app.call_sessions
       WHERE id=$1
       FOR UPDATE
@@ -179,34 +181,27 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     const role = participantRole(row, userId);
-    if (row.telephony_provider !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
+    if (row.transport !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
     if (!ACTIVE_STATUSES.includes(row.status as (typeof ACTIVE_STATUSES)[number])) throw new HttpError(409, 'call_not_active');
 
     if (kind === 'offer' && role !== 'caller') throw new HttpError(403, 'voice_offer_caller_only');
     if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');
 
+    await deleteExpiredSignals(client);
     await client.query(`
-      INSERT INTO app.call_events(call_session_id, status, source, metadata)
-      VALUES ($1,$2::app.call_status,'api',$3::jsonb)
-    `, [rawCallId, row.status, JSON.stringify({
-      reason: 'internet_voice_signal',
-      transport: 'internet_voice',
-      signalKind: kind,
-      senderRole: role,
-      payload,
-    })]);
+      INSERT INTO app.internet_voice_signals(call_session_id, sender_role, signal_kind, payload)
+      VALUES ($1,$2,$3,$4::jsonb)
+    `, [rawCallId, role, kind, JSON.stringify(payload)]);
 
     let status = row.status;
     let becameConnected = false;
     if (kind === 'media_connected' && row.status !== 'connected') {
       const connectedRoles = await client.query<{ role: string }>(`
-        SELECT DISTINCT metadata->>'senderRole' AS role
-        FROM app.call_events
+        SELECT DISTINCT sender_role AS role
+        FROM app.internet_voice_signals
         WHERE call_session_id=$1
-          AND metadata->>'reason'='internet_voice_signal'
-          AND metadata->>'transport'='internet_voice'
-          AND metadata->>'signalKind'='media_connected'
-          AND metadata->>'senderRole' IN ('caller','listener')
+          AND signal_kind='media_connected'
+          AND expires_at>now()
       `, [rawCallId]);
       const roles = new Set(connectedRoles.rows.map((item) => item.role));
       if (roles.has('caller') && roles.has('listener')) {
@@ -214,7 +209,7 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
           UPDATE app.call_sessions
           SET status='connected', connected_at=COALESCE(connected_at,now()),
               billing_started_at=COALESCE(billing_started_at,now()), updated_at=now()
-          WHERE id=$1 AND status='calling_listener'
+          WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
           RETURNING id
         `, [rawCallId]);
         if (updated.rowCount) {
@@ -254,36 +249,33 @@ export async function getInternetVoiceSignals(req: IncomingMessage, res: ServerR
       caller_user_id: string;
       listener_user_id: string | null;
       status: string;
-      telephony_provider: string | null;
+      transport: string | null;
     }>(`
-      SELECT caller_user_id::text, listener_user_id::text, status::text, telephony_provider
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text
       FROM app.call_sessions
       WHERE id=$1
     `, [rawCallId]);
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     const role = participantRole(row, userId);
-    if (row.telephony_provider !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
+    if (row.transport !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
 
+    await deleteExpiredSignals(client);
     const signals = await client.query<{
+      id: string;
       created_at: string;
       signal_kind: string;
       sender_role: string;
       payload: unknown;
     }>(`
-      SELECT created_at::text,
-             metadata->>'signalKind' AS signal_kind,
-             metadata->>'senderRole' AS sender_role,
-             metadata->'payload' AS payload
-      FROM app.call_events
-      WHERE call_session_id=$1
-        AND metadata->>'reason'='internet_voice_signal'
-        AND metadata->>'transport'='internet_voice'
-      ORDER BY created_at DESC
-      LIMIT 200
+      SELECT id::text, created_at::text, signal_kind, sender_role, payload
+      FROM app.internet_voice_signals
+      WHERE call_session_id=$1 AND expires_at>now()
+      ORDER BY created_at ASC, id ASC
+      LIMIT 500
     `, [rawCallId]);
 
-    return { role, status: row.status, signals: signals.rows.reverse() };
+    return { role, status: row.status, signals: signals.rows };
   });
 
   sendJson(res, 200, {
@@ -292,6 +284,7 @@ export async function getInternetVoiceSignals(req: IncomingMessage, res: ServerR
     role: result.role,
     status: result.status,
     signals: result.signals.map((signal) => ({
+      id: signal.id,
       createdAt: signal.created_at,
       kind: signal.signal_kind,
       senderRole: signal.sender_role,
@@ -309,14 +302,14 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
       caller_user_id: string;
       listener_user_id: string | null;
       status: string;
-      telephony_provider: string | null;
+      transport: string | null;
       currency_code: string;
       authorized_minor: string;
       product_id: string;
       service_id: string;
       market_id: string;
     }>(`
-      SELECT caller_user_id::text, listener_user_id::text, status::text, telephony_provider,
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text,
              currency_code, authorized_minor::text, product_id::text, service_id::text, market_id::text
       FROM app.call_sessions
       WHERE id=$1 AND caller_user_id=$2
@@ -324,7 +317,7 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
     `, [rawCallId, userId]);
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
-    if (row.telephony_provider !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
+    if (row.transport !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
     if (row.status === 'connected') throw new HttpError(409, 'call_already_connected');
     if (row.status === 'missed') return { status: 'missed', idempotent: true };
     if (row.status !== 'calling_listener') throw new HttpError(409, 'call_not_waiting_for_listener');
@@ -342,12 +335,11 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
 
     const listenerAnswered = await client.query(`
       SELECT 1
-      FROM app.call_events
+      FROM app.internet_voice_signals
       WHERE call_session_id=$1
-        AND metadata->>'reason'='internet_voice_signal'
-        AND metadata->>'transport'='internet_voice'
-        AND metadata->>'signalKind' IN ('answer','media_connected')
-        AND metadata->>'senderRole'='listener'
+        AND signal_kind IN ('answer','media_connected')
+        AND sender_role='listener'
+        AND expires_at>now()
       LIMIT 1
     `, [rawCallId]);
     if (listenerAnswered.rowCount) throw new HttpError(409, 'listener_already_answered');
@@ -389,7 +381,7 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
     await client.query(`
       UPDATE app.call_sessions
       SET status='missed', ended_at=COALESCE(ended_at,now()), ended_reason='internet_voice_no_answer', updated_at=now()
-      WHERE id=$1 AND status='calling_listener'
+      WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
     `, [rawCallId]);
     await client.query(`
       INSERT INTO app.call_events(call_session_id, status, source, metadata)
@@ -401,6 +393,7 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
       listenerAutoOffline: true,
       noAnswerSeconds: NO_ANSWER_SECONDS,
     })]);
+    await client.query('DELETE FROM app.internet_voice_signals WHERE call_session_id=$1', [rawCallId]);
 
     return { status: 'missed', idempotent: false };
   });

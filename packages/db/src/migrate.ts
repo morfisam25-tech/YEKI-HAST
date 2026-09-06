@@ -25,6 +25,10 @@ const migrationSources: MigrationSource[] = [
     filename: '0002_email_auth.sql',
     path: join(migrationsDir, '0002_email_auth.sql'),
   },
+  {
+    filename: '0003_internet_voice_transport.sql',
+    path: join(migrationsDir, '0003_internet_voice_transport.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

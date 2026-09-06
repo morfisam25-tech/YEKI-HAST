@@ -1,0 +1,233 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { withTransaction } from '../../../../packages/db/src/client.ts';
+import { requireAuth } from '../lib/auth.ts';
+import { HttpError, readJson, sendJson } from '../lib/http.ts';
+import { encryptPrivateText } from '../lib/security.ts';
+import { settleInternetVoiceCall } from '../services/internet-voice-lifecycle.ts';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PRE_CONNECTED_STATUSES = new Set(['routing', 'calling_listener']);
+
+type ParticipantRole = 'caller' | 'listener';
+
+function assertCallId(callId: string): void {
+  if (!UUID_RE.test(callId)) throw new HttpError(400, 'invalid_call');
+}
+
+function detailsFrom(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw new HttpError(400, 'invalid_details');
+  const details = value.trim();
+  if (!details) return null;
+  if (details.length > 4_000) throw new HttpError(400, 'details_too_long');
+  return details;
+}
+
+function endedReasonFrom(value: unknown, fallback: string): string {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') throw new HttpError(400, 'invalid_end_reason');
+  const reason = value.trim();
+  if (!reason || reason.length > 120) throw new HttpError(400, 'invalid_end_reason');
+  return reason;
+}
+
+async function prepareVoiceEnd(input: {
+  callId: string;
+  userId: string;
+  safety: boolean;
+  details: string | null;
+  blockCounterparty: boolean;
+  endedReason: string;
+}) {
+  return withTransaction(async (client) => {
+    const result = await client.query<{
+      caller_user_id: string;
+      listener_user_id: string | null;
+      status: string;
+      transport: string | null;
+      currency_code: string;
+      authorized_minor: string;
+    }>(`
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text,
+             currency_code, authorized_minor::text
+      FROM app.call_sessions
+      WHERE id=$1
+      FOR UPDATE
+    `, [input.callId]);
+    const row = result.rows[0];
+    if (!row) throw new HttpError(404, 'call_not_found');
+    if (row.transport !== 'internet_voice') throw new HttpError(409, 'call_not_internet_voice');
+
+    let role: ParticipantRole;
+    let otherUserId: string | null;
+    if (row.caller_user_id === input.userId) {
+      role = 'caller';
+      otherUserId = row.listener_user_id;
+    } else if (row.listener_user_id === input.userId) {
+      role = 'listener';
+      otherUserId = row.caller_user_id;
+    } else {
+      throw new HttpError(403, 'not_call_participant');
+    }
+
+    if (row.status === 'completed' || row.status === 'cancelled' || row.status === 'safety_terminated') {
+      return {
+        kind: 'terminal' as const,
+        role,
+        status: row.status,
+        safetyEventId: null as string | null,
+      };
+    }
+
+    let safetyEventId: string | null = null;
+    if (input.safety) {
+      const event = await client.query<{ id: string }>(`
+        INSERT INTO app.safety_events(call_session_id, triggered_by, trigger_user_id, severity, action_code)
+        VALUES ($1,$2,$3,'high','end_for_safety')
+        RETURNING id::text
+      `, [input.callId, role, input.userId]);
+      safetyEventId = event.rows[0].id;
+      if (input.details) {
+        await client.query(`
+          INSERT INTO private_data.safety_event_details(safety_event_id, details_ciphertext)
+          VALUES ($1,$2)
+        `, [safetyEventId, encryptPrivateText(input.details, `safety_event_details:${safetyEventId}`)]);
+      }
+      if (input.blockCounterparty && otherUserId) {
+        await client.query(`
+          INSERT INTO app.blocks(blocker_user_id, blocked_user_id, reason_code)
+          VALUES ($1,$2,'safety_exit')
+          ON CONFLICT (blocker_user_id, blocked_user_id) DO UPDATE SET
+            reason_code=EXCLUDED.reason_code, expires_at=NULL
+        `, [input.userId, otherUserId]);
+      }
+    }
+
+    if (PRE_CONNECTED_STATUSES.has(row.status)) {
+      const authorized = BigInt(row.authorized_minor);
+      if (authorized > 0n) {
+        const released = await client.query(`
+          UPDATE app.wallets
+          SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
+          WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
+          RETURNING id
+        `, [row.caller_user_id, row.currency_code, authorized.toString()]);
+        if (!released.rowCount) throw new HttpError(409, 'wallet_release_conflict');
+      }
+      const finalStatus = input.safety ? 'safety_terminated' : 'cancelled';
+      await client.query(`
+        UPDATE app.call_sessions
+        SET status=$2::app.call_status, ended_at=COALESCE(ended_at,now()), ended_reason=$3, updated_at=now()
+        WHERE id=$1 AND status::text = ANY($4::text[]) AND transport='internet_voice'
+      `, [input.callId, finalStatus, input.endedReason, [...PRE_CONNECTED_STATUSES]]);
+      await client.query(`
+        INSERT INTO app.call_events(call_session_id, status, source, metadata)
+        VALUES ($1,$2::app.call_status,'api',$3::jsonb)
+      `, [input.callId, finalStatus, JSON.stringify({
+        reason: input.endedReason,
+        transport: 'internet_voice',
+        endedByRole: role,
+        holdReleased: true,
+        chargedMinor: '0',
+        safetyEventId,
+      })]);
+      await client.query('DELETE FROM app.internet_voice_signals WHERE call_session_id=$1', [input.callId]);
+      return {
+        kind: 'preconnected_finalized' as const,
+        role,
+        status: finalStatus,
+        safetyEventId,
+      };
+    }
+
+    if (row.status !== 'connected') throw new HttpError(409, 'call_not_live');
+    return { kind: 'connected' as const, role, status: row.status, safetyEventId };
+  });
+}
+
+export async function endInternetVoiceCall(
+  req: IncomingMessage,
+  res: ServerResponse,
+  rawCallId: string,
+  options?: { safety?: boolean },
+) {
+  assertCallId(rawCallId);
+  const { userId } = await requireAuth(req);
+  const safety = Boolean(options?.safety);
+  const body = await readJson<{
+    reason?: unknown;
+    details?: unknown;
+    blockCounterparty?: unknown;
+  }>(req);
+  const details = safety ? detailsFrom(body.details) : null;
+  const blockCounterparty = safety && body.blockCounterparty === true;
+  const endedReason = endedReasonFrom(
+    body.reason,
+    safety ? 'internet_voice_safety_exit' : 'internet_voice_user_ended',
+  );
+
+  const prepared = await prepareVoiceEnd({
+    callId: rawCallId,
+    userId,
+    safety,
+    details,
+    blockCounterparty,
+    endedReason,
+  });
+
+  if (prepared.kind === 'terminal') {
+    sendJson(res, 200, {
+      ok: true,
+      callId: rawCallId,
+      transport: 'internet_voice',
+      status: prepared.status,
+      idempotent: true,
+    });
+    return;
+  }
+
+  if (prepared.kind === 'preconnected_finalized') {
+    sendJson(res, 200, {
+      ok: true,
+      callId: rawCallId,
+      transport: 'internet_voice',
+      status: prepared.status,
+      billableSeconds: 0,
+      callerChargeMinor: '0',
+      listenerEarningMinor: '0',
+      holdReleased: true,
+      safetyEventId: prepared.safetyEventId,
+      reportPrefill: safety ? { callId: rawCallId, category: 'inappropriate_conduct' } : null,
+      idempotent: false,
+    });
+    return;
+  }
+
+  let settlement;
+  try {
+    settlement = await settleInternetVoiceCall({
+      callId: rawCallId,
+      endedByRole: prepared.role,
+      safety,
+      endedReason,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'call_not_settleable') {
+      throw new HttpError(409, 'call_end_conflict');
+    }
+    throw error;
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    callId: settlement.callId,
+    transport: 'internet_voice',
+    status: settlement.status,
+    billableSeconds: settlement.billableSeconds,
+    callerChargeMinor: settlement.callerChargeMinor,
+    listenerEarningMinor: settlement.listenerEarningMinor,
+    safetyEventId: prepared.safetyEventId,
+    reportPrefill: safety ? { callId: rawCallId, category: 'inappropriate_conduct' } : null,
+    idempotent: settlement.idempotent,
+  });
+}

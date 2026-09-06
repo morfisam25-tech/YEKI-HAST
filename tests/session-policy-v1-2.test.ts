@@ -93,6 +93,13 @@ test('migration records initial HOLDs and rejects arbitrary Wave 1 initial durat
   assert.match(migrationSource, /NOT IN \(600, 1800, 3600\)/);
 });
 
+test('Internet Voice no-answer records the zero-charge HOLD release in the append-only ledger', () => {
+  assert.match(migrationSource, /record_internet_voice_no_answer_hold_release/);
+  assert.match(migrationSource, /NEW\.ended_reason IS DISTINCT FROM 'internet_voice_no_answer'/);
+  assert.match(migrationSource, /'call:' \|\| NEW\.id::text \|\| ':hold:no_answer_release'/);
+  assert.match(migrationSource, /'release',[\s\S]*'internet_voice_no_answer'/);
+});
+
 test('connected settlement consumes actual charge and releases unused HOLD', () => {
   assert.match(settlementSource, /event_type,[\s\S]*'consume'/);
   assert.match(settlementSource, /const unusedHold = authorized - charge/);

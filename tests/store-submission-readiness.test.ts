@@ -73,7 +73,7 @@ test('store submission packet is pinned to real current identifiers and public p
   assert.match(submissionPacket, /app\.yekihast\.mobile/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/privacy/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/account\/delete/);
-  assert.match(submissionPacket, /Email-first Technical Beta/);
+  assert.match(submissionPacket, /Technical Beta is email-first and listener-focused/);
   assert.match(submissionPacket, /Caller voice, payment, KYC, payout, telephony/);
   assert.match(submissionPacket, /GOOGLE_PLAY_FINAL_PACKET\.md/);
   assert.match(submissionPacket, /Android reviewer\/Data Safety baseline/);

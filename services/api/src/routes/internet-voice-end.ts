@@ -105,14 +105,16 @@ async function prepareVoiceEnd(input: {
 
     if (PRE_CONNECTED_STATUSES.has(row.status)) {
       const authorized = BigInt(row.authorized_minor);
+      let releasedWalletId: string | null = null;
       if (authorized > 0n) {
-        const released = await client.query(`
+        const released = await client.query<{ id: string }>(`
           UPDATE app.wallets
           SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
           WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
-          RETURNING id
+          RETURNING id::text
         `, [row.caller_user_id, row.currency_code, authorized.toString()]);
         if (!released.rowCount) throw new HttpError(409, 'wallet_release_conflict');
+        releasedWalletId = released.rows[0].id;
       }
       const finalStatus = input.safety ? 'safety_terminated' : 'cancelled';
       await client.query(`
@@ -120,6 +122,23 @@ async function prepareVoiceEnd(input: {
         SET status=$2::app.call_status, ended_at=COALESCE(ended_at,now()), ended_reason=$3, updated_at=now()
         WHERE id=$1 AND status::text = ANY($4::text[]) AND transport='internet_voice'
       `, [input.callId, finalStatus, input.endedReason, [...PRE_CONNECTED_STATUSES]]);
+      if (releasedWalletId && authorized > 0n) {
+        await client.query(`
+          INSERT INTO app.wallet_hold_events(
+            wallet_id, call_session_id, currency_code, event_type,
+            amount_minor, reason_code, idempotency_key, metadata
+          ) VALUES ($1,$2,$3,'release',$4,$5,$6,$7::jsonb)
+          ON CONFLICT (idempotency_key) DO NOTHING
+        `, [
+          releasedWalletId,
+          input.callId,
+          row.currency_code,
+          authorized.toString(),
+          input.safety ? 'preconnect_safety_exit' : 'preconnect_user_cancel',
+          `call:${input.callId}:hold:release:preconnect`,
+          JSON.stringify({ status: finalStatus, endedByRole: role }),
+        ]);
+      }
       await client.query(`
         INSERT INTO app.call_events(call_session_id, status, source, metadata)
         VALUES ($1,$2::app.call_status,'api',$3::jsonb)
@@ -128,6 +147,7 @@ async function prepareVoiceEnd(input: {
         transport: 'internet_voice',
         endedByRole: role,
         holdReleased: true,
+        holdReleasedMinor: authorized.toString(),
         chargedMinor: '0',
         safetyEventId,
       })]);

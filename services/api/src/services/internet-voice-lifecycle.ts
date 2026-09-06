@@ -143,6 +143,38 @@ export async function settleInternetVoiceCall(input: {
         row.id,
         `call:${row.id}:charge`,
       ]);
+      await client.query(`
+        INSERT INTO app.wallet_hold_events(
+          wallet_id, call_session_id, currency_code, event_type,
+          amount_minor, reason_code, idempotency_key, metadata
+        ) VALUES ($1,$2,$3,'consume',$4,'actual_connected_time_charge',$5,$6::jsonb)
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        walletRow.id,
+        row.id,
+        row.currency_code,
+        charge.toString(),
+        `call:${row.id}:hold:consume`,
+        JSON.stringify({ billableSeconds: settlement.billableSeconds }),
+      ]);
+    }
+
+    const unusedHold = authorized - charge;
+    if (unusedHold > 0n) {
+      await client.query(`
+        INSERT INTO app.wallet_hold_events(
+          wallet_id, call_session_id, currency_code, event_type,
+          amount_minor, reason_code, idempotency_key, metadata
+        ) VALUES ($1,$2,$3,'release',$4,'unused_session_hold',$5,$6::jsonb)
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        walletRow.id,
+        row.id,
+        row.currency_code,
+        unusedHold.toString(),
+        `call:${row.id}:hold:release:unused`,
+        JSON.stringify({ authorizedMinor: authorized.toString(), callerChargeMinor: charge.toString() }),
+      ]);
     }
 
     if (earning > 0n) {
@@ -179,6 +211,7 @@ export async function settleInternetVoiceCall(input: {
       billableSeconds: settlement.billableSeconds,
       callerChargeMinor: charge.toString(),
       listenerEarningMinor: earning.toString(),
+      holdReleasedMinor: unusedHold.toString(),
     })]);
 
     await client.query('DELETE FROM app.internet_voice_signals WHERE call_session_id=$1', [row.id]);

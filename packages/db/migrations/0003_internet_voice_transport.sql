@@ -43,3 +43,21 @@ CREATE INDEX IF NOT EXISTS internet_voice_signals_call_created_idx
   ON app.internet_voice_signals(call_session_id, created_at, id);
 CREATE INDEX IF NOT EXISTS internet_voice_signals_expiry_idx
   ON app.internet_voice_signals(expires_at);
+
+-- v1.2 Iran economics are expressed to users in toman, while the ledger remains in IRR
+-- minor units. 4,000 / 2,800 / 1,200 toman therefore becomes 40,000 / 28,000 / 12,000 IRR.
+-- Existing call sessions keep their snapshotted rates; this changes future authorizations only.
+UPDATE app.pricing_plans pp
+SET caller_rate_per_minute_minor=40000,
+    listener_rate_per_minute_minor=28000,
+    platform_spread_per_minute_minor=12000,
+    billing_increment_seconds=1
+FROM app.products p, app.service_catalog s, app.markets m
+WHERE pp.product_id=p.id
+  AND pp.service_id=s.id
+  AND pp.market_id=m.id
+  AND p.code='yeki_hast'
+  AND s.code='human_listening'
+  AND m.code='ir'
+  AND pp.currency_code='IRR'
+  AND pp.is_active=true;

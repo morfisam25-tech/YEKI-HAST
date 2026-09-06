@@ -3,6 +3,7 @@ import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { validateEmailSecurityEnv, validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
 import { requireCallerClosedBetaEnabled } from './lib/caller-beta.ts';
+import { validatePrimaryCallTransportEnv } from './providers/call-transport.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
 import { validateEmailProviderEnv } from './providers/email.ts';
 import { HttpError, sendJson } from './lib/http.ts';
@@ -35,6 +36,11 @@ function ensureKycReady(): void {
   catch { throw new HttpError(503, 'kyc_not_configured'); }
 }
 function ensureCallReady(): void {
+  ensureDatabaseReady();
+  try { validatePrimaryCallTransportEnv(); }
+  catch { throw new HttpError(503, 'call_transport_not_configured'); }
+}
+function ensureTelephonyReady(): void {
   ensureDatabaseReady();
   try { validateTelephonyEnv(); }
   catch { throw new HttpError(503, 'telephony_not_configured'); }
@@ -117,8 +123,19 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && payoutDispatchMatch) { ensureKycReady(); const { dispatchPayout } = await import('./routes/payouts.ts'); return await dispatchPayout(req, res, payoutDispatchMatch[1]); }
     const payoutReconcileMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/reconcile$/);
     if (method === 'POST' && payoutReconcileMatch) { ensureDatabaseReady(); const { reconcilePayout } = await import('./routes/payouts.ts'); return await reconcilePayout(req, res, payoutReconcileMatch[1]); }
+
+    const voiceStartMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/start$/);
+    if (method === 'POST' && voiceStartMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { startInternetVoiceCall } = await import('./routes/internet-voice.ts'); return await startInternetVoiceCall(req, res, voiceStartMatch[1]); }
+    const voiceConfigMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/config$/);
+    if (method === 'GET' && voiceConfigMatch) { ensureCallReady(); const { getInternetVoiceConfig } = await import('./routes/internet-voice.ts'); return await getInternetVoiceConfig(req, res, voiceConfigMatch[1]); }
+    const voiceSignalsMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/signals$/);
+    if (method === 'POST' && voiceSignalsMatch) { ensureCallReady(); const { postInternetVoiceSignal } = await import('./routes/internet-voice.ts'); return await postInternetVoiceSignal(req, res, voiceSignalsMatch[1]); }
+    if (method === 'GET' && voiceSignalsMatch) { ensureCallReady(); const { getInternetVoiceSignals } = await import('./routes/internet-voice.ts'); return await getInternetVoiceSignals(req, res, voiceSignalsMatch[1]); }
+    const voiceNoAnswerMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/no-answer$/);
+    if (method === 'POST' && voiceNoAnswerMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { expireInternetVoiceNoAnswer } = await import('./routes/internet-voice.ts'); return await expireInternetVoiceNoAnswer(req, res, voiceNoAnswerMatch[1]); }
+
     const dispatchMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/dispatch$/);
-    if (method === 'POST' && dispatchMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
+    if (method === 'POST' && dispatchMatch) { requireCallerClosedBetaEnabled(); ensureTelephonyReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) { ensureSensitiveDataReady(); const { safetyExitCall } = await import('./routes/safety.ts'); return await safetyExitCall(req, res, safetyExitMatch[1]); }
     const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);

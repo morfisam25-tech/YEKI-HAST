@@ -11,6 +11,7 @@ import {
   sessionTiming,
 } from '../services/api/src/domain/session-policy.ts';
 
+const callsSource = await readFile(new URL('../services/api/src/routes/calls.ts', import.meta.url), 'utf8');
 const extensionSource = await readFile(new URL('../services/api/src/routes/internet-voice-extension.ts', import.meta.url), 'utf8');
 const handlerSource = await readFile(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const migrationSource = await readFile(new URL('../packages/db/migrations/0003_internet_voice_transport.sql', import.meta.url), 'utf8');
@@ -22,6 +23,13 @@ test('Wave 1 exposes exactly 10/30/60 minute initial caps', () => {
   assert.equal(requireWave1SessionCapSeconds(1800), 1800);
   assert.equal(requireWave1SessionCapSeconds(3600), 3600);
   assert.throws(() => requireWave1SessionCapSeconds(1080), /invalid_wave1_session_cap/);
+});
+
+test('call request enforces presets at the API boundary and keeps a 10-minute compatibility default', () => {
+  assert.match(callsSource, /requireWave1SessionCapSeconds/);
+  assert.match(callsSource, /\? 600 : Number\(value\)/);
+  assert.match(callsSource, /invalid_session_cap/);
+  assert.doesNotMatch(callsSource, /parsed > 86_400/);
 });
 
 test('Internet Voice extension exposes only +15 and +30 minutes', () => {

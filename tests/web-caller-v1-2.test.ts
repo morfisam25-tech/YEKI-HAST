@@ -4,6 +4,9 @@ import test from 'node:test';
 
 const callerPage = await readFile(new URL('../apps/web/app/talk/page.tsx', import.meta.url), 'utf8');
 const callerProxy = await readFile(new URL('../apps/web/app/api/caller/[...path]/route.ts', import.meta.url), 'utf8');
+const manifestSource = await readFile(new URL('../apps/web/app/manifest.ts', import.meta.url), 'utf8');
+const pwaRegister = await readFile(new URL('../apps/web/app/PwaRegister.tsx', import.meta.url), 'utf8');
+const serviceWorker = await readFile(new URL('../apps/web/public/sw.js', import.meta.url), 'utf8');
 
 test('Web Caller proxy keeps the session token server-side and allow-lists Caller operations', () => {
   assert.match(callerProxy, /WEB_SESSION_COOKIE/);
@@ -39,4 +42,13 @@ test('Web Caller handles 90-second no-answer, actual connected timing, warnings 
   assert.match(callerPage, /extend\(15\)/);
   assert.match(callerPage, /extend\(30\)/);
   assert.match(callerPage, /voice\/end/);
+});
+
+test('Web Caller is an installable PWA without caching authenticated or call data', () => {
+  assert.match(manifestSource, /start_url: '\/talk'/);
+  assert.match(manifestSource, /display: 'standalone'/);
+  assert.match(manifestSource, /\/icon\.svg/);
+  assert.match(pwaRegister, /serviceWorker\.register\('\/sw\.js'/);
+  assert.match(serviceWorker, /not cached/);
+  assert.doesNotMatch(serviceWorker, /caches\.open|cache\.put|respondWith/);
 });

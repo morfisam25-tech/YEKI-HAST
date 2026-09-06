@@ -157,12 +157,12 @@ export default function TalkPage() {
     id: string,
     iceServers: RTCIceServer[],
     noAnswerSeconds: number,
+    stream: MediaStream,
   ) => {
     cleanupRtc();
     setPhase('ringing');
     setNotice('در حال تماس با شنونده…');
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     localStreamRef.current = stream;
     const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
@@ -278,14 +278,25 @@ export default function TalkPage() {
   async function startCall() {
     if (!selected || busy || !ageConfirmed) return;
     setBusy(true);
+    setPhase('preparing');
     setError('');
-    setNotice('');
+    setNotice('در حال بررسی میکروفن…');
+
+    let preparedStream: MediaStream | null = null;
+    let createdCallId: string | null = null;
+    let voiceStarted = false;
     try {
       const age = await api<{ minimumAge: number; policyVersion: string }>('caller/age-gate', {
         method: 'POST',
         body: JSON.stringify({ confirmed: true }),
       });
       setAgePolicyText(`تأیید سن ${faNumber(age.minimumAge)}+ ثبت شد.`);
+
+      // Ask for microphone access before creating a call or reserving Wallet funds.
+      // A denied/slow permission prompt therefore never starts the 90-second answer clock.
+      preparedStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      if (preparedStream.getAudioTracks().length === 0) throw new DOMException('microphone_missing', 'NotFoundError');
+      setNotice('میکروفن آماده است؛ در حال رزرو سقف تماس…');
 
       const languageCode = selected.languages.find((item) => item.code === 'fa')?.code
         ?? selected.languages[0]?.code
@@ -300,25 +311,45 @@ export default function TalkPage() {
           maxSeconds: capSeconds,
         }),
       });
+      createdCallId = call.callId;
       setCallId(call.callId);
       setMaxBillableSeconds(call.maxBillableSeconds ?? capSeconds);
+
       const voice = await api<{
         noAnswerSeconds: number;
         client: { iceServers: RTCIceServer[]; relayConfigured: boolean };
       }>(`calls/${call.callId}/voice/start`, { method: 'POST', body: '{}' });
+      voiceStarted = true;
       if (!voice.client.relayConfigured && process.env.NODE_ENV === 'production') {
         throw new Error('voice_relay_not_ready');
       }
-      await beginRtc(call.callId, voice.client.iceServers, voice.noAnswerSeconds);
+      await beginRtc(call.callId, voice.client.iceServers, voice.noAnswerSeconds, preparedStream);
+      preparedStream = null;
     } catch (cause) {
+      // If Wallet HOLD/call creation already happened, compensate it before returning the UI
+      // to idle. Internet Voice uses its own transport-neutral end path after voice/start;
+      // a pre-start routing call can use the existing local cancel path.
+      if (createdCallId) {
+        const path = voiceStarted
+          ? `calls/${createdCallId}/voice/end`
+          : `calls/${createdCallId}/cancel`;
+        const reason = voiceStarted ? 'web_start_failed' : 'web_pre_voice_start_failed';
+        await api(path, { method: 'POST', body: JSON.stringify({ reason }) }).catch(() => undefined);
+      }
+      if (preparedStream && localStreamRef.current !== preparedStream) {
+        preparedStream.getTracks().forEach((track) => track.stop());
+      }
       cleanupRtc();
+      setCallId(null);
       setPhase('idle');
       const code = cause instanceof Error ? cause.message : 'call_failed';
+      const browserErrorName = typeof DOMException !== 'undefined' && cause instanceof DOMException ? cause.name : '';
       if (code === 'insufficient_balance') setError('اعتبار برای سقف زمانی انتخاب‌شده کافی نیست.');
       else if (code === 'no_listener_available') setError('این شنونده دیگر آنلاین نیست. یک گزینه دیگر انتخاب کن.');
       else if (code === 'caller_age_policy_not_configured') setError('قانون سن Caller در این محیط هنوز تنظیم نشده است.');
       else if (code === 'call_transport_not_configured' || code === 'voice_relay_not_ready') setError('مسیر صوتی امن هنوز در این محیط آماده نیست.');
-      else if (code === 'NotAllowedError') setError('برای تماس باید دسترسی میکروفن را فعال کنی.');
+      else if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای تماس باید دسترسی میکروفن را فعال کنی.');
+      else if (browserErrorName === 'NotFoundError') setError('میکروفن قابل استفاده پیدا نشد.');
       else setError('شروع تماس انجام نشد. دوباره تلاش کن.');
     } finally {
       setBusy(false);
@@ -408,7 +439,7 @@ export default function TalkPage() {
                   <strong>{listener.nickname}</strong>
                   <span>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأیید نشده'}</span>
                   <span>{listener.ratingAverage === null ? 'بدون امتیاز' : `امتیاز ${listener.ratingAverage.toFixed(1)} از ${faNumber(listener.ratingCount)} نظر`}</span>
-                  {listener.shortIntro && <small>معرفی شخصی: {listener.shortIntro}</small>}
+                  {listener.shortIntro && <small>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</small>}
                 </button>
               ))}
               {!listeners.length && !error && <p>الان شنونده آنلاین پیدا نشد.</p>}
@@ -443,7 +474,7 @@ export default function TalkPage() {
         <section className="live-call" aria-labelledby="live-call-title">
           <p className="kicker">تماس فعال</p>
           <h2 id="live-call-title">{selected?.nickname ?? 'شنونده'}</h2>
-          <p>{phase === 'ringing' ? 'منتظر پاسخ شنونده…' : phase === 'connecting' ? 'در حال اتصال صدا…' : 'تماس وصل است.'}</p>
+          <p>{phase === 'preparing' ? 'در حال آماده‌سازی میکروفن…' : phase === 'ringing' ? 'منتظر پاسخ شنونده…' : phase === 'connecting' ? 'در حال اتصال صدا…' : 'تماس وصل است.'}</p>
           {phase === 'connected' && remainingSeconds !== null && (
             <p className={warning ? 'error' : ''}>
               زمان باقی‌مانده از سقف: {faNumber(Math.floor(remainingSeconds / 60))}:{faNumber(remainingSeconds % 60).padStart(2, '۰')}
@@ -456,7 +487,7 @@ export default function TalkPage() {
               <button type="button" disabled={busy} onClick={() => void extend(30)}>+۳۰ دقیقه</button>
             </div>
           )}
-          <button type="button" disabled={busy} onClick={() => void endCall()}>پایان تماس</button>
+          {callId && <button type="button" disabled={busy} onClick={() => void endCall()}>پایان تماس</button>}
           <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای شنونده" />
         </section>
       )}

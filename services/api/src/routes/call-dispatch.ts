@@ -29,16 +29,22 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
       authorized_minor: string;
       max_billable_seconds: number | null;
       provider_bridge_id: string | null;
+      transport: string | null;
+      transport_session_id: string | null;
     }>(`
       SELECT id::text, caller_user_id::text, listener_user_id::text, status::text,
-             currency_code, authorized_minor::text, max_billable_seconds, provider_bridge_id
+             currency_code, authorized_minor::text, max_billable_seconds, provider_bridge_id,
+             transport::text, transport_session_id
       FROM app.call_sessions
       WHERE id=$1 AND caller_user_id=$2
       FOR UPDATE
     `, [rawCallId, userId]);
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
-    if (row.provider_bridge_id) return { kind: 'already_dispatched' as const, status: row.status };
+    if (row.transport === 'internet_voice') throw new HttpError(409, 'call_transport_already_claimed');
+    if (row.provider_bridge_id || (row.transport === 'masked_pstn' && row.transport_session_id)) {
+      return { kind: 'already_dispatched' as const, status: row.status };
+    }
 
     // Once a routing call is claimed as calling_caller, a provider submission may already
     // have happened even when the bridge id was not persisted. Blind redispatch could create
@@ -88,14 +94,14 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
 
     const updated = await client.query(`
       UPDATE app.call_sessions
-      SET status='calling_caller', telephony_provider=$2, updated_at=now()
-      WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL
+      SET status='calling_caller', transport='masked_pstn', telephony_provider=$2, updated_at=now()
+      WHERE id=$1 AND status='routing' AND provider_bridge_id IS NULL AND transport IS NULL
       RETURNING id
     `, [row.id, process.env.TELEPHONY_PROVIDER?.trim() || null]);
     if (!updated.rowCount) throw new HttpError(409, 'call_dispatch_conflict');
     await client.query(`
-      INSERT INTO app.call_events(call_session_id, status, source)
-      VALUES ($1,'calling_caller','api')
+      INSERT INTO app.call_events(call_session_id, status, source, metadata)
+      VALUES ($1,'calling_caller','api',jsonb_build_object('transport','masked_pstn'))
     `, [row.id]);
 
     return {
@@ -128,7 +134,7 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
     try {
       await query(`
         INSERT INTO app.call_events(call_session_id, status, source, metadata)
-        VALUES ($1,'calling_caller','telephony',jsonb_build_object('reason','dispatch_result_uncertain'))
+        VALUES ($1,'calling_caller','telephony',jsonb_build_object('reason','dispatch_result_uncertain','transport','masked_pstn'))
       `, [claimed.callId]);
     } catch {
       console.error('telephony_dispatch_uncertain_event_failed', { callId: claimed.callId });
@@ -138,8 +144,8 @@ export async function dispatchCall(req: IncomingMessage, res: ServerResponse, ra
 
   const persisted = await query(`
     UPDATE app.call_sessions
-    SET provider_bridge_id=$2, updated_at=now()
-    WHERE id=$1 AND status='calling_caller' AND provider_bridge_id IS NULL
+    SET provider_bridge_id=$2, transport_session_id=$2, updated_at=now()
+    WHERE id=$1 AND status='calling_caller' AND transport='masked_pstn' AND provider_bridge_id IS NULL
     RETURNING id
   `, [claimed.callId, bridgeId]);
 

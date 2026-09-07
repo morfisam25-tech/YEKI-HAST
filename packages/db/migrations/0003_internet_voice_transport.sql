@@ -139,7 +139,7 @@ BEGIN
   ) VALUES (
     v_wallet_id, NEW.id, NEW.currency_code, 'release',
     NEW.authorized_minor, 'internet_voice_no_answer',
-    'call:' || NEW.id::text || ':hold:no_answer_release',
+    'call:' || NEW.id::text || ':hold:release:no_answer',
     jsonb_build_object('chargedMinor', 0, 'terminalStatus', 'missed')
   ) ON CONFLICT (idempotency_key) DO NOTHING;
 

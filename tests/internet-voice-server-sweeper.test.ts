@@ -51,3 +51,15 @@ test('Iran pricing migration never writes the generated platform-spread column d
   assert.match(pricingUpdate, /caller_rate_per_minute_minor=40000/);
   assert.match(pricingUpdate, /listener_rate_per_minute_minor=28000/);
 });
+
+
+test('no-answer HOLD release uses one canonical idempotency key across API, trigger and sweeper', async () => {
+  const voiceRoute = await readFile(new URL('../services/api/src/routes/internet-voice.ts', import.meta.url), 'utf8');
+  assert.match(transportMigration, /:hold:release:no_answer/);
+  assert.match(migration, /:hold:release:no_answer/);
+  assert.match(voiceRoute, /:hold:release:no_answer/);
+  assert.doesNotMatch(transportMigration, /:hold:no_answer_release/);
+  assert.equal((transportMigration.match(/:hold:release:no_answer/g) ?? []).length, 1);
+  assert.ok((migration.match(/:hold:release:no_answer/g) ?? []).length >= 1);
+  assert.ok((voiceRoute.match(/:hold:release:no_answer/g) ?? []).length >= 1);
+});

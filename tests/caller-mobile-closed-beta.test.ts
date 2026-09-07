@@ -20,7 +20,8 @@ test('closed-beta caller shell requires server age confirmation before browse fl
 
 test('closed-beta caller shell exposes request plus real Internet Voice start, end and safety clients', () => {
   assert.match(caller, /await requestCall\(token/);
-  assert.match(caller, /await startInternetVoiceCall\(token, requested\.callId\)/);
+  assert.match(caller, /const startedCallId = requested\.callId/);
+  assert.match(caller, /await startInternetVoiceCall\(token, startedCallId\)/);
   assert.match(caller, /await endInternetVoiceCall\(token, call\.callId\)/);
   assert.match(caller, /await safetyExitInternetVoiceCall\(token, call\.callId\)/);
   assert.doesNotMatch(caller, /dispatchCall\(/);

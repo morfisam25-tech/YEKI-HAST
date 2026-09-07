@@ -1,4 +1,4 @@
-name: Inspect vc5 Store AAB permissions
+name: Inspect and archive vc5 Store AAB
 
 on:
   push:
@@ -16,20 +16,64 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 --output app.aab 'https://expo.dev/artifacts/eas/8kWgYhlJalu_Ou6H8pk4Mf2jr4XkIjZDXonlwqUU2QQ.aab'
-          actual="$(sha256sum app.aab | awk '{print $1}')"
+          mkdir -p verified-vc5
+          curl --fail --location --retry 3 --output verified-vc5/yeki-hast-1.0.0-vc5-v1.2-final.aab 'https://expo.dev/artifacts/eas/8kWgYhlJalu_Ou6H8pk4Mf2jr4XkIjZDXonlwqUU2QQ.aab'
+          actual="$(sha256sum verified-vc5/yeki-hast-1.0.0-vc5-v1.2-final.aab | awk '{print $1}')"
           test "$actual" = 'f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32'
+          printf '%s  %s\n' "$actual" 'yeki-hast-1.0.0-vc5-v1.2-final.aab' > verified-vc5/yeki-hast-1.0.0-vc5-v1.2-final.aab.sha256
           echo "checksum PASS: $actual"
 
-      - name: Dump manifest and permissions
+      - name: Verify archive signing manifest and requested permissions
         shell: bash
         run: |
           set -euo pipefail
+          AAB='verified-vc5/yeki-hast-1.0.0-vc5-v1.2-final.aab'
+          unzip -t "$AAB" >/dev/null
+          jarsigner -verify -verbose "$AAB" >/tmp/jarsigner.txt 2>&1
+          grep -q 'jar verified' /tmp/jarsigner.txt
           curl --fail --location --retry 3 --output bundletool.jar 'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar'
-          java -jar bundletool.jar dump manifest --bundle=app.aab > manifest.xml
-          echo '--- DECLARED PERMISSIONS ---'
-          grep -o 'android.permission.[A-Z0-9_]*' manifest.xml | sort -u || true
-          echo '--- USES-PERMISSION LINES ---'
-          grep '<uses-permission' manifest.xml || true
-          echo '--- PACKAGE/SDK ---'
-          grep -E '<manifest |<uses-sdk ' manifest.xml || true
+          java -jar bundletool.jar dump manifest --bundle="$AAB" > verified-vc5/aab-manifest.xml
+          grep -F 'package="app.yekihast.mobile"' verified-vc5/aab-manifest.xml
+          grep -E 'android:versionCode="5"' verified-vc5/aab-manifest.xml
+          grep -E 'targetSdkVersion="36"|targetSdkVersion="0x24"' verified-vc5/aab-manifest.xml
+          grep '<uses-permission' verified-vc5/aab-manifest.xml | sed -n 's/.*android:name="\([^"]*\)".*/\1/p' | sort -u > verified-vc5/requested-permissions.txt
+          cat verified-vc5/requested-permissions.txt
+          grep -Fxq 'android.permission.RECORD_AUDIO' verified-vc5/requested-permissions.txt
+          for forbidden in \
+            android.permission.CAMERA \
+            android.permission.DUMP \
+            android.permission.ACCESS_FINE_LOCATION \
+            android.permission.ACCESS_COARSE_LOCATION \
+            android.permission.READ_CONTACTS \
+            android.permission.WRITE_CONTACTS \
+            android.permission.GET_ACCOUNTS \
+            android.permission.READ_CALL_LOG \
+            android.permission.WRITE_CALL_LOG \
+            android.permission.READ_PHONE_STATE \
+            android.permission.READ_PHONE_NUMBERS \
+            android.permission.CALL_PHONE \
+            android.permission.READ_SMS \
+            android.permission.RECEIVE_SMS \
+            android.permission.SEND_SMS \
+            com.google.android.gms.permission.AD_ID \
+            android.permission.SYSTEM_ALERT_WINDOW \
+            android.permission.READ_EXTERNAL_STORAGE \
+            android.permission.WRITE_EXTERNAL_STORAGE \
+            android.permission.MANAGE_EXTERNAL_STORAGE \
+            android.permission.READ_MEDIA_AUDIO \
+            android.permission.READ_MEDIA_IMAGES \
+            android.permission.READ_MEDIA_VIDEO; do
+              if grep -Fxq "$forbidden" verified-vc5/requested-permissions.txt; then
+                echo "::error::Forbidden requested permission: $forbidden"
+                exit 1
+              fi
+          done
+          echo 'vc5 Store AAB requested-permission audit PASS'
+
+      - name: Upload exact verified vc5 Store AAB archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: yeki-hast-final-android-aab-v1.0.0-vc5-v1.2
+          path: verified-vc5
+          retention-days: 90
+          if-no-files-found: error

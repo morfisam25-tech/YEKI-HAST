@@ -20,7 +20,7 @@ concurrency:
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       ESBUILD_BIN: ${{ github.workspace }}/node_modules/.bin/esbuild
     steps:
@@ -146,7 +146,27 @@ jobs:
         run: npm run verify:security-config
 
       - name: Typecheck all workspaces
-        run: npm run typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npm run typecheck 2>&1 | tee typecheck.log; then
+            {
+              echo '### Typecheck failure'
+              echo '```text'
+              tail -n 160 typecheck.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Upload typecheck failure log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: typecheck-failure
+          path: typecheck.log
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Build Web production app
         env:
@@ -157,6 +177,15 @@ jobs:
         env:
           NODE_ENV: production
         run: npm --workspace @yeki-hast/admin run build
+
+      - name: Validate Android native prebuild
+        env:
+          CI: '1'
+          EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-unique-6ff0.vercel.app
+        run: |
+          cd apps/mobile
+          npx expo prebuild --platform android --clean --no-install
+          test -f android/app/src/main/AndroidManifest.xml
 
       - name: Export Android bundle
         env:

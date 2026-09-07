@@ -1,0 +1,35 @@
+name: Inspect vc5 Store AAB permissions
+
+on:
+  push:
+    branches:
+      - ops/vc5-permission-forensic
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download exact vc5 AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output app.aab 'https://expo.dev/artifacts/eas/8kWgYhlJalu_Ou6H8pk4Mf2jr4XkIjZDXonlwqUU2QQ.aab'
+          actual="$(sha256sum app.aab | awk '{print $1}')"
+          test "$actual" = 'f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32'
+          echo "checksum PASS: $actual"
+
+      - name: Dump manifest and permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output bundletool.jar 'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar'
+          java -jar bundletool.jar dump manifest --bundle=app.aab > manifest.xml
+          echo '--- DECLARED PERMISSIONS ---'
+          grep -o 'android.permission.[A-Z0-9_]*' manifest.xml | sort -u || true
+          echo '--- USES-PERMISSION LINES ---'
+          grep '<uses-permission' manifest.xml || true
+          echo '--- PACKAGE/SDK ---'
+          grep -E '<manifest |<uses-sdk ' manifest.xml || true

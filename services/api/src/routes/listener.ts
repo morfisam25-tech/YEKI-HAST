@@ -152,6 +152,14 @@ export async function submitListenerAssessment(req: IncomingMessage, res: Server
     `, [row.id]);
     if (!listenerTrainingComplete(progress.rows)) throw new HttpError(409, 'training_incomplete');
 
+    const pending = await client.query(`
+      SELECT 1
+      FROM app.listener_assessment_attempts
+      WHERE application_id=$1 AND result='pending'
+      LIMIT 1
+    `, [row.id]);
+    if (pending.rowCount) throw new HttpError(409, 'assessment_pending_review');
+
     const attempt = await client.query<{ id: string }>(`
       INSERT INTO app.listener_assessment_attempts(application_id, result, scenario_version, answers)
       VALUES ($1,'pending',$2,$3::jsonb)

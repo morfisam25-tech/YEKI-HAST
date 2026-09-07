@@ -16,8 +16,10 @@ function messageFor(code: string): string {
   const messages: Record<string, string> = {
     unauthorized: 'نشست ورود معتبر نیست. دوباره وارد شو.',
     kyc_not_configured: 'ثبت امن اطلاعات هویتی هنوز روی این محیط فعال نشده.',
+    kyc_provider_not_configured: 'سرویس استعلام واقعی احراز هویت هنوز روی این محیط فعال نشده.',
     kyc_not_available: 'مرحله احراز هویت هنوز برای این درخواست باز نشده.',
     kyc_already_verified: 'احراز هویت قبلاً تأیید شده است.',
+    kyc_pending_review: 'اطلاعات احراز هویت قبلاً ثبت شده و هنوز در حال بررسی است.',
     invalid_legal_name: 'نام و نام خانوادگی را مطابق مدرک هویتی وارد کن.',
     invalid_national_id: 'کد ملی معتبر نیست.',
     invalid_date_of_birth: 'تاریخ تولد شمسی معتبر نیست.',

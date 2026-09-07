@@ -1,9 +1,15 @@
 import pg from 'pg';
 
-const expectedMigrations = new Map([
+const expectedMigrationEntries = [
   ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
   ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
-]);
+  ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
+  ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
+  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
+  ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
+];
+const expectedMigrations = new Map(expectedMigrationEntries);
+
 
 function normalizedDatabaseUrl(connectionString) {
   const url = new URL(connectionString);
@@ -41,18 +47,19 @@ try {
       ORDER BY filename
     `);
     const applied = new Map();
-    for (const migration of migrations.rows) {
+    for (let index = 0; index < migrations.rows.length; index += 1) {
+      const migration = migrations.rows[index];
       const filename = String(migration.filename ?? '');
       const sha256 = String(migration.sha256 ?? '');
+      const expectedEntry = expectedMigrationEntries[index];
+      if (!expectedEntry || filename !== expectedEntry[0]) {
+        throw new Error(`production migration history is out of order or unexpected: ${filename || 'unknown'}`);
+      }
       const expectedSha = expectedMigrations.get(filename);
-      if (!expectedSha) throw new Error(`unexpected production migration record: ${filename || 'unknown'}`);
       if (sha256 !== expectedSha) throw new Error(`production migration hash mismatch: ${filename}`);
       applied.set(filename, sha256);
     }
 
-    if (applied.has('0002_email_auth.sql') && !applied.has('0001_initial.sql')) {
-      throw new Error('production migration history is out of order');
-    }
     if (!applied.has('0001_initial.sql') && (appSchema || privateSchema)) {
       throw new Error('application schemas exist without tracked initial migration');
     }

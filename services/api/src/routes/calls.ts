@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { computeCallAuthorization } from '../domain/call-authorization.ts';
+import { requireWave1SessionCapSeconds } from '../domain/session-policy.ts';
 import { getTelephonyProvider } from '../providers/telephony.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
 
@@ -37,11 +38,15 @@ function parseListenerId(value: unknown): string | null {
   return id;
 }
 
-function parseMaxSeconds(value: unknown): number | null {
-  if (value === undefined || value === null || value === '') return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 86_400) throw new HttpError(400, 'invalid_max_seconds');
-  return parsed;
+function parseMaxSeconds(value: unknown): number {
+  // Wave 1 exposes only the locked 10/30/60 minute presets. Defaulting an omitted
+  // value to 10 minutes preserves older clients without creating an arbitrary picker.
+  const parsed = value === undefined || value === null || value === '' ? 600 : Number(value);
+  try {
+    return requireWave1SessionCapSeconds(parsed);
+  } catch {
+    throw new HttpError(400, 'invalid_session_cap');
+  }
 }
 
 function snapshotCall(row: {
@@ -254,12 +259,12 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
+    caller_charge_minor: string; transport: 'internet_voice' | 'masked_pstn' | null; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
     SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
            cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
            cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
-           cs.provider_bridge_id,
+           cs.transport::text, cs.provider_bridge_id,
            EXISTS (
              SELECT 1
              FROM app.call_events ce
@@ -285,6 +290,7 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
       currencyCode: row.currency_code,
       authorizedMinor: row.authorized_minor,
       maxBillableSeconds: row.max_billable_seconds,
+      transport: row.transport,
       telephonyReady: Boolean(row.provider_bridge_id),
       terminationInProgress: row.termination_in_progress,
       requestedAt: row.requested_at,
@@ -303,12 +309,12 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
+    caller_charge_minor: string; transport: 'internet_voice' | 'masked_pstn' | null; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
     SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
            cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
            cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
-           cs.provider_bridge_id,
+           cs.transport::text, cs.provider_bridge_id,
            EXISTS (
              SELECT 1
              FROM app.call_events ce
@@ -327,6 +333,7 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     currencyCode: row.currency_code,
     authorizedMinor: row.authorized_minor,
     maxBillableSeconds: row.max_billable_seconds,
+    transport: row.transport,
     telephonyReady: Boolean(row.provider_bridge_id),
     terminationInProgress: row.termination_in_progress,
     requestedAt: row.requested_at,

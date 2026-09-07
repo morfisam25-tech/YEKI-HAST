@@ -25,6 +25,22 @@ const migrationSources: MigrationSource[] = [
     filename: '0002_email_auth.sql',
     path: join(migrationsDir, '0002_email_auth.sql'),
   },
+  {
+    filename: '0003_internet_voice_transport.sql',
+    path: join(migrationsDir, '0003_internet_voice_transport.sql'),
+  },
+  {
+    filename: '0004_booking.sql',
+    path: join(migrationsDir, '0004_booking.sql'),
+  },
+  {
+    filename: '0005_no_answer_hold_idempotency.sql',
+    path: join(migrationsDir, '0005_no_answer_hold_idempotency.sql'),
+  },
+  {
+    filename: '0006_internet_voice_server_sweeper.sql',
+    path: join(migrationsDir, '0006_internet_voice_server_sweeper.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

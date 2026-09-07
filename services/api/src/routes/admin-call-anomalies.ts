@@ -32,6 +32,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     FROM app.call_sessions
     WHERE status::text='calling_caller'
       AND provider_bridge_id IS NULL
+      AND (transport IS NULL OR transport::text='masked_pstn')
     ORDER BY requested_at ASC
     LIMIT 100
   `);
@@ -110,6 +111,7 @@ export async function getAdminCallAnomalies(req: IncomingMessage, res: ServerRes
     FROM app.call_sessions
     WHERE status::text IN ('caller_answered','calling_listener','connected')
       AND provider_bridge_id IS NULL
+      AND (transport IS NULL OR transport::text='masked_pstn')
     ORDER BY requested_at ASC
     LIMIT 100
   `);

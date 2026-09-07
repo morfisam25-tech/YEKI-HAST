@@ -18,10 +18,12 @@ body {
 }
 
 button,
-input { font: inherit; }
+input,
+textarea { font: inherit; }
 
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
   outline: 3px solid #7f9278;
   outline-offset: 2px;
@@ -132,22 +134,33 @@ h2 {
 
 .helper { margin: 8px 0 0; }
 
-label {
+label,
+.field-label {
   margin-bottom: -8px;
   font-size: 14px;
   font-weight: 700;
 }
 
-input {
+input,
+textarea {
   width: 100%;
-  min-height: 52px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fbfaf7;
   color: var(--ink);
   padding: 12px 14px;
-  direction: ltr;
   text-align: right;
+}
+
+input {
+  min-height: 52px;
+  direction: ltr;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.8;
+  direction: rtl;
 }
 
 .code-input {
@@ -155,7 +168,8 @@ input {
   letter-spacing: 8px;
 }
 
-button {
+button,
+.primary-link {
   min-height: 52px;
   border: 0;
   border-radius: 6px;
@@ -164,6 +178,13 @@ button {
   padding: 12px 18px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 button:disabled {
@@ -251,6 +272,377 @@ button:disabled {
   padding-right: 22px;
 }
 
+.talk-page {
+  display: grid;
+  gap: 28px;
+}
+
+.talk-page .listener-note {
+  margin-top: 22px;
+  padding-bottom: 28px;
+}
+
+.talk-page .listener-note h1 {
+  font-size: clamp(32px, 6vw, 54px);
+}
+
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.listener-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.listener-card {
+  min-height: 170px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  text-align: right;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+.listener-card span,
+.listener-card small {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.listener-card.selected,
+.duration-options button.selected,
+.language-button.selected {
+  border: 2px solid #5d7058;
+  background: #f2f6ef;
+  color: var(--ink);
+}
+
+.call-setup,
+.live-call {
+  display: grid;
+  gap: 18px;
+  max-width: 720px;
+  padding: clamp(20px, 4vw, 34px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.duration-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.live-call .duration-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.age-check {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.7;
+}
+
+.age-check input {
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  direction: rtl;
+}
+
+.live-call audio {
+  width: 100%;
+}
+
+.listener-work-page,
+.listener-onboarding-page {
+  display: grid;
+  gap: 26px;
+}
+
+.listener-work-hero,
+.listener-onboarding-hero {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  gap: 42px;
+  align-items: center;
+  padding: 42px 0 30px;
+  border-bottom: 1px solid var(--line);
+}
+
+.listener-work-hero h1 {
+  font-size: clamp(42px, 7vw, 64px);
+}
+
+.listener-onboarding-hero h1 {
+  font-size: clamp(36px, 6vw, 56px);
+}
+
+.listener-onboarding-hero > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.95;
+}
+
+.work-status-copy {
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.work-status-copy p { margin: 0; }
+.work-status-copy strong { color: var(--ink); }
+
+.work-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.listener-work-page .call-setup {
+  max-width: none;
+  height: 100%;
+}
+
+.presence-pill {
+  width: fit-content;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f2f1ed;
+  color: #55564f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.presence-pill[data-status='online'] {
+  background: #eaf2e6;
+  border-color: #b8c9af;
+  color: #40523a;
+}
+
+.presence-pill[data-status='paused'] {
+  background: #fbf2df;
+  border-color: #dbcba4;
+  color: #5a481d;
+}
+
+.duration-options.two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.secondary-action {
+  background: #eceae4;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.danger-action {
+  background: #8a3430;
+  color: #ffffff;
+}
+
+.wide-card {
+  max-width: none;
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.summary-card strong {
+  font-size: 18px;
+}
+
+.summary-card span,
+.recent-row span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.recent-list {
+  display: grid;
+  gap: 10px;
+}
+
+.recent-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.recent-row > div {
+  display: grid;
+  gap: 5px;
+}
+
+.recent-row > div:last-child {
+  text-align: left;
+}
+
+.listener-work-page audio {
+  width: 100%;
+}
+
+.onboarding-card {
+  max-width: 860px;
+  margin-inline: auto;
+}
+
+.listener-onboarding-page input:not([dir='ltr']) {
+  direction: rtl;
+}
+
+.language-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.language-button {
+  min-height: 48px;
+  background: #f1efe9;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.training-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.training-card-done {
+  background: #f0f4ed;
+  border-color: #b7c3af;
+}
+
+.training-card h3,
+.assessment-panel h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.training-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.assessment-panel,
+.kyc-form {
+  display: grid;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.question-card {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f6f2;
+}
+
+.question-card legend {
+  padding: 0 6px;
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+.answer-choice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 0;
+  padding: 11px;
+  border-radius: 6px;
+  background: #ffffff;
+  font-weight: 400;
+  line-height: 1.75;
+}
+
+.answer-choice input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  padding: 0;
+}
+
+.status-notice {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid #cbd6c5;
+  border-radius: 8px;
+  background: #eef3ea;
+}
+
+.status-notice span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.warning-notice {
+  border-color: #e1d2ab;
+  background: #fbf2df;
+}
+
+.ready-card {
+  background: #f7faf5;
+  border-color: #b7c3af;
+}
+
 @media (max-width: 800px) {
   main { padding-top: 12px; }
   .site-header span { display: none; }
@@ -268,6 +660,31 @@ button:disabled {
     gap: 12px;
   }
   .legal-page { padding-top: 40px; }
+  .listener-grid { grid-template-columns: 1fr 1fr; }
+  .listener-work-hero,
+  .listener-onboarding-hero,
+  .work-grid {
+    grid-template-columns: 1fr;
+  }
+  .listener-work-hero,
+  .listener-onboarding-hero { gap: 18px; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .language-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .section-heading { align-items: start; flex-direction: column; }
+  .listener-grid { grid-template-columns: 1fr; }
+  .duration-options { grid-template-columns: 1fr; }
+  .live-call .duration-options { grid-template-columns: 1fr 1fr; }
+  .duration-options.two-column,
+  .summary-grid,
+  .recent-row,
+  .training-grid,
+  .language-grid {
+    grid-template-columns: 1fr;
+  }
+  .recent-row > div:last-child { text-align: right; }
 }
 
 @media (max-width: 420px) {

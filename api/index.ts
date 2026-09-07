@@ -5,6 +5,10 @@ import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.t
 const EXPECTED_MIGRATIONS = new Map([
   ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
   ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+  ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
+  ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
+  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
+  ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
 ]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -56,7 +60,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, {
       ok: true,
       service: 'yeki-hast-api',
-      version: '0.0.10',
+      version: '0.0.11',
       ...(sha ? { releaseSha: sha } : {}),
       ...(url.pathname === '/' ? { endpoints: ['/health', '/ready', '/v1/bootstrap'] } : {}),
     });
@@ -88,6 +92,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         pricing_ready: boolean;
         audit_ready: boolean;
         email_otp_ready: boolean;
+        internet_voice_signals_ready: boolean;
+        wallet_hold_events_ready: boolean;
+        listener_availability_ready: boolean;
+        call_reservations_ready: boolean;
+        pg_cron_ready: boolean;
+        pg_cron_database_ready: boolean;
+        internet_voice_sweeper_ready: boolean;
+        internet_voice_sweeper_ensure_ready: boolean;
+        internet_voice_sweeper_stop_ready: boolean;
+        internet_voice_liveness_columns_ready: boolean;
+        internet_voice_liveness_settlement_ready: boolean;
       }>(`
         SELECT
           to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migrations_ready,
@@ -95,7 +110,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           to_regclass('private_data.auth_sessions') IS NOT NULL AS sessions_ready,
           to_regclass('app.pricing_plans') IS NOT NULL AS pricing_ready,
           to_regclass('app.audit_logs') IS NOT NULL AS audit_ready,
-          to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready
+          to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready,
+          to_regclass('app.internet_voice_signals') IS NOT NULL AS internet_voice_signals_ready,
+          to_regclass('app.wallet_hold_events') IS NOT NULL AS wallet_hold_events_ready,
+          to_regclass('app.listener_availability') IS NOT NULL AS listener_availability_ready,
+          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready,
+          EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron_ready,
+          current_setting('cron.database_name', true)=current_database() AS pg_cron_database_ready,
+          to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS internet_voice_sweeper_ready,
+          to_regprocedure('app.ensure_internet_voice_sweeper_job()') IS NOT NULL AS internet_voice_sweeper_ensure_ready,
+          to_regprocedure('app.stop_internet_voice_sweeper_if_idle()') IS NOT NULL AS internet_voice_sweeper_stop_ready,
+          (
+            SELECT count(*)=2
+            FROM information_schema.columns
+            WHERE table_schema='app'
+              AND table_name='call_sessions'
+              AND column_name IN ('caller_voice_heartbeat_at','listener_voice_heartbeat_at')
+          ) AS internet_voice_liveness_columns_ready,
+          to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean,timestamptz)') IS NOT NULL
+            AS internet_voice_liveness_settlement_ready
       `);
       const row = critical.rows[0];
       const relationsReady = Boolean(
@@ -105,6 +138,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.pricing_ready
         && row?.audit_ready
         && row?.email_otp_ready
+        && row?.internet_voice_signals_ready
+        && row?.wallet_hold_events_ready
+        && row?.listener_availability_ready
+        && row?.call_reservations_ready
+        && row?.pg_cron_ready
+        && row?.pg_cron_database_ready
+        && row?.internet_voice_sweeper_ready
+        && row?.internet_voice_sweeper_ensure_ready
+        && row?.internet_voice_sweeper_stop_ready
+        && row?.internet_voice_liveness_columns_ready
+        && row?.internet_voice_liveness_settlement_ready
       );
       if (!relationsReady) {
         console.error('readiness_schema_incomplete', {
@@ -114,6 +158,74 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           pricing: Boolean(row?.pricing_ready),
           audit: Boolean(row?.audit_ready),
           emailOtp: Boolean(row?.email_otp_ready),
+          internetVoiceSignals: Boolean(row?.internet_voice_signals_ready),
+          walletHoldEvents: Boolean(row?.wallet_hold_events_ready),
+          listenerAvailability: Boolean(row?.listener_availability_ready),
+          callReservations: Boolean(row?.call_reservations_ready),
+          pgCron: Boolean(row?.pg_cron_ready),
+          pgCronDatabase: Boolean(row?.pg_cron_database_ready),
+          internetVoiceSweeper: Boolean(row?.internet_voice_sweeper_ready),
+          internetVoiceSweeperEnsure: Boolean(row?.internet_voice_sweeper_ensure_ready),
+          internetVoiceSweeperStop: Boolean(row?.internet_voice_sweeper_stop_ready),
+          internetVoiceLivenessColumns: Boolean(row?.internet_voice_liveness_columns_ready),
+          internetVoiceLivenessSettlement: Boolean(row?.internet_voice_liveness_settlement_ready),
+        });
+        sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+        return;
+      }
+
+      const scheduler = await pool.query<{
+        active_voice_calls: string;
+        valid_jobs: string;
+        invalid_jobs: string;
+      }>(`
+        SELECT
+          (
+            SELECT count(*)::text
+            FROM app.call_sessions
+            WHERE transport='internet_voice'
+              AND status IN ('calling_listener','connected')
+          ) AS active_voice_calls,
+          (
+            SELECT count(*)::text
+            FROM cron.job
+            WHERE jobname='yeki_hast_internet_voice_sweep'
+              AND schedule='10 seconds'
+              AND active=true
+              AND database=current_database()
+              AND command='SELECT * FROM app.sweep_internet_voice_sessions(100);'
+          ) AS valid_jobs,
+          (
+            SELECT count(*)::text
+            FROM cron.job
+            WHERE jobname='yeki_hast_internet_voice_sweep'
+              AND NOT (
+                schedule='10 seconds'
+                AND active=true
+                AND database=current_database()
+                AND command='SELECT * FROM app.sweep_internet_voice_sessions(100);'
+              )
+          ) AS invalid_jobs
+      `);
+      const schedulerRow = scheduler.rows[0];
+      const activeVoiceCalls = Number(schedulerRow?.active_voice_calls ?? '0');
+      const validJobs = Number(schedulerRow?.valid_jobs ?? '0');
+      const invalidJobs = Number(schedulerRow?.invalid_jobs ?? '0');
+      if (
+        !Number.isSafeInteger(activeVoiceCalls)
+        || !Number.isSafeInteger(validJobs)
+        || !Number.isSafeInteger(invalidJobs)
+        || activeVoiceCalls < 0
+        || validJobs < 0
+        || invalidJobs < 0
+        || invalidJobs > 0
+        || validJobs > 1
+        || (activeVoiceCalls > 0 && validJobs !== 1)
+      ) {
+        console.error('readiness_internet_voice_sweeper_job_invalid', {
+          activeVoiceCalls,
+          validJobs,
+          invalidJobs,
         });
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;
@@ -122,9 +234,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const migrations = await pool.query<{ filename: string; sha256: string }>(`
         SELECT filename, sha256
         FROM public.yeki_hast_schema_migrations
-        WHERE filename IN ('0001_initial.sql','0002_email_auth.sql')
+        WHERE filename IN (
+          '0001_initial.sql',
+          '0002_email_auth.sql',
+          '0003_internet_voice_transport.sql',
+          '0004_booking.sql',
+          '0005_no_answer_hold_idempotency.sql',
+          '0006_internet_voice_server_sweeper.sql'
+        )
       `);
-      const migrationMap = new Map(migrations.rows.map((migration) => [migration.filename, migration.sha256]));
+      const migrationMap = new Map(
+        migrations.rows.map((migration) => [migration.filename, migration.sha256]),
+      );
       for (const [filename, expectedSha] of EXPECTED_MIGRATIONS) {
         if (migrationMap.get(filename) !== expectedSha) {
           console.error('readiness_migration_integrity_mismatch', { filename });
@@ -192,20 +313,32 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         LIMIT 1
       `, [productCode, serviceCode, marketCode]);
 
-      const languages = await pool.query<{ code: string; name_fa: string; name_en: string | null }>(
+      const languages = await pool.query<{
+        code: string;
+        name_fa: string;
+        name_en: string | null;
+      }>(
         'SELECT code, name_fa, name_en FROM app.languages WHERE is_active=true ORDER BY code',
       );
 
       const row = pricing.rows[0];
       if (!row) {
-        console.error('bootstrap_active_market_pricing_missing', { productCode, serviceCode, marketCode });
+        console.error('bootstrap_active_market_pricing_missing', {
+          productCode,
+          serviceCode,
+          marketCode,
+        });
         sendJson(res, 503, { error: 'active_market_pricing_missing' });
         return;
       }
 
       sendJson(res, 200, {
         brandName: row.brand_name,
-        market: { code: row.market_code, countryCode: row.country_code, timezone: row.timezone },
+        market: {
+          code: row.market_code,
+          countryCode: row.country_code,
+          timezone: row.timezone,
+        },
         pricing: {
           currencyCode: row.currency_code,
           callerRatePerMinuteMinor: Number(row.caller_rate),
@@ -219,7 +352,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           callerClosedBetaEnabled: isCallerClosedBetaEnabled(),
         },
         legal: getPublicReleaseConfig(),
-        languages: languages.rows.map((x) => ({ code: x.code, nameFa: x.name_fa, nameEn: x.name_en })),
+        languages: languages.rows.map((x) => ({
+          code: x.code,
+          nameFa: x.name_fa,
+          nameEn: x.name_en,
+        })),
       });
     } catch (error) {
       logInternal('bootstrap_database_query_failed', error);

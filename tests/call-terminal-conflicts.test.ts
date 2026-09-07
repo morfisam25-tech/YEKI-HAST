@@ -13,41 +13,32 @@ test('caller cancel remains limited to pre-connect states and cannot mutate conn
   assert.doesNotMatch(calls, /\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'\]\.includes\(row\.status\)/);
 });
 
-test('safety exit accepts only live states plus its own idempotent terminal state', () => {
+test('PSTN safety exit accepts only live states plus its own idempotent terminal state', () => {
   assert.match(safety, /const liveStatuses = new Set\(\[\.\.\.preConnectedStatuses, 'connected'\]\)/);
   assert.match(safety, /if \(call\.status === 'safety_terminated'\)/);
   assert.match(safety, /if \(!liveStatuses\.has\(call\.status\)\) throw new HttpError\(409, 'call_not_live'\)/);
 });
 
-test('cancel and safety terminal conflict paths cannot release the same reservation twice', () => {
+test('PSTN cancel and safety terminal conflict paths cannot release the same reservation twice', () => {
   assert.match(calls, /if \(row\.status === 'cancelled'\)[\s\S]*idempotent: true/);
   assert.match(safety, /if \(call\.status === 'safety_terminated'\)[\s\S]*idempotent: true/);
 });
 
-test('cancel refuses to submit provider termination after safety termination has started', () => {
+test('PSTN cancel refuses to submit provider termination after safety termination has started', () => {
   const cancelStart = calls.indexOf('export async function cancelCall');
   const providerSubmit = calls.indexOf("kind: 'provider_submit'", cancelStart);
   const section = calls.slice(cancelStart, providerSubmit);
-  for (const reason of [
-    'safety_termination_started',
-    'safety_termination_result_uncertain',
-    'safety_termination_confirmed',
-  ]) {
+  for (const reason of ['safety_termination_started','safety_termination_result_uncertain','safety_termination_confirmed']) {
     assert.ok(section.includes(reason));
   }
   assert.match(section, /call_termination_in_progress/);
 });
 
-test('safety exit refuses to submit provider termination after caller cancel has started', () => {
-  for (const reason of [
-    'cancel_termination_started',
-    'cancel_termination_result_uncertain',
-    'cancel_termination_confirmed',
-  ]) {
+test('PSTN safety exit refuses to submit provider termination after caller cancel has started', () => {
+  for (const reason of ['cancel_termination_started','cancel_termination_result_uncertain','cancel_termination_confirmed']) {
     assert.ok(safety.includes(reason));
   }
   assert.match(safety, /const cancelTerminationReasons = \[/);
-
   const safetyStart = safety.indexOf('export async function safetyExitCall');
   const providerSubmit = safety.indexOf("kind: 'provider_submit'", safetyStart);
   assert.ok(safetyStart >= 0 && providerSubmit > safetyStart);
@@ -56,9 +47,11 @@ test('safety exit refuses to submit provider termination after caller cancel has
   assert.match(section, /call_termination_in_progress/);
 });
 
-test('mobile clients explain competing termination without encouraging another end request', () => {
-  assert.match(callerMobile, /call_termination_in_progress/);
-  assert.match(callerMobile, /عملیات پایان دیگری را شروع نکن/);
-  assert.match(listenerMobile, /call_termination_in_progress/);
-  assert.match(listenerMobile, /Safety Exit را دوباره ارسال نکن/);
+test('mobile primary Internet Voice uses transport-specific normal and safety ends without PSTN dispatch', () => {
+  assert.match(callerMobile, /endInternetVoiceCall\(token, call\.callId\)/);
+  assert.match(callerMobile, /safetyExitInternetVoiceCall\(token, call\.callId\)/);
+  assert.doesNotMatch(callerMobile, /dispatchCall\(/);
+  assert.match(listenerMobile, /endInternetVoiceCall\(token, activeCall\.callId/);
+  assert.match(listenerMobile, /safetyExitInternetVoiceCall\(token, activeCall\.callId\)/);
+  assert.match(listenerMobile, /activeCall\.terminationInProgress/);
 });

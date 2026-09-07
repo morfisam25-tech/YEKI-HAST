@@ -152,6 +152,28 @@ export default function ListenerTrainingScreen({ token, onDone }: Props) {
     return <ListenerKycScreen token={token} onDone={onDone} />;
   }
 
+  if (['agreement_pending', 'admin_review', 'mock_call', 'suspended', 'rejected', 'archived'].includes(application.status)) {
+    const labels: Record<string, string> = {
+      agreement_pending: 'در انتظار قرارداد',
+      admin_review: 'در بررسی نهایی',
+      mock_call: 'در مرحله تماس آزمایشی',
+      suspended: 'حساب معلق است',
+      rejected: 'درخواست رد شده است',
+      archived: 'درخواست بایگانی شده است',
+    };
+    return (
+      <View style={styles.card}>
+        <Text style={styles.title}>{labels[application.status] ?? 'وضعیت درخواست'}</Text>
+        <Text style={styles.body}>
+          این مرحله از داخل برنامه قابل تغییر نیست. آموزش یا آزمون قبلی فقط وقتی دوباره باز می‌شود که وضعیت واقعی سرور به مرحله قابل‌ویرایش برگردد.
+        </Text>
+        <TouchableOpacity onPress={onDone} style={styles.secondaryButton}>
+          <Text style={styles.secondaryText}>برگشت</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>آموزش شنونده</Text>

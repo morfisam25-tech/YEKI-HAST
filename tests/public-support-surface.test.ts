@@ -8,7 +8,7 @@ const privacy = await readFile(new URL('../apps/web/app/privacy/page.tsx', impor
 const terms = await readFile(new URL('../apps/web/app/terms/page.tsx', import.meta.url), 'utf8');
 const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
 
-test('selected technical-beta support mailbox is reachable from all checked-in public policy surfaces', () => {
+test('selected support mailbox is reachable from all checked-in public policy surfaces', () => {
   for (const source of [home, privacy, terms]) {
     assert.match(source, new RegExp(`mailto:${supportEmail.replace(/\./g, '\\.')}`));
     assert.match(source, new RegExp(supportEmail.replace(/\./g, '\\.')));
@@ -23,10 +23,12 @@ test('mailbox usability is not treated as proven by source alone and production 
   assert.doesNotMatch(emailSmoke, /imap\.gmail\.com/);
 });
 
-test('public home does not imply voice calling or provider-gated listener operations are open', () => {
-  assert.match(home, /تماس صوتی هنوز فعال نیست/);
-  assert.match(home, /این انتشار Web آن را به‌عنوان قابلیت عمومی باز اعلام نمی‌کند/);
-  assert.match(home, /تماس صوتی، پرداخت،/);
-  assert.match(home, /تا عبور از کنترل‌های production بسته می‌مانند/);
-  assert.doesNotMatch(home, /سرویسی برای گفت‌وگوی صوتی با شنونده‌های انسانی تأییدشده/);
+test('public home describes Internet Voice as primary and masked PSTN as optional fallback', () => {
+  assert.match(home, /تماس صوتی را مستقیم از اینترنت/);
+  assert.match(home, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
+  assert.match(home, /شماره تلفن[\s\S]*برای آن لازم نیست|شماره تماس[\s\S]*برای آن لازم نیست/);
+  assert.match(home, /۱۰، ۳۰ و ۶۰ دقیقه/);
+  assert.match(home, /HOLD اعتبار/);
+  assert.match(home, /صدای هر دو طرف واقعاً متصل شده باشد/);
+  assert.doesNotMatch(home, /تماس صوتی هنوز فعال نیست/);
 });

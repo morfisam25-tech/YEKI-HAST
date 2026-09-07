@@ -48,12 +48,13 @@ function normalizedBirthDate(body: { dateOfBirth?: unknown; dateOfBirthJalali?: 
 }
 
 export async function submitListenerKyc(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+
   // Do not collect identity/banking payloads while the real inquiry provider is disabled.
-  // Technical beta keeps KYC provider selectors blank, so this fails before body parsing
-  // and before any sensitive-data write.
+  // Authentication happens first so unauthenticated callers cannot probe provider readiness;
+  // provider validation still happens before body parsing and before sensitive-data writes.
   requireKycSubmissionProvider();
 
-  const { userId } = await requireAuth(req);
   const body = await readJson<{
     legalName?: unknown;
     nationalId?: unknown;
@@ -115,6 +116,7 @@ export async function submitListenerKyc(req: IncomingMessage, res: ServerRespons
         FOR UPDATE
       `, [userId]);
       if (current.rows[0]?.status === 'verified') throw new HttpError(409, 'kyc_already_verified');
+      if (current.rows[0]?.status === 'pending') throw new HttpError(409, 'kyc_pending_review');
 
       const legalNameCiphertext = encryptPrivateText(legalName, `listener_kyc:legal_name:${userId}`);
       const nationalIdCiphertext = encryptPrivateText(nationalId, `listener_kyc:national_id:${userId}`);

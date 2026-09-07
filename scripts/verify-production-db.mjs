@@ -21,6 +21,10 @@ try {
   const expectedMigrations = new Map([
     ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
     ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+    ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
+    ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
+    ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
+    ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
   ]);
   const migrationMap = new Map();
   for (const migration of migrations.rows) {
@@ -61,6 +65,10 @@ try {
     'app.listener_work_sessions',
     'app.wallets',
     'app.wallet_transactions',
+    'app.wallet_hold_events',
+    'app.internet_voice_signals',
+    'app.listener_availability',
+    'app.call_reservations',
     'app.payment_attempts',
     'app.reservations',
     'app.call_sessions',
@@ -110,6 +118,29 @@ try {
     if (!triggerNames.has(triggerName)) throw new Error(`critical trigger missing: ${triggerName}`);
   }
 
+  const sweeper = await pool.query(`
+    SELECT
+      EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron,
+      to_regprocedure('app.expire_internet_voice_preconnect(uuid,text)') IS NOT NULL AS preconnect_fn,
+      to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean)') IS NOT NULL AS settlement_fn,
+      to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS sweep_fn
+  `);
+  const sweeperRow = sweeper.rows[0] ?? {};
+  if (sweeperRow.pg_cron !== true) throw new Error('pg_cron extension missing');
+  if (sweeperRow.preconnect_fn !== true) throw new Error('Internet Voice preconnect finalizer missing');
+  if (sweeperRow.settlement_fn !== true) throw new Error('Internet Voice settlement function missing');
+  if (sweeperRow.sweep_fn !== true) throw new Error('Internet Voice sweeper function missing');
+
+  const cronJob = await pool.query(`
+    SELECT 1
+    FROM cron.job
+    WHERE jobname='yeki_hast_internet_voice_sweep'
+      AND schedule='* * * * *'
+      AND active=true
+    LIMIT 1
+  `);
+  if (!cronJob.rowCount) throw new Error('Internet Voice sweeper cron job missing');
+
   const emailSchema = await pool.query(`
     SELECT
       to_regclass('private_data.user_emails') IS NOT NULL AS user_emails,
@@ -137,7 +168,7 @@ try {
   if (!row) throw new Error('active Iran pricing seed missing');
   if (row.brand_name !== 'یکی هست') throw new Error('brand seed mismatch');
   if (row.currency_code !== 'IRR') throw new Error('currency seed mismatch');
-  if (row.caller_rate !== '31000' || row.listener_rate !== '21000' || row.spread !== '10000') {
+  if (row.caller_rate !== '40000' || row.listener_rate !== '28000' || row.spread !== '12000') {
     throw new Error('pricing seed mismatch');
   }
   if (Number(row.billing_increment_seconds) !== 1) throw new Error('billing increment mismatch');

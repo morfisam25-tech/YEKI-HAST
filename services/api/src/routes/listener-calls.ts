@@ -33,6 +33,7 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
     ended_at: string | null;
     billable_seconds: number;
     listener_earning_minor: string;
+    transport: string | null;
     provider_bridge_id: string | null;
     termination_in_progress: boolean;
   }>(`
@@ -45,6 +46,7 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
            cs.ended_at::text,
            cs.billable_seconds,
            cs.listener_earning_minor::text,
+           cs.transport::text,
            cs.provider_bridge_id,
            EXISTS (
              SELECT 1
@@ -72,6 +74,8 @@ export async function getListenerActiveCall(req: IncomingMessage, res: ServerRes
       status: row.status,
       currencyCode: row.currency_code,
       maxBillableSeconds: row.max_billable_seconds,
+      transport: row.transport,
+      internetVoiceReady: row.transport === 'internet_voice',
       telephonyReady: Boolean(row.provider_bridge_id),
       terminationInProgress: row.termination_in_progress,
       requestedAt: row.requested_at,

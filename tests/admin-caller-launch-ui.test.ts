@@ -15,19 +15,21 @@ test('admin readiness UI surfaces aggregate Caller launch verdict and configured
   assert.match(page, /BETA DISABLED/);
 });
 
-test('Caller launch readiness remains fail-closed on every required dependency', () => {
+test('Caller launch readiness remains fail-closed on every primary-transport dependency', () => {
   assert.match(backend, /const callerLaunchReady = callerClosedBetaConfigured/);
   assert.match(backend, /&& commercialHostingApproved/);
   assert.match(backend, /&& callerAgePolicyReady/);
   assert.match(backend, /&& callerCatalogReady/);
   assert.match(backend, /&& accountAuthReady/);
-  assert.match(backend, /&& callPhoneVerificationReady/);
+  assert.match(backend, /&& callTransportReady/);
   assert.match(backend, /&& paymentReady/);
-  assert.match(backend, /&& telephonyReady/);
   assert.match(backend, /&& sensitiveDataReady/);
   assert.match(backend, /&& adminBootstrapLockedDown/);
   assert.match(backend, /&& publicRelease\.ready/);
-  assert.doesNotMatch(backend, /const callerLaunchReady =[\s\S]{0,500}&& smsReady/);
+  const callerLaunchBlock = backend.match(/const callerLaunchReady =[\s\S]*?;/)?.[0] ?? '';
+  assert.doesNotMatch(callerLaunchBlock, /callPhoneVerificationReady/);
+  assert.doesNotMatch(callerLaunchBlock, /telephonyReady/);
+  assert.doesNotMatch(callerLaunchBlock, /smsReady/);
 });
 
 test('admin readiness UI surfaces hosting, auth, phone, catalog and sensitive-data readiness without credential values', () => {
@@ -51,6 +53,7 @@ test('admin readiness UI surfaces hosting, auth, phone, catalog and sensitive-da
   assert.match(backend, /emailAuth: \{ provider: emailProvider, ready: emailAuthReady \}/);
   assert.match(backend, /accountAuth: \{ ready: accountAuthReady \}/);
   assert.match(backend, /callPhoneVerification: \{/);
+  assert.match(backend, /callTransport: \{/);
   assert.match(backend, /sensitiveData: \{ ready: sensitiveDataReady \}/);
   assert.match(backend, /callerCatalog: \{ ready: callerCatalogReady \}/);
   assert.match(backend, /secretsIncluded: false/);

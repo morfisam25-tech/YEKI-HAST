@@ -7,8 +7,8 @@ import {
   setListenerPresence,
   type ListenerPresenceResponse,
 } from './api';
-import CallPhoneSetupCard from './CallPhoneSetupCard';
 import ListenerActiveCallCard from './ListenerActiveCallCard';
+import ListenerBookingCard from './ListenerBookingCard';
 import ListenerEarningsCard from './ListenerEarningsCard';
 
 type Props = { token: string; onDone: () => void };
@@ -19,7 +19,6 @@ function messageFor(code: string): string {
     unauthorized: 'نشست ورود معتبر نیست. دوباره وارد شو.',
     listener_not_approved: 'حساب شنونده هنوز برای کار فعال نشده.',
     listener_verification_required: 'احراز هویت شنونده هنوز کامل نشده.',
-    verified_phone_required: 'برای دریافت تماس باید شماره تماس امن تأیید شده باشد.',
     no_callers_accepted: 'برای Online شدن حداقل یک گروه Caller را فعال کن.',
     listener_not_online: 'وضعیت آنلاین منقضی شده؛ دوباره Online شو.',
     listener_active_call_conflict: 'بیش از یک تماس فعال برای این حساب ثبت شده؛ کنترل‌های دریافت تماس تا بررسی وضعیت قفل‌اند.',
@@ -33,7 +32,6 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
   const [acceptsMale, setAcceptsMale] = useState(true);
   const [acceptsFemale, setAcceptsFemale] = useState(true);
   const [activeCallConflict, setActiveCallConflict] = useState(false);
-  const [callPhoneVerified, setCallPhoneVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const presenceRef = useRef<ListenerPresenceResponse | null>(null);
@@ -67,7 +65,6 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
       const current = presenceRef.current;
       if (previous === 'active' && current && (current.status === 'online' || current.status === 'paused')) {
-        // Going offline must remain available even if another launch guard becomes false.
         setListenerPresence(token, 'offline', current.acceptsMale, current.acceptsFemale).catch(() => undefined);
         applyPresence({
           ...current,
@@ -105,10 +102,6 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
       setError(messageFor('listener_active_call_conflict'));
       return;
     }
-    if (!callPhoneVerified && status !== 'offline') {
-      setError(messageFor('verified_phone_required'));
-      return;
-    }
     setBusy(true);
     setError('');
     try {
@@ -132,10 +125,6 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
     if (!presence || busy) return;
     if (activeCallConflict) {
       setError(messageFor('listener_active_call_conflict'));
-      return;
-    }
-    if (!callPhoneVerified) {
-      setError(messageFor('verified_phone_required'));
       return;
     }
     const nextMale = kind === 'male' ? !acceptsMale : acceptsMale;
@@ -186,7 +175,7 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
 
   const isOnline = presence.status === 'online';
   const isPaused = presence.status === 'paused';
-  const workControlsLocked = busy || activeCallConflict || !callPhoneVerified;
+  const workControlsLocked = busy || activeCallConflict;
 
   return (
     <View style={styles.card}>
@@ -195,30 +184,25 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
         styles.statusBox,
         isOnline && styles.onlineBox,
         isPaused && styles.pausedBox,
-        (activeCallConflict || !callPhoneVerified) && styles.conflictBox,
+        activeCallConflict && styles.conflictBox,
       ]}>
         <Text style={styles.statusText}>
           {activeCallConflict
             ? '⚠ چند تماس فعال ثبت شده — دریافت تماس جدید قفل است'
-            : !callPhoneVerified
-              ? '⚠ شماره تماس هنوز تأیید نشده — دریافت تماس جدید قفل است'
-              : isOnline
-                ? '● آنلاین — آماده دریافت تماس'
-                : isPaused
-                  ? '● مکث — تماس جدید نمی‌آید'
-                  : '○ آفلاین'}
+            : isOnline
+              ? '● آنلاین — آماده دریافت تماس اینترنتی'
+              : isPaused
+                ? '● مکث — تماس جدید نمی‌آید'
+                : '○ آفلاین'}
         </Text>
       </View>
 
-      <Text style={styles.helper}>Heartbeat فقط وقتی اپ باز و وضعیت Online یا Pause باشد هر ۳۰ ثانیه ارسال می‌شود. با رفتن اپ به پس‌زمینه، حضور به‌صورت امن Offline می‌شود؛ guard سرور هم بعد از ۹۰ ثانیه stale presence را رد می‌کند.</Text>
+      <Text style={styles.helper}>مسیر اصلی تماس Internet Voice است و Online شدن به شماره تلفن وابسته نیست. Heartbeat فقط وقتی اپ باز و وضعیت Online یا Pause باشد هر ۳۰ ثانیه ارسال می‌شود؛ با رفتن اپ به پس‌زمینه حضور به‌صورت امن Offline می‌شود.</Text>
       {activeCallConflict && (
         <Text style={styles.error}>سرور این حساب را به‌دلیل وجود چند تماس فعال از دریافت تماس جدید کنار می‌گذارد. Online، Pause و تغییر گروه Caller تا رفع تعارض قفل‌اند؛ Offline همچنان مجاز است.</Text>
       )}
-      {!callPhoneVerified && (
-        <Text style={styles.error}>تا وقتی مالکیت شماره تماس برای بتا تأیید نشده، Online، Pause و تغییر گروه Caller قفل‌اند. اگر از قبل Online باشی، Offline همچنان باز می‌ماند.</Text>
-      )}
 
-      <CallPhoneSetupCard token={token} onVerifiedChange={setCallPhoneVerified} />
+      <ListenerBookingCard token={token} acceptsMale={acceptsMale} acceptsFemale={acceptsFemale} />
       <ListenerActiveCallCard token={token} onActiveCallConflictChange={setActiveCallConflict} />
       <ListenerEarningsCard token={token} />
 

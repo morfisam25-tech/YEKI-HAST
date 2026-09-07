@@ -4,6 +4,7 @@ import { sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { getPublicReleaseConfig } from '../lib/public-release.ts';
 import { isCallerClosedBetaEnabled } from '../lib/caller-beta.ts';
+import { getCallTransportReadiness } from '../providers/call-transport.ts';
 
 export async function bootstrap(res: ServerResponse) {
   const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
@@ -38,6 +39,8 @@ export async function bootstrap(res: ServerResponse) {
   );
   const row = result.rows[0];
   if (!row) return sendJson(res, 503, { error: 'active_market_pricing_missing' });
+
+  const transport = getCallTransportReadiness();
   sendJson(res, 200, {
     brandName: row.brand_name,
     market: { code: row.market_code, countryCode: row.country_code, timezone: row.timezone },
@@ -49,6 +52,15 @@ export async function bootstrap(res: ServerResponse) {
       billingIncrementSeconds: row.billing_increment_seconds,
       displayUnit: row.currency_code === 'IRR' ? 'toman' : 'currency',
       displayDivisor: row.currency_code === 'IRR' ? 10 : 1,
+    },
+    calls: {
+      primaryTransport: transport.primary,
+      fallbackTransport: transport.fallback,
+      internetVoiceRelayConfigured: transport.internetVoice.relayConfigured,
+      iranDomesticPathConfigured: transport.internetVoice.iranDomesticPathConfigured,
+      sessionCapsMinutes: [10, 30, 60],
+      extensionMinutes: [15, 30],
+      noAnswerSeconds: 90,
     },
     features: {
       callerClosedBetaEnabled: isCallerClosedBetaEnabled(),

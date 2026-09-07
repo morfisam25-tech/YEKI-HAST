@@ -11,18 +11,26 @@ test('caller API contract matches listener browse response ids', () => {
   assert.doesNotMatch(api, /export type BrowseListener = \{\s*userId: string;/);
 });
 
-test('closed-beta caller shell requires server age confirmation before browse flow', () => {
-  const age = caller.indexOf('await confirmCallerAge(token)');
+test('closed-beta caller shell requires explicit current age, Terms and safety consent before browse flow', () => {
+  const consent = caller.indexOf('await confirmCallerAge(token, { termsAccepted, safetyAccepted })');
   const browse = caller.indexOf('await browseListeners(token');
-  assert.ok(age >= 0 && browse > age);
+  assert.ok(consent >= 0 && browse > consent);
+  assert.match(caller, /const policiesReady = ageConfirmed && termsAccepted && safetyAccepted/);
+  assert.match(caller, /disabled=\{busy \|\| !policiesReady\}/);
+  assert.match(caller, /قوانین استفاده را خواندم و می‌پذیرم/);
+  assert.match(caller, /اینجا محل دوست‌یابی یا مشاوره تخصصی نیست/);
+  assert.match(api, /termsAccepted: input\.termsAccepted/);
+  assert.match(api, /safetyAccepted: input\.safetyAccepted/);
   assert.match(caller, /stage === 'age-gate'/);
 });
 
-test('closed-beta caller shell exposes real request, dispatch, cancel and safety exit clients', () => {
+test('closed-beta caller shell exposes request plus real Internet Voice start, end and safety clients', () => {
   assert.match(caller, /await requestCall\(token/);
-  assert.match(caller, /await dispatchCall\(token, requested\.callId\)/);
-  assert.match(caller, /await cancelCall\(token, call\.callId\)/);
-  assert.match(caller, /await safetyExitCall\(token, call\.callId\)/);
+  assert.match(caller, /const startedCallId = requested\.callId/);
+  assert.match(caller, /await startInternetVoiceCall\(token, startedCallId\)/);
+  assert.match(caller, /await endInternetVoiceCall\(token, call\.callId\)/);
+  assert.match(caller, /await safetyExitInternetVoiceCall\(token, call\.callId\)/);
+  assert.doesNotMatch(caller, /dispatchCall\(/);
 });
 
 test('public app navigation is driven by the fail-closed server bootstrap flag', () => {
@@ -33,7 +41,7 @@ test('public app navigation is driven by the fail-closed server bootstrap flag',
   assert.match(app, /if \(!callerBetaEnabled\) \{\s*setScreen\('waitlist'\)/);
 });
 
-test('Caller and Listener share OTP plumbing but keep separate post-auth destinations', () => {
+test('Caller and Listener share account auth plumbing but keep separate post-auth destinations', () => {
   assert.match(app, /type AuthPurpose = 'listener' \| 'caller'/);
   assert.match(app, /if \(authPurpose === 'caller'\)[\s\S]*setScreen\('caller-beta'\)/);
   assert.match(app, /await resumeListener\(session\.token\)/);

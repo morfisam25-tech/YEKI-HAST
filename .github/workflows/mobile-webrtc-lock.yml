@@ -8,7 +8,7 @@ on:
       - .github/workflows/mobile-webrtc-lock.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lock:
@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout exact feature HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/v1-2-internet-voice-foundation
 
       - name: Setup exact Node used by release tooling
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -35,6 +37,20 @@ jobs:
             react-native-webrtc@124.0.8 \
             @config-plugins/react-native-webrtc@15.0.2
           npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Commit validated manifests to feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json apps/mobile/package.json
+          if git diff --cached --quiet; then
+            echo 'No manifest changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: add native WebRTC mobile dependencies'
+          git push origin HEAD:feat/v1-2-internet-voice-foundation
 
       - name: Upload generated manifests only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

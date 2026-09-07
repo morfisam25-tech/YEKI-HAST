@@ -70,8 +70,8 @@ test('Web Listener does not render Caller identity, country, phone or payment co
   assert.doesNotMatch(listenerPage, /caller_user_id|callerUserId|callerCountry|paymentCurrency|phoneNumber|providerBridge/);
 });
 
-test('verified web session exposes both Caller and Listener entry points', () => {
+test('verified web session exposes Caller and Listener onboarding entry points', () => {
   assert.match(homePage, /href="\/talk"/);
-  assert.match(homePage, /href="\/listener\/work"/);
-  assert.match(homePage, /حالت کاری شنونده/);
+  assert.match(homePage, /href="\/listener"/);
+  assert.match(homePage, /می‌خواهم شنونده باشم/);
 });

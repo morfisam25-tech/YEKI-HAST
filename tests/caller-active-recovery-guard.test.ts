@@ -19,15 +19,14 @@ test('caller active-call recovery is caller-scoped and limited to active states'
   assert.match(handler, /url\.pathname === '\/v1\/calls\/active'/);
 });
 
-test('duplicate active-call recovery blocks new caller flow until reviewed', () => {
+test('duplicate active-call recovery blocks all new caller starts until reviewed', () => {
   assert.match(screen, /const \[recoveryBlocked, setRecoveryBlocked\] = useState\(false\)/);
   assert.match(screen, /if \(code === 'caller_active_call_conflict'\) setRecoveryBlocked\(true\)/);
   assert.match(screen, /if \(recoveryCode === 'caller_active_call_conflict'\) setRecoveryBlocked\(true\)/);
-  assert.match(screen, /if \(recoveryBlocked \|\| !callPhoneVerified\) return;/);
+  assert.match(screen, /if \(recoveryBlocked\) return;/);
   assert.match(screen, /recoveryComplete && recoveryBlocked/);
-  assert.match(screen, /recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'age-gate'/);
-  assert.match(screen, /recoveryComplete && !recoveryBlocked && callPhoneVerified && stage === 'browse'/);
-  assert.match(screen, /شروع تماس جدید در این صفحه موقتاً بسته است/);
+  assert.match(screen, /recoveryComplete && !recoveryBlocked && stage === 'age-gate'/);
+  assert.match(screen, /recoveryComplete && !recoveryBlocked && stage === 'browse'/);
   assert.doesNotMatch(screen, /force-cancel|repair-conflict|resolve-conflict/);
 });
 
@@ -41,9 +40,8 @@ test('new call creation serializes per caller and rejects a second active call',
 test('mobile reopens the server-side active call instead of creating a replacement call', () => {
   assert.match(api, /export function getActiveCall/);
   assert.match(api, /request\('\/v1\/calls\/active'/);
-  assert.match(screen, /useEffect\(\(\) => \{/);
   assert.match(screen, /await getActiveCall\(token\)/);
-  assert.match(screen, /setCall\(result\.activeCall\)/);
+  assert.match(screen, /setCall\(result\.activeCall as CallerCallResponse\)/);
   assert.match(screen, /setStage\('call'\)/);
 });
 
@@ -51,48 +49,35 @@ test('request race recovers the winning active call instead of leaving caller st
   assert.match(screen, /code === 'caller_call_already_active'/);
   assert.match(screen, /const recovered = await getActiveCall\(token\)/);
   assert.match(screen, /if \(recovered\.activeCall\)/);
-  assert.match(screen, /setCall\(recovered\.activeCall\)/);
+  assert.match(screen, /setCall\(recovered\.activeCall as CallerCallResponse\)/);
   assert.match(screen, /setStage\('call'\)/);
 });
 
-test('uncertain telephony dispatch keeps the caller on the same call without blind provider retry', () => {
-  assert.match(screen, /telephony_dispatch_uncertain:/);
-  assert.match(screen, /if \(!call \|\| call\.status !== 'routing' \|\| call\.terminationInProgress\) return/);
-  assert.match(screen, /const dispatchRetryable = Boolean\(call && call\.status === 'routing' && !terminationInProgress\)/);
-  assert.match(screen, /شروع دوباره ارسال نمی‌شود/);
-  assert.match(dispatch, /if \(row\.status === 'calling_caller'\) \{[\s\S]*telephony_dispatch_uncertain/);
+test('Android primary transport reconnects the same Internet Voice call and never blind-retries PSTN dispatch', () => {
+  assert.match(screen, /async function reconnectVoice/);
+  assert.match(screen, /getInternetVoiceConfig\(token, call\.callId\)/);
+  assert.match(screen, /createCallerPeer\(call\.callId, config\.client, stream\)/);
+  assert.doesNotMatch(screen, /dispatchCall\(/);
+  assert.match(dispatch, /telephony_dispatch_uncertain/);
 });
 
-test('telephony readiness is exposed without exposing the provider bridge id', () => {
-  assert.match(calls, /telephonyReady: Boolean\(row\.provider_bridge_id\)/);
-  assert.match(dispatch, /telephonyReady: true/);
-  assert.match(screen, /type CallerCallResponse = CallResponse & \{ telephonyReady\?: boolean \}/);
-  assert.match(screen, /telephonyIdentityStatuses\.has\(call\.status\) && call\.telephonyReady === false/);
+test('active-call read model exposes transport without provider bridge identity', () => {
+  assert.match(calls, /transport: row\.transport/);
+  assert.match(api, /transport\?: 'internet_voice' \| 'masked_pstn' \| null/);
   assert.doesNotMatch(screen, /providerBridgeId|provider_bridge_id/);
 });
 
-test('unresolved telephony identity or termination state hides duplicate end controls', () => {
-  assert.match(screen, /const telephonyUnresolved = Boolean/);
-  assert.match(screen, /const terminationInProgress = Boolean\(call\?\.terminationInProgress\)/);
-  assert.match(screen, /const dispatchRetryable = Boolean/);
-  assert.match(screen, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved && !terminationInProgress/);
-  assert.match(screen, /برای جلوگیری از تماس تکراری/);
-  assert.match(screen, /کنترل‌های پایان قفل شده‌اند/);
-});
-
-test('live caller status auto-sync polls only non-terminal calls and cleans up its timer', () => {
+test('live caller status auto-sync is bounded to the same non-terminal call', () => {
   assert.match(screen, /const CALL_STATUS_POLL_MS = 3_000/);
   assert.match(screen, /stage !== 'call' \|\| !call \|\| terminalStatuses\.has\(call\.status\)/);
   assert.match(screen, /const next = await getCall\(token, callId\)/);
-  assert.match(screen, /current\?\.callId === callId \? next : current/);
-  assert.match(screen, /setInterval\(\(\) => \{ void syncLiveCall\(\); \}, CALL_STATUS_POLL_MS\)/);
+  assert.match(screen, /current\?\.callId === callId \? next as CallerCallResponse : current/);
   assert.match(screen, /clearInterval\(timer\)/);
-  assert.match(screen, /getErrorCode\(cause\) !== 'network_error'/);
 });
 
-test('connected calls remain non-cancellable in caller UI while safety exit stays available only before termination starts', () => {
-  assert.match(screen, /const cancellableStatuses = new Set\(\['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener'\]\)/);
-  assert.doesNotMatch(screen, /cancellableStatuses[^\n]*connected/);
-  assert.match(screen, /پایان فوری برای ایمنی/);
-  assert.match(screen, /!terminationInProgress/);
+test('connected Internet Voice uses explicit normal end and safety end, not caller cancel', () => {
+  assert.match(screen, /endInternetVoiceCall\(token, call\.callId\)/);
+  assert.match(screen, /safetyExitInternetVoiceCall\(token, call\.callId\)/);
+  assert.match(screen, /if \(call\.status === 'routing'\) setCall\(await cancelCall/);
+  assert.doesNotMatch(screen, /dispatchCall\(/);
 });

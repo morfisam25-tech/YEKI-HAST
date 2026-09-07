@@ -11,6 +11,7 @@ import {
 const UUID = '[0-9a-fA-F-]{36}';
 const ALLOWED_PATHS = [
   /^listeners$/,
+  /^bookable-listeners$/,
   new RegExp(`^listeners\/${UUID}\/availability$`),
   /^bookings$/,
   new RegExp(`^bookings\/${UUID}\/(cancel|start)$`),

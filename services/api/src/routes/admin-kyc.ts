@@ -110,6 +110,7 @@ export async function reviewListenerKyc(
     if (!row) throw new HttpError(404, 'listener_application_not_found');
     if (!row.kyc_status || row.kyc_status === 'not_started') throw new HttpError(409, 'kyc_not_submitted');
     if (row.kyc_status === 'verified') throw new HttpError(409, 'kyc_already_verified');
+    if (row.kyc_status !== 'pending') throw new HttpError(409, 'kyc_not_pending');
 
     // Manual admin review may reject/expire evidence, but it can never create
     // a verified identity. Verification must come from the dedicated provider flow.

@@ -187,6 +187,7 @@ export default function Page() {
               <h2>ایمیل شما تأیید شد.</h2>
               <p className="helper">نشست ورود به‌صورت امن در cookie غیرقابل‌دسترسی برای JavaScript نگهداری می‌شود.</p>
               <a className="primary-link" href="/talk">رفتن به صفحه تماس</a>
+              <a className="primary-link" href="/listener/work">حالت کاری شنونده</a>
               <button type="button" className="text-button" onClick={() => void logout()}>خروج از این نشست</button>
             </div>
           )}

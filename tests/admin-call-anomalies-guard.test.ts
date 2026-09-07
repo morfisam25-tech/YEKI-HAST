@@ -18,6 +18,13 @@ test('call anomaly diagnostics cover deterministic lifecycle and reservation inv
   assert.match(anomalies, /w\.reserved_minor < a\.required_reserved_minor/);
 });
 
+test('PSTN bridge anomaly checks never classify Internet Voice calls as missing a provider bridge', () => {
+  const transportGuards = anomalies.match(/transport IS NULL OR transport::text='masked_pstn'/g) ?? [];
+  assert.equal(transportGuards.length, 2);
+  assert.match(anomalies, /status::text='calling_caller'[\s\S]*?provider_bridge_id IS NULL[\s\S]*?transport::text='masked_pstn'/);
+  assert.match(anomalies, /status::text IN \('caller_answered','calling_listener','connected'\)[\s\S]*?provider_bridge_id IS NULL[\s\S]*?transport::text='masked_pstn'/);
+});
+
 test('call anomaly diagnostics flag duplicate active calls for one caller', () => {
   assert.match(anomalies, /duplicateActiveCallers/);
   assert.match(anomalies, /GROUP BY caller_user_id/);

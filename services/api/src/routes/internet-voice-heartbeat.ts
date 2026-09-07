@@ -26,9 +26,10 @@ export async function heartbeatInternetVoiceCall(
     transport: string | null;
     connected_at: string | null;
     max_billable_seconds: number | null;
+    ended_reason: string | null;
   }>(`
     SELECT id::text, caller_user_id::text, listener_user_id::text,
-           status::text, transport::text, connected_at::text, max_billable_seconds
+           status::text, transport::text, connected_at::text, max_billable_seconds, ended_reason
     FROM app.call_sessions
     WHERE id=$1
   `, [rawCallId]);
@@ -42,18 +43,19 @@ export async function heartbeatInternetVoiceCall(
   else throw new HttpError(403, 'not_call_participant');
 
   if (TERMINAL_STATUSES.has(row.status)) {
+    const capReached = row.ended_reason === 'internet_voice_session_cap_reached';
     sendJson(res, 200, {
       ok: true,
       callId: row.id,
       transport: 'internet_voice',
       status: row.status,
       terminal: true,
-      capReached: row.status === 'completed',
+      capReached,
       timing: {
-        elapsedConnectedSeconds: row.max_billable_seconds ?? 0,
+        elapsedConnectedSeconds: capReached ? row.max_billable_seconds ?? 0 : 0,
         remainingSeconds: 0,
         warningThresholdsSeconds: [120, 60],
-        warning: 60,
+        warning: null,
       },
     });
     return;

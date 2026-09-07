@@ -8,7 +8,7 @@ const EXPECTED_MIGRATIONS = new Map([
   ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
   ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
   ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
-  ['0006_internet_voice_server_sweeper.sql', 'adefa348b1c656ef1e129735be5be922be2c7f38f5bb2c39a951f766fe93cc7a'],
+  ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
 ]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

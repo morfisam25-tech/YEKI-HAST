@@ -42,6 +42,17 @@ export async function heartbeatInternetVoiceCall(
   else if (row.listener_user_id === userId) role = 'listener';
   else throw new HttpError(403, 'not_call_participant');
 
+  if (row.status === 'connected') {
+    const heartbeatColumn = role === 'caller' ? 'caller_voice_heartbeat_at' : 'listener_voice_heartbeat_at';
+    const updated = await query(`
+      UPDATE app.call_sessions
+      SET ${heartbeatColumn}=now(), updated_at=now()
+      WHERE id=$1 AND status='connected' AND transport='internet_voice'
+      RETURNING id
+    `, [row.id]);
+    if (!updated.rowCount) throw new HttpError(409, 'call_not_live');
+  }
+
   if (TERMINAL_STATUSES.has(row.status)) {
     const capReached = row.ended_reason === 'internet_voice_session_cap_reached';
     sendJson(res, 200, {

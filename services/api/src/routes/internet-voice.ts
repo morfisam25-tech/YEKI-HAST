@@ -219,7 +219,10 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
         const updated = await client.query(`
           UPDATE app.call_sessions
           SET status='connected', connected_at=COALESCE(connected_at,now()),
-              billing_started_at=COALESCE(billing_started_at,now()), updated_at=now()
+              billing_started_at=COALESCE(billing_started_at,now()),
+              caller_voice_heartbeat_at=COALESCE(caller_voice_heartbeat_at,now()),
+              listener_voice_heartbeat_at=COALESCE(listener_voice_heartbeat_at,now()),
+              updated_at=now()
           WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
           RETURNING id
         `, [rawCallId]);

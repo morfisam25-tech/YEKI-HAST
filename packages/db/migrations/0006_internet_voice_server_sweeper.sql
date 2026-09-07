@@ -17,7 +17,9 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 ALTER TABLE app.call_sessions
   ADD COLUMN IF NOT EXISTS voice_offer_started_at timestamptz,
-  ADD COLUMN IF NOT EXISTS voice_listener_answered_at timestamptz;
+  ADD COLUMN IF NOT EXISTS voice_listener_answered_at timestamptz,
+  ADD COLUMN IF NOT EXISTS caller_voice_heartbeat_at timestamptz,
+  ADD COLUMN IF NOT EXISTS listener_voice_heartbeat_at timestamptz;
 
 UPDATE app.call_sessions cs
 SET voice_offer_started_at = COALESCE(
@@ -34,10 +36,24 @@ WHERE cs.transport='internet_voice'
   AND cs.status='calling_listener'
   AND cs.voice_offer_started_at IS NULL;
 
+-- Existing connected rows, if any exist in a pre-release/staging database, receive a fresh
+-- grace point when this migration is applied. New connections set both timestamps directly
+-- when both participants report media connected.
+UPDATE app.call_sessions
+SET caller_voice_heartbeat_at=COALESCE(caller_voice_heartbeat_at,now()),
+    listener_voice_heartbeat_at=COALESCE(listener_voice_heartbeat_at,now())
+WHERE transport='internet_voice'
+  AND status='connected';
+
 CREATE INDEX IF NOT EXISTS call_sessions_internet_voice_sweep_idx
   ON app.call_sessions(status, voice_offer_started_at, voice_listener_answered_at, connected_at)
   WHERE transport='internet_voice'
     AND status IN ('calling_listener','connected');
+
+CREATE INDEX IF NOT EXISTS call_sessions_internet_voice_liveness_idx
+  ON app.call_sessions(caller_voice_heartbeat_at,listener_voice_heartbeat_at,connected_at,id)
+  WHERE transport='internet_voice'
+    AND status='connected';
 
 CREATE OR REPLACE FUNCTION app.expire_internet_voice_preconnect(
   p_call_id uuid,
@@ -195,7 +211,8 @@ CREATE OR REPLACE FUNCTION app.settle_internet_voice_call(
   p_call_id uuid,
   p_ended_reason text,
   p_ended_by_role text,
-  p_safety boolean DEFAULT false
+  p_safety boolean DEFAULT false,
+  p_effective_end_at timestamptz DEFAULT NULL
 )
 RETURNS TABLE(
   final_status text,
@@ -209,6 +226,7 @@ AS $$
 DECLARE
   v_call record;
   v_increment integer;
+  v_observed_end_at timestamptz;
   v_connected_seconds integer;
   v_billable_seconds integer;
   v_charge bigint;
@@ -256,9 +274,15 @@ BEGIN
     RAISE EXCEPTION 'pricing_plan_unavailable';
   END IF;
 
+  -- Normal end/safety/cap settlement observes now(). A liveness timeout may provide
+  -- an earlier server-observed end so crash/network-detection grace is not billed.
+  v_observed_end_at := LEAST(now(),COALESCE(p_effective_end_at,now()));
+  IF v_observed_end_at < v_call.connected_at THEN
+    v_observed_end_at := v_call.connected_at;
+  END IF;
   v_connected_seconds := LEAST(
     v_call.max_billable_seconds,
-    GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now()-v_call.connected_at)))::integer)
+    GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (v_observed_end_at-v_call.connected_at)))::integer)
   );
   IF v_connected_seconds=0 THEN
     v_billable_seconds := 0;
@@ -375,6 +399,7 @@ BEGIN
       'reason',v_reason,
       'transport','internet_voice',
       'endedByRole',p_ended_by_role,
+      'effectiveEndAt',v_observed_end_at,
       'connectedSecondsObserved',v_connected_seconds,
       'billableSeconds',v_billable_seconds,
       'callerChargeMinor',v_charge::text,
@@ -471,6 +496,7 @@ CREATE OR REPLACE FUNCTION app.sweep_internet_voice_sessions(
 RETURNS TABLE(
   no_answer_expired integer,
   connect_timeout_expired integer,
+  liveness_settled integer,
   cap_settled integer
 )
 LANGUAGE plpgsql
@@ -479,6 +505,7 @@ DECLARE
   v_call record;
   v_no_answer integer := 0;
   v_connect_timeout integer := 0;
+  v_liveness integer := 0;
   v_cap integer := 0;
 BEGIN
   IF p_limit < 1 OR p_limit > 1000 THEN
@@ -526,6 +553,45 @@ BEGIN
     v_connect_timeout := v_connect_timeout+1;
   END LOOP;
 
+  -- Connected calls require recent liveness from BOTH participants. Client heartbeats
+  -- run around every five seconds; thirty seconds tolerates transient scheduling/network jitter.
+  -- Settlement stops at the older of the two latest participant heartbeats, so the detection
+  -- grace itself is not charged after one side disappears.
+  FOR v_call IN
+    SELECT id,
+           LEAST(
+             COALESCE(caller_voice_heartbeat_at,connected_at),
+             COALESCE(listener_voice_heartbeat_at,connected_at)
+           ) AS effective_end_at
+    FROM app.call_sessions
+    WHERE transport='internet_voice'
+      AND status='connected'
+      AND connected_at IS NOT NULL
+      AND connected_at <= now()-interval '30 seconds'
+      AND (
+        caller_voice_heartbeat_at IS NULL
+        OR listener_voice_heartbeat_at IS NULL
+        OR caller_voice_heartbeat_at <= now()-interval '30 seconds'
+        OR listener_voice_heartbeat_at <= now()-interval '30 seconds'
+      )
+    ORDER BY LEAST(
+      COALESCE(caller_voice_heartbeat_at,connected_at),
+      COALESCE(listener_voice_heartbeat_at,connected_at)
+    ),id
+    FOR UPDATE SKIP LOCKED
+    LIMIT p_limit
+  LOOP
+    PERFORM 1
+    FROM app.settle_internet_voice_call(
+      v_call.id,
+      'internet_voice_liveness_timeout',
+      'system',
+      false,
+      v_call.effective_end_at
+    );
+    v_liveness := v_liveness+1;
+  END LOOP;
+
   FOR v_call IN
     SELECT id
     FROM app.call_sessions
@@ -550,7 +616,7 @@ BEGIN
 
   PERFORM app.stop_internet_voice_sweeper_if_idle();
 
-  RETURN QUERY SELECT v_no_answer,v_connect_timeout,v_cap;
+  RETURN QUERY SELECT v_no_answer,v_connect_timeout,v_liveness,v_cap;
 END;
 $$;
 

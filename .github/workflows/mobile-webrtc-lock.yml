@@ -1,0 +1,47 @@
+name: Generate Mobile WebRTC Lock
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/v1-2-internet-voice-foundation]
+    paths:
+      - .github/workflows/mobile-webrtc-lock.yml
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact feature HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Add native WebRTC manifests and generate lock locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = 'v22.23.1'
+          test "$(npm --version)" = '10.9.8'
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+            --workspace @yeki-hast/mobile \
+            react-native-webrtc@124.0.8 \
+            @config-plugins/react-native-webrtc@15.0.2
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Upload generated manifests only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-webrtc-lock
+          path: |
+            package-lock.json
+            apps/mobile/package.json
+          if-no-files-found: error
+          retention-days: 1

@@ -11,10 +11,16 @@ test('caller API contract matches listener browse response ids', () => {
   assert.doesNotMatch(api, /export type BrowseListener = \{\s*userId: string;/);
 });
 
-test('closed-beta caller shell requires server age confirmation before browse flow', () => {
-  const age = caller.indexOf('await confirmCallerAge(token)');
+test('closed-beta caller shell requires explicit current age, Terms and safety consent before browse flow', () => {
+  const consent = caller.indexOf('await confirmCallerAge(token, { termsAccepted, safetyAccepted })');
   const browse = caller.indexOf('await browseListeners(token');
-  assert.ok(age >= 0 && browse > age);
+  assert.ok(consent >= 0 && browse > consent);
+  assert.match(caller, /const policiesReady = ageConfirmed && termsAccepted && safetyAccepted/);
+  assert.match(caller, /disabled=\{busy \|\| !policiesReady\}/);
+  assert.match(caller, /قوانین استفاده را خواندم و می‌پذیرم/);
+  assert.match(caller, /اینجا محل دوست‌یابی یا مشاوره تخصصی نیست/);
+  assert.match(api, /termsAccepted: input\.termsAccepted/);
+  assert.match(api, /safetyAccepted: input\.safetyAccepted/);
   assert.match(caller, /stage === 'age-gate'/);
 });
 

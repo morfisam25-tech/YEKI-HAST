@@ -415,8 +415,24 @@ export function heartbeatListenerPresence(token: string): Promise<{ ok: true; st
   return request('/v1/listener/presence/heartbeat', { method: 'POST' }, token);
 }
 
-export function confirmCallerAge(token: string): Promise<{ ok: true; minimumAge: number; policyVersion: string }> {
-  return request('/v1/caller/age-gate', { method: 'POST', body: JSON.stringify({ confirmed: true }) }, token);
+export function confirmCallerAge(
+  token: string,
+  input: { termsAccepted: boolean; safetyAccepted: boolean },
+): Promise<{
+  ok: true;
+  minimumAge: number;
+  policyVersion: string;
+  termsVersion: string;
+  safetyProtocolVersion: string;
+}> {
+  return request('/v1/caller/age-gate', {
+    method: 'POST',
+    body: JSON.stringify({
+      confirmed: true,
+      termsAccepted: input.termsAccepted,
+      safetyAccepted: input.safetyAccepted,
+    }),
+  }, token);
 }
 
 export function joinCallerWaitlist(

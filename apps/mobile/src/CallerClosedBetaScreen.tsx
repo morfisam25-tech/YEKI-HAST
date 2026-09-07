@@ -55,6 +55,7 @@ function messageFor(code: string): string {
     caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
+    caller_consent_required: 'برای ادامه باید قوانین استفاده و مرزبندی ایمنی را بپذیری.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد؛ همان تماس بازیابی می‌شود.',
     caller_active_call_conflict: 'چند تماس فعال همزمان پیدا شد. برای جلوگیری از انتخاب اشتباه، ادامه متوقف شده و نیاز به بررسی دارد.',
     no_listener_available: 'این شنونده دیگر آماده نیست؛ فهرست آماده‌ها به‌روزرسانی شد.',
@@ -94,6 +95,9 @@ function warningFor(timing: InternetVoiceTiming | null): string {
 export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [stage, setStage] = useState<Stage>('age-gate');
   const [minimumAge, setMinimumAge] = useState<number | null>(null);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
   const [listeners, setListeners] = useState<BrowseListener[]>([]);
   const [selected, setSelected] = useState<BrowseListener | null>(null);
   const [call, setCall] = useState<CallerCallResponse | null>(null);
@@ -111,6 +115,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const processedSignalIdsRef = useRef(new Set<string>());
   const postedMediaConnectedRef = useRef(false);
   const noAnswerExpiryInFlightRef = useRef(false);
+  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted;
 
   function cleanupRtc() {
     const peer = peerRef.current;
@@ -315,11 +320,11 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }, [token, call?.callId, call?.status, noAnswerDeadlineMs]);
 
   async function acceptAgeGate() {
-    if (recoveryBlocked) return;
+    if (recoveryBlocked || !policiesReady) return;
     setBusy(true);
     setError('');
     try {
-      const result = await confirmCallerAge(token);
+      const result = await confirmCallerAge(token, { termsAccepted, safetyAccepted });
       setMinimumAge(result.minimumAge);
       const browse = await browseListeners(token, { limit: 20 });
       setListeners(browse.listeners);
@@ -492,12 +497,23 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       )}
 
       {recoveryComplete && !recoveryBlocked && stage === 'age-gate' && (
-        <View style={styles.card}>
-          <Text style={styles.heading}>تأیید شرط سنی</Text>
-          <Text style={styles.body}>قبل از دیدن مسیر تماس باید شرط سنی نسخه جاری سرور را تأیید کنی.</Text>
-          <TouchableOpacity disabled={busy} style={styles.primary} onPress={acceptAgeGate}><Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text></TouchableOpacity>
-        </View>
-      )}
+  <View style={styles.card}>
+    <Text style={styles.heading}>تأیید سن و قوانین</Text>
+    <Text style={styles.body}>قبل از دیدن شنونده‌ها هر سه مورد را جداگانه تأیید کن.</Text>
+    <TouchableOpacity disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
+      <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</Text>
+    </TouchableOpacity>
+    <TouchableOpacity disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
+      <Text style={styles.policyText}>{termsAccepted ? '☑' : '☐'} قوانین استفاده را خواندم و می‌پذیرم. لینک «قوانین استفاده» پایین صفحه در دسترس است.</Text>
+    </TouchableOpacity>
+    <TouchableOpacity disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
+      <Text style={styles.policyText}>{safetyAccepted ? '☑' : '☐'} می‌پذیرم محترمانه رفتار کنم؛ اینجا محل دوست‌یابی یا مشاوره تخصصی نیست و اطلاعات تماس شخصی ردوبدل نمی‌کنم.</Text>
+    </TouchableOpacity>
+    <TouchableOpacity disabled={busy || !policiesReady} style={[styles.primary, !policiesReady && styles.disabled]} onPress={acceptAgeGate}>
+      <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text>
+    </TouchableOpacity>
+  </View>
+)}
 
       {recoveryComplete && !recoveryBlocked && stage === 'browse' && (
         <View style={styles.card}>
@@ -516,8 +532,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             <View key={listener.id} style={styles.listener}>
               <View style={styles.listenerText}>
                 <Text style={styles.listenerName}>{listener.nickname}</Text>
-                <Text style={styles.meta}>{listener.verified ? 'وضعیت تأییدشده' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
-                {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری: {listener.shortIntro}</Text>}
+                <Text style={styles.meta}>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}
               </View>
               <TouchableOpacity disabled={busy} style={styles.smallButton} onPress={() => { void startCall(listener); }}><Text style={styles.smallButtonText}>تماس</Text></TouchableOpacity>
             </View>
@@ -576,6 +592,10 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, textAlign: 'right', opacity: 0.62 },
   primary: { backgroundColor: '#171717', borderRadius: 12, padding: 14 },
   primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
+  disabled: { opacity: 0.45 },
+  policyRow: { borderWidth: 1, borderColor: '#D8D1C7', borderRadius: 12, padding: 12, backgroundColor: '#FFF' },
+  policyRowActive: { borderColor: '#171717', backgroundColor: '#F3F0EA' },
+  policyText: { fontSize: 13, lineHeight: 21, textAlign: 'right' },
   listener: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: '#EEE9E2', paddingTop: 12 },
   listenerText: { flex: 1, gap: 4 },
   listenerName: { fontSize: 16, fontWeight: '700', textAlign: 'right' },

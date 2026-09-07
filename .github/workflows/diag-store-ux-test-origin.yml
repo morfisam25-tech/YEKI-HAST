@@ -1,0 +1,32 @@
+name: Diagnostic Store UX test origin
+
+on:
+  push:
+    branches:
+      - diag/store-ux-test-origin
+    paths:
+      - .github/workflows/diag-store-ux-test-origin.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Inspect exact test filesystem before npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo '=== git ls-files matching store/release/ux ==='
+          git ls-files tests | grep -Ei 'store|release|ux' || true
+          echo '=== filesystem matching store/release/ux ==='
+          find tests -maxdepth 1 -type f -printf '%f\n' | sort | grep -Ei 'store|release|ux' || true
+          echo '=== exact stale phrase anywhere in repository ==='
+          grep -RFn --exclude-dir=.git 'ورود با ایمیل انجام می‌شود و شماره تماس جداگانه تأیید می‌شود' . || true
+          echo '=== exact test title anywhere in repository ==='
+          grep -RFn --exclude-dir=.git 'Store three-lane UI converges on Email-first auth' . || true

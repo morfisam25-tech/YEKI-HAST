@@ -29,7 +29,7 @@ Verified against the exact vc5 AAB:
 - package is `app.yekihast.mobile`;
 - app version is `1.0.0` / versionCode `5`;
 - targetSdkVersion is `36`;
-- `RECORD_AUDIO` is requested for v1.2 Internet Voice;
+- `RECORD_AUDIO` is present for the implemented Internet Voice capability;
 - camera is not requested;
 - location is not requested;
 - contacts are not requested;
@@ -64,6 +64,25 @@ Requested permission list from the exact vc5 manifest:
 
 The artifact contains the exact AAB, checksum, dumped manifest and requested-permission list. Upload the `.aab`, not the outer GitHub artifact ZIP.
 
+## Current production gate truth — VERIFIED
+
+The final binary contains Internet Voice implementation, but the submitted public production environment does **not** currently expose an operational Caller/voice path.
+
+Safe production audits on 2026-09-07 confirmed:
+
+- TURN/provider audit run `34161228428` — SUCCESS;
+- Caller gate audit run `34161306558` — SUCCESS;
+- `CALLER_CLOSED_BETA_ENABLED=false`;
+- `COMMERCIAL_HOSTING_APPROVED=false`;
+- `INTERNET_VOICE_ICE_SERVERS_JSON` absent;
+- Iran TURN and domestic control-plane values absent;
+- payment/KYC/payout providers not configured;
+- production bootstrap returns `features.callerClosedBetaEnabled=false`.
+
+The app shell reads that server gate and routes users to the non-operational Caller information/waitlist state instead of opening a call.
+
+This distinction is mandatory for Store filing: **permission present in the APK is not the same thing as data actually collected by the current public production behavior.**
+
 ## Public Store URLs
 
 - Website: `https://yekihast.app`
@@ -72,7 +91,7 @@ The artifact contains the exact AAB, checksum, dumped manifest and requested-per
 - Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-The v1.2 Privacy page is live on production.
+The privacy page must describe the closed Caller/voice production state before final Play submission.
 
 ## Google Play record values
 
@@ -93,17 +112,15 @@ Do not invent the legal developer/Seller name. It must match the actual Google P
 
 ### Short description
 
-`وقتی می‌خواهی با یک آدم واقعی حرف بزنی؛ یکی هست برای شنیده‌شدن و همراهی.`
+`مسیر ثبت‌نام، آموزش و آماده‌سازی شنونده برای تجربه انسانی «یکی هست».`
 
 ### Full description
 
-`یکی هست` برای زمانی ساخته شده که حضور و گفت‌وگوی انسانی مهم است.
+`یکی هست` برای ساختن یک تجربه انسانیِ شنیده‌شدن طراحی شده است.
 
-نسخه فعلی مسیر ثبت‌نام و آماده‌سازی شنونده را ارائه می‌کند و زیرساخت تماس صوتی اینترنتی را برای بخش‌های فعال‌شده‌ی محصول دارد. ورود با کد یک‌بارمصرف ایمیلی انجام می‌شود. کاربر می‌تواند پروفایل اولیه را بسازد، زبان‌ها و سطح تسلط خود را مشخص کند و مسیر آموزش و ارزیابی را طی کند.
+نسخه عمومی فعلی روی مسیر شنونده تمرکز دارد: ورود با کد یک‌بارمصرف ایمیلی، ساخت پروفایل اولیه، انتخاب زبان‌ها و سطح تسلط، آموزش و ارزیابی، دسترسی به قوانین و حریم خصوصی، پشتیبانی و حذف حساب.
 
-در بخش تماس صوتی اینترنتی، میکروفون فقط هنگام استفاده از تماس لازم است. رسانه‌ی زنده با WebRTC منتقل می‌شود و اگر اتصال مستقیم ممکن نباشد می‌تواند از TURN عبور کند. برنامه مسیر فعالی برای ضبط یا ذخیره‌ی محتوای صوتی مکالمه ندارد.
-
-حریم خصوصی، قوانین استفاده، پشتیبانی و مسیر حذف حساب در دسترس‌اند. قابلیت‌هایی مثل پرداخت، KYC، تسویه و مسیرهای provider فقط زمانی باید در Store به‌عنوان قابلیت فعال معرفی شوند که production gate واقعی آن‌ها باز و تأیید شده باشد.
+زیرساخت Caller و تماس صوتی اینترنتی در محصول پیاده‌سازی شده، اما گیت آن در production فعلی باز نیست و نباید در این انتشار به‌عنوان قابلیت عمومی فعال معرفی شود. پرداخت، KYC بیرونی، تسویه و مسیرهای provider نیز تا زمانی که گیت production واقعی آن‌ها باز و تأیید نشده باشد عمومی نیستند.
 
 `یکی هست` درمان، مشاوره تخصصی یا سرویس اضطراری نیست. اگر در خطر فوری هستید، از خدمات اضطراری محل زندگی خود کمک بگیرید.
 
@@ -117,58 +134,60 @@ Reviewer path:
 2. Use the listener/email sign-in path.
 3. Enter an inbox the reviewer can access.
 4. Request the one-time email code and enter it in the app.
-5. Continue through the available onboarding/training flow.
+5. Continue through the available listener onboarding/training flow.
 6. Privacy, Terms, Account Deletion and Support are available from the app surfaces.
-7. If the Internet Voice flow is enabled for the reviewer account/environment, microphone permission is requested only for the call path.
+7. Caller/Internet Voice is intentionally closed in the submitted production environment; do not provide or promise a reviewer-only bypass.
 
 Never place OTPs, passwords, session tokens, Expo credentials, signing keys or production secrets in Play Console notes.
 
-## Data Safety filing baseline
+## Data Safety filing baseline — CURRENT PRODUCTION
 
-Google Play defines data as collected when it is transmitted off-device. Its form also requires data that is processed ephemerally to be represented in the form response, even when that transient processing is not shown as retained collection on the public Data Safety section.
+Google Play separates the manifest permission list from the Data Safety section. The permission list describes permissions declared by the APK; Data Safety describes data the app actually collects/shares. Google's current guidance also states that data transmitted off-device must generally be represented as collection, while permission presence by itself does not mean the data is collected.
 
-### Data currently used by the signed-in product path
+### Data currently used by the signed-in listener path
 
-- Email address — authentication, account management, security/support.
+At filing time, map the exact Play Console data-type labels to the current behavior. The current application path processes at least:
+
+- Email address — authentication, account management and security/support.
 - Listener nickname — profile/app functionality.
 - Declared gender, languages and proficiency — onboarding/app functionality.
-- Optional short introduction — user-provided content.
+- Optional short introduction — user-provided content/app functionality.
 - Listener training/assessment/application state and answers — app functionality.
 
-### Live Internet Voice
+These current account/profile data types must be disclosed accurately in the form. Do not infer `Shared = Yes` merely because first-party hosting/database/email service providers process data on the developer's behalf; apply Google's service-provider rules to the exact Console questions.
 
-Final vc5 requests `RECORD_AUDIO`.
+### Audio / Voice or sound recordings
 
-Current behavior:
+Final vc5 declares `RECORD_AUDIO`, but production Caller/Internet Voice is closed and no TURN relay is configured.
 
-- microphone audio is used for a user-initiated live Internet Voice session;
-- media is transmitted off-device using WebRTC;
-- TURN may relay live media when direct peer connectivity is unavailable;
-- conversation audio is not intentionally recorded or persisted by the application;
-- transient media should be treated as ephemeral real-time processing when the provider/runtime behavior matches that description.
+Current filing baseline for **Audio files / Voice or sound recordings**:
 
-Conservative Play Console filing baseline for the voice data type:
+- Collected: **No** for this submitted production state;
+- Shared: **No** for this submitted production state;
+- Reason: the public production gate prevents users from entering an operational voice session, so conversation audio is not transmitted by the current public behavior;
+- this does **not** change the manifest/permission fact that `RECORD_AUDIO` exists in vc5.
 
-- Audio files / Voice or sound recordings: **Collected = Yes** for form purposes because live user voice leaves the device;
-- Ephemeral processing: **Yes**;
-- Purpose: **App functionality**;
-- Required vs optional: choose the exact value shown by the Console based on whether the user can use the app without starting a voice call; current product semantics make microphone use call-feature-specific rather than account-wide;
-- Shared: **No** only if the final production transfer fits Google's user-initiated-transfer exception for the other participant and any TURN/cloud relay is acting solely as a service provider on the developer's behalf.
+Before `CALLER_CLOSED_BETA_ENABLED` or any equivalent public Caller/voice gate is opened in production:
 
-Before the final Play submission, confirm the actual production TURN/provider role. If provider behavior or contract does not fit the service-provider/user-initiated exceptions, update the Shared answer instead of guessing.
+1. configure and verify the actual TURN/provider path;
+2. verify whether live media is direct, relayed, end-to-end encrypted, or readable by any intermediary;
+3. re-evaluate Google Play Data Safety collection/sharing/ephemeral/service-provider answers;
+4. update Privacy and Store disclosures **before** enabling the feature;
+5. do not rely on this current `Audio = No` filing after voice becomes operational.
 
-Do **not** use the old `Microphone: No` / `voice recordings: No` filing baseline.
+The implemented application backend has no conversation-audio recording/storage path, but that fact alone would not make future live off-device voice transmission `Collected = No`; future filing must follow the then-active runtime behavior and Google's current definitions.
 
-### Data not currently requested/collected by vc5 through Android permissions
+### Data not currently requested/collected through Android permission-dependent public paths
 
 - device location;
 - contacts/address book;
 - photos/videos;
 - SMS/MMS or call logs;
 - advertising identifiers for ad targeting;
-- broad external/media storage access.
+- broad external/media storage access;
+- conversation voice/audio in the current closed Caller environment.
 
-Payment/KYC/payout/provider data must be rechecked if those production gates are opened before Store submission.
+Payment/KYC/payout/provider data must be rechecked if those production gates are opened before or after Store submission.
 
 ### Security/deletion baseline
 
@@ -183,13 +202,14 @@ Payment/KYC/payout/provider data must be rechecked if those production gates are
 
 - Contains ads: No
 - Advertising ID: No
-- Camera: No
-- Microphone: **Yes**
-- Location: No
-- Contacts: No
-- SMS/call log/phone: No
+- Camera permission: No
+- Microphone permission: **Yes** (`RECORD_AUDIO` exists in vc5)
+- Current production audio collection: **No** while Caller/voice remains closed
+- Location permission: No
+- Contacts permission: No
+- SMS/call log/phone permission: No
 
-The microphone declaration is required by the exact vc5 AAB and must match the live Privacy page.
+Do not answer a permission question with the Data Safety collection answer or vice versa.
 
 ## Artwork
 
@@ -207,12 +227,12 @@ Hosted GitHub Android emulator capture remains closed because prior Linux KVM an
 
 Recommended real states:
 
-1. Home / product proposition + listener CTA.
+1. Home / current proposition with Caller visibly closed if that state is shown.
 2. Listener introduction/onboarding.
 3. Email sign-in with no personal email or OTP visible.
-4. A real available listener/training or voice-related state that exists in the submitted build.
+4. A real listener profile/training/assessment state that exists in the submitted build.
 
-Never expose real email, OTP, session/admin data or secrets. Do not use speculative payment/KYC/provider screens.
+Never expose real email, OTP, session/admin data or secrets. Do not fabricate Caller/payment/KYC/provider screens.
 
 ## Content/policy questionnaire baseline
 
@@ -226,7 +246,7 @@ Never expose real email, OTP, session/admin data or secrets. Do not use speculat
 
 Answer IARC/content rating and target-audience questions from the exact Play Console form at filing time; do not pre-invent a rating.
 
-## External-only blockers after repository preparation
+## External-only blockers after repository/privacy reconciliation
 
 1. Capture/QC current vc5 screenshots on a real Android device.
 2. Confirm/create the Google Play developer account and complete identity/organization verification.
@@ -234,21 +254,25 @@ Answer IARC/content rating and target-audience questions from the exact Play Con
 4. Create the Play app record for `app.yekihast.mobile`.
 5. Upload the exact vc5 AAB.
 6. Fill Store listing, App access, Data Safety, Content rating, Target audience, Ads and other required declarations from this packet.
-7. Confirm final production TURN/provider role before locking the Data Safety Shared answer for live audio.
-8. Upload the locked icon/feature graphic and final screenshots.
-9. Run Play pre-launch/review checks and fix only evidence-backed findings.
-10. Submit to the selected track only after the exact artifact passes the desired review/smoke gate.
+7. Upload the locked icon/feature graphic and final screenshots.
+8. Run Play pre-launch/review checks and fix only evidence-backed findings.
+9. Submit to the selected track only after the exact artifact passes the desired review/smoke gate.
+
+TURN/provider verification is **not** a blocker for this release while Caller/voice remains closed. It becomes a mandatory pre-enable gate before Internet Voice is made operational later.
 
 ## Official Google references checked for this packet
 
-- Data Safety form definitions and ephemeral processing: `https://support.google.com/googleplay/android-developer/answer/10787469`
+- Data Safety form definitions, permission-vs-collection distinction and ephemeral processing: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - User Data policy: `https://support.google.com/googleplay/android-developer/answer/10144311`
 
 ## Do not do
 
 - Do not upload vc2/vc3/vc4 as the final Store binary.
-- Do not declare Microphone: No for vc5.
-- Do not rebuild Android because only Store metadata changed.
+- Do not claim the current public release has operational Internet Voice.
+- Do not claim the vc5 APK lacks microphone permission; it contains `RECORD_AUDIO`.
+- Do not file current conversation audio as collected while the production Caller/voice path remains closed.
+- Do not open Caller/voice after filing `Audio = No` without first updating Data Safety and Privacy.
+- Do not rebuild Android because only Store metadata/privacy wording changed.
 - Do not retry hosted Android emulator screenshot runs.
 - Do not upload a screenshot-only APK to Google Play.
 - Do not replace the Android signing key.

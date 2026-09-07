@@ -1,0 +1,50 @@
+name: One-shot listener copy patch
+
+on:
+  push:
+    branches:
+      - feat/v1-2-internet-voice-foundation
+    paths:
+      - .github/workflows/patch-listener-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+          fetch-depth: 0
+
+      - name: Restore explicit verification and self-declared labels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('apps/web/app/talk/page.tsx')
+          text = path.read_text()
+          old_verified = "<span>{listener.verified ? 'هویت تأییدشده' : 'اطلاعات تأیید نشده'}</span>"
+          new_verified = "<span>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأیید نشده'}</span>"
+          old_intro = "{listener.shortIntro && <small>{listener.shortIntro}</small>}"
+          new_intro = "{listener.shortIntro && <small>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</small>}"
+          if old_verified not in text:
+              raise SystemExit('verified copy target not found')
+          if old_intro not in text:
+              raise SystemExit('intro copy target not found')
+          text = text.replace(old_verified, new_verified, 1).replace(old_intro, new_intro, 1)
+          path.write_text(text)
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/app/talk/page.tsx
+          git diff --cached --check
+          git commit -m "fix: restore listener verification labels"
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

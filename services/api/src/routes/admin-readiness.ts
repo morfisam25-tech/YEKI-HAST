@@ -12,6 +12,7 @@ import { validateEmailProviderEnv } from '../providers/email.ts';
 import { validatePaymentProviderEnv } from '../providers/payment.ts';
 import { validatePayoutProviderEnv } from '../providers/payout.ts';
 import { validateTelephonyEnv } from '../providers/telephony.ts';
+import { getCallTransportReadiness, validatePrimaryCallTransportEnv } from '../providers/call-transport.ts';
 import { validateKycInquiryProviderEnv } from '../providers/kyc-inquiry.ts';
 
 function ready(check: () => unknown): boolean {
@@ -42,11 +43,16 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const paymentReady = ready(() => validatePaymentProviderEnv());
   const payoutReady = ready(() => validatePayoutProviderEnv());
   const telephonyReady = ready(() => validateTelephonyEnv());
+  const callTransportReady = ready(() => validatePrimaryCallTransportEnv());
   const kycInquiryReady = ready(() => validateKycInquiryProviderEnv());
   const sensitiveDataReady = ready(() => validateSecurityEnv());
   const manualPhoneVerificationEnabled = process.env.MANUAL_PHONE_VERIFICATION_BETA_ENABLED?.trim().toLowerCase() === 'true';
   const accountAuthReady = emailAuthReady || smsReady;
   const callPhoneVerificationReady = manualPhoneVerificationEnabled || smsReady;
+  let callTransport: ReturnType<typeof getCallTransportReadiness> | null = null;
+  try { callTransport = getCallTransportReadiness(); } catch {}
+  const maskedPstnLaunchRequired = callTransport?.primary === 'masked_pstn';
+  const maskedPstnFallbackSelected = callTransport?.fallback === 'masked_pstn';
 
   const publicRelease = getPublicReleaseConfig();
 
@@ -89,9 +95,8 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && callerAgePolicyReady
     && callerCatalogReady
     && accountAuthReady
-    && callPhoneVerificationReady
+    && callTransportReady
     && paymentReady
-    && telephonyReady
     && sensitiveDataReady
     && adminBootstrapLockedDown
     && publicRelease.ready;
@@ -101,15 +106,29 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     generatedAt: new Date().toISOString(),
     integrations: {
       emailAuth: { provider: emailProvider, ready: emailAuthReady },
-      sms: { provider: smsProvider, ready: smsReady, optionalWhenEmailAndManualPhoneVerificationReady: true },
+      sms: { provider: smsProvider, ready: smsReady, optionalWhenEmailAuthReady: true },
       accountAuth: { ready: accountAuthReady },
+      callTransport: {
+        ready: callTransportReady,
+        primary: callTransport?.primary ?? null,
+        fallback: callTransport?.fallback ?? null,
+        internetVoiceReady: Boolean(callTransport?.internetVoice.configured && callTransport.internetVoice.relayConfigured),
+        iranDomesticPathReady: Boolean(callTransport?.internetVoice.iranDomesticPathConfigured),
+      },
       callPhoneVerification: {
         ready: callPhoneVerificationReady,
         manualBetaEnabled: manualPhoneVerificationEnabled,
+        launchRequired: maskedPstnLaunchRequired,
+        fallbackRequired: maskedPstnFallbackSelected,
       },
       payment: { provider: paymentProvider, ready: paymentReady },
       payout: { provider: payoutProvider, ready: payoutReady },
-      telephony: { provider: telephonyProvider, ready: telephonyReady },
+      telephony: {
+        provider: telephonyProvider,
+        ready: telephonyReady,
+        launchRequired: maskedPstnLaunchRequired,
+        fallbackRequired: maskedPstnFallbackSelected,
+      },
       kycInquiry: { provider: kycInquiryProvider, ready: kycInquiryReady },
       sensitiveData: { ready: sensitiveDataReady },
       commercialHosting: { ready: commercialHostingApproved },

@@ -8,7 +8,6 @@ const voiceApi = await readFile(new URL('../apps/mobile/src/internet-voice-api.t
 const appConfig = await readFile(new URL('../apps/mobile/app.json', import.meta.url), 'utf8');
 const mobilePackage = await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8');
 
-
 test('Android native build declares WebRTC dependency, plugin and microphone permission', () => {
   assert.match(mobilePackage, /"react-native-webrtc": "\^124\.0\.8"/);
   assert.match(mobilePackage, /"@config-plugins\/react-native-webrtc": "\^15\.0\.2"/);
@@ -51,10 +50,11 @@ test('Android Listener explicitly accepts Internet Voice before microphone acces
   assert.match(answer, /ensureMicrophone\(\)/);
   assert.match(answer, /getInternetVoiceConfig/);
   assert.match(answer, /getInternetVoiceSignals/);
+  assert.match(listener, /async function consumeCallerSignal\(callId: string/);
   assert.match(listener, /createAnswer/);
-  assert.match(listener, /postInternetVoiceSignal\(token, activeCallIdRef\.current \?\? '', 'answer'/);
+  assert.match(listener, /postInternetVoiceSignal\(token, callId, 'answer'/);
   assert.match(listener, /پاسخ تماس/);
-  assert.doesNotMatch(listener, /پاسخ‌دادن به تماس از خود تماس تلفنی انجام می‌شود/);
+  assert.doesNotMatch(listener, /activeCallIdRef\.current \?\? ''/);
 });
 
 test('Android Listener confirms media connection and participates in authoritative heartbeat enforcement', () => {

@@ -50,13 +50,20 @@ test('ICE parser accepts STUN/TURN config and rejects malformed input', () => {
   assert.throws(() => parseIceServers(JSON.stringify([{ urls: 'turn:x', username: 'u' }])));
 });
 
-test('Internet Voice is the default primary transport and PSTN remains non-blocking fallback', () => {
+test('Internet Voice is the default primary transport and PSTN fallback is off unless explicitly enabled', () => {
   withEnv({ NODE_ENV: 'development', CALL_PRIMARY_TRANSPORT: undefined, CALL_FALLBACK_TRANSPORT: undefined, TELEPHONY_PROVIDER: undefined }, () => {
+    const readiness = getCallTransportReadiness();
+    assert.equal(readiness.primary, 'internet_voice');
+    assert.equal(readiness.fallback, null);
+    assert.equal(readiness.maskedPstn.configured, false);
+    assert.doesNotThrow(() => validatePrimaryCallTransportEnv());
+  });
+
+  withEnv({ NODE_ENV: 'development', CALL_PRIMARY_TRANSPORT: 'internet_voice', CALL_FALLBACK_TRANSPORT: 'masked_pstn', TELEPHONY_PROVIDER: undefined }, () => {
     const readiness = getCallTransportReadiness();
     assert.equal(readiness.primary, 'internet_voice');
     assert.equal(readiness.fallback, 'masked_pstn');
     assert.equal(readiness.maskedPstn.configured, false);
-    assert.doesNotThrow(() => validatePrimaryCallTransportEnv());
   });
 });
 

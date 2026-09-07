@@ -14,11 +14,20 @@
         {
           "configureAndroidBackup": true
         }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "برای تماس صوتی اینترنتی، یکی هست به میکروفون نیاز دارد."
+        }
       ]
     ],
     "android": {
       "package": "app.yekihast.mobile",
       "allowBackup": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "blockedPermissions": [
         "android.permission.DUMP",
         "android.permission.READ_EXTERNAL_STORAGE",

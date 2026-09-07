@@ -29,45 +29,47 @@ test('manual phone verification is closed-beta-only and explicitly confirmed', (
   assert.match(admin, /requireAdmin\(req\)/);
 });
 
-test('handler exposes authenticated phone setup and admin verification operations', () => {
+test('handler keeps authenticated phone setup and admin verification available for masked PSTN fallback', () => {
   assert.match(handler, /\/v1\/account\/call-phone/);
   assert.match(handler, /\/v1\/admin\/call-phone-verifications/);
   assert.match(handler, /call-phone\\\/verify/);
 });
 
-test('caller cannot progress to a new call path before call phone verification', () => {
-  assert.match(caller, /const \[callPhoneVerified, setCallPhoneVerified\] = useState\(false\)/);
-  assert.match(caller, /<CallPhoneSetupCard token=\{token\} onVerifiedChange=\{setCallPhoneVerified\} \/>/);
-  assert.match(caller, /recoveryBlocked \|\| !callPhoneVerified/);
-  assert.match(caller, /callPhoneVerified && stage === 'age-gate'/);
-  assert.match(caller, /callPhoneVerified && stage === 'browse'/);
+test('Internet Voice caller path is not gated on verified PSTN phone setup', () => {
+  assert.doesNotMatch(caller, /const \[callPhoneVerified, setCallPhoneVerified\] = useState\(false\)/);
+  assert.doesNotMatch(caller, /recoveryBlocked \|\| !callPhoneVerified/);
+  assert.doesNotMatch(caller, /callPhoneVerified && stage === 'age-gate'/);
+  assert.doesNotMatch(caller, /callPhoneVerified && stage === 'browse'/);
+  assert.doesNotMatch(caller, /<CallPhoneSetupCard token=\{token\} onVerifiedChange=\{setCallPhoneVerified\} \/>/);
 });
 
-test('listener work controls fail closed without a verified phone but offline stays available', () => {
-  assert.match(listener, /const \[callPhoneVerified, setCallPhoneVerified\] = useState\(false\)/);
-  assert.match(listener, /!callPhoneVerified && status !== 'offline'/);
-  assert.match(listener, /const workControlsLocked = busy \|\| activeCallConflict \|\| !callPhoneVerified/);
-  assert.match(listener, /<CallPhoneSetupCard token=\{token\} onVerifiedChange=\{setCallPhoneVerified\} \/>/);
-  assert.match(listener, /disabled=\{busy\} onPress=\{\(\) => changeStatus\('offline'\)\}/);
+test('Internet Voice listener work mode is not gated on verified PSTN phone setup', () => {
+  assert.doesNotMatch(listener, /const \[callPhoneVerified, setCallPhoneVerified\] = useState\(false\)/);
+  assert.doesNotMatch(listener, /!callPhoneVerified && status !== 'offline'/);
+  assert.doesNotMatch(listener, /const workControlsLocked = busy \|\| activeCallConflict \|\| !callPhoneVerified/);
+  assert.doesNotMatch(listener, /<CallPhoneSetupCard token=\{token\} onVerifiedChange=\{setCallPhoneVerified\} \/>/);
+  assert.match(listener, /آماده دریافت تماس اینترنتی/);
 });
 
-test('mobile phone card never claims a pending number is verified', () => {
+test('mobile phone card never claims a pending fallback number is verified', () => {
   assert.match(card, /status\?\.configured && !status\.verified/);
   assert.match(card, /ادمین بعد از بررسی مالکیت شماره آن را فعال می‌کند/);
   assert.doesNotMatch(card, /verified:\s*true/);
 });
 
-test('admin UI warns that ownership must be checked out of band before confirmation', () => {
+test('admin UI warns that fallback phone ownership must be checked out of band before confirmation', () => {
   assert.match(adminPage, /فقط در بتای بسته و بعد از بررسی واقعی مالکیت شماره خارج از سیستم/);
   assert.match(adminPage, /window\.confirm/);
   assert.match(adminPage, /confirmed: true/);
 });
 
-test('SMS is no longer a hard caller launch dependency when email and manual beta verification are ready', () => {
+test('Caller launch readiness follows primary call transport and does not require PSTN readiness for Internet Voice', () => {
   assert.match(readiness, /const accountAuthReady = emailAuthReady \|\| smsReady/);
-  assert.match(readiness, /const callPhoneVerificationReady = manualPhoneVerificationEnabled \|\| smsReady/);
+  assert.match(readiness, /const callTransportReady = ready\(\(\) => validatePrimaryCallTransportEnv\(\)\)/);
+  assert.match(readiness, /const maskedPstnLaunchRequired = callTransport\?\.primary === 'masked_pstn'/);
   const callerLaunchBlock = readiness.match(/const callerLaunchReady =[\s\S]*?;/)?.[0] ?? '';
   assert.match(callerLaunchBlock, /accountAuthReady/);
-  assert.match(callerLaunchBlock, /callPhoneVerificationReady/);
-  assert.doesNotMatch(callerLaunchBlock, /&& smsReady/);
+  assert.match(callerLaunchBlock, /callTransportReady/);
+  assert.doesNotMatch(callerLaunchBlock, /callPhoneVerificationReady/);
+  assert.doesNotMatch(callerLaunchBlock, /telephonyReady/);
 });

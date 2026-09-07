@@ -6,10 +6,9 @@ const expectedMigrationEntries = [
   ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
   ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
   ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
-  ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
+  ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
 ];
 const expectedMigrations = new Map(expectedMigrationEntries);
-
 
 function normalizedDatabaseUrl(connectionString) {
   const url = new URL(connectionString);

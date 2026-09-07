@@ -1,6 +1,17 @@
 -- Blueprint v1.2 server-owned Internet Voice expiry and cap enforcement.
--- Vercel Hobby cannot run a minute-level cron. Neon pg_cron is used instead so
--- Wallet HOLD release and hard session caps do not depend on either mobile app staying open.
+-- The Neon compute must set cron.database_name to the application database before
+-- this migration runs. The scheduler is created only while an Internet Voice call
+-- is active so an idle project can still scale to zero.
+
+DO $$
+BEGIN
+  IF current_setting('cron.database_name', true) IS DISTINCT FROM current_database() THEN
+    RAISE EXCEPTION 'internet_voice_pg_cron_database_not_configured'
+      USING HINT = 'Set the Neon compute setting cron.database_name to ' || current_database()
+        || ' and restart the compute before applying migration 0006.';
+  END IF;
+END;
+$$;
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
@@ -8,7 +19,6 @@ ALTER TABLE app.call_sessions
   ADD COLUMN IF NOT EXISTS voice_offer_started_at timestamptz,
   ADD COLUMN IF NOT EXISTS voice_listener_answered_at timestamptz;
 
--- Backfill any in-flight Internet Voice session created before these explicit timestamps existed.
 UPDATE app.call_sessions cs
 SET voice_offer_started_at = COALESCE(
       cs.voice_offer_started_at,
@@ -20,18 +30,15 @@ SET voice_offer_started_at = COALESCE(
       ),
       cs.updated_at
     )
-WHERE cs.transport::text='internet_voice'
-  AND cs.status::text='calling_listener'
+WHERE cs.transport='internet_voice'
+  AND cs.status='calling_listener'
   AND cs.voice_offer_started_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS call_sessions_internet_voice_sweep_idx
   ON app.call_sessions(status, voice_offer_started_at, voice_listener_answered_at, connected_at)
-  WHERE transport::text='internet_voice'
-    AND status::text IN ('calling_listener','connected');
+  WHERE transport='internet_voice'
+    AND status IN ('calling_listener','connected');
 
--- Zero-charge pre-connect finalizer used by both the authenticated API route and pg_cron.
--- No-answer remains 90 seconds. Once the Listener has explicitly answered, a separate
--- 120-second media-connection fail-safe releases the HOLD without penalizing Listener presence.
 CREATE OR REPLACE FUNCTION app.expire_internet_voice_preconnect(
   p_call_id uuid,
   p_reason text
@@ -69,10 +76,14 @@ BEGIN
     RETURN QUERY SELECT v_call.status::text, true, 0::bigint, false;
     RETURN;
   END IF;
-  IF v_call.status::text <> 'calling_listener' THEN RAISE EXCEPTION 'call_not_waiting_for_listener'; END IF;
+  IF v_call.status::text <> 'calling_listener' THEN
+    RAISE EXCEPTION 'call_not_waiting_for_listener';
+  END IF;
 
   IF p_reason='internet_voice_no_answer' THEN
-    IF v_call.voice_listener_answered_at IS NOT NULL THEN RAISE EXCEPTION 'listener_already_answered'; END IF;
+    IF v_call.voice_listener_answered_at IS NOT NULL THEN
+      RAISE EXCEPTION 'listener_already_answered';
+    END IF;
     IF v_call.voice_offer_started_at IS NULL
        OR now() < v_call.voice_offer_started_at + interval '90 seconds' THEN
       RAISE EXCEPTION 'no_answer_window_active';
@@ -82,7 +93,9 @@ BEGIN
     v_hold_reason := 'internet_voice_no_answer';
     v_hold_key := 'call:' || p_call_id::text || ':hold:release:no_answer';
   ELSE
-    IF v_call.voice_listener_answered_at IS NULL THEN RAISE EXCEPTION 'listener_not_answered'; END IF;
+    IF v_call.voice_listener_answered_at IS NULL THEN
+      RAISE EXCEPTION 'listener_not_answered';
+    END IF;
     IF now() < v_call.voice_listener_answered_at + interval '120 seconds' THEN
       RAISE EXCEPTION 'connect_timeout_window_active';
     END IF;
@@ -94,7 +107,8 @@ BEGIN
 
   SELECT w.id INTO v_wallet_id
   FROM app.wallets w
-  WHERE w.user_id=v_call.caller_user_id AND w.currency_code=v_call.currency_code
+  WHERE w.user_id=v_call.caller_user_id
+    AND w.currency_code=v_call.currency_code
   FOR UPDATE;
   IF v_wallet_id IS NULL THEN RAISE EXCEPTION 'wallet_unavailable'; END IF;
 
@@ -152,7 +166,7 @@ BEGIN
       updated_at=now()
   WHERE id=p_call_id
     AND status='calling_listener'
-    AND transport::text='internet_voice';
+    AND transport='internet_voice';
   IF NOT FOUND THEN RAISE EXCEPTION 'call_preconnect_finalize_conflict'; END IF;
 
   INSERT INTO app.call_events(call_session_id,status,source,metadata)
@@ -177,9 +191,6 @@ BEGIN
 END;
 $$;
 
--- Authoritative connected-call settlement shared by API-triggered end/heartbeat and pg_cron.
--- Integer arithmetic intentionally mirrors packages/domain/src/billing.ts:
--- caller rounds monetary fractions up, Listener rounds down, seconds round to the plan increment.
 CREATE OR REPLACE FUNCTION app.settle_internet_voice_call(
   p_call_id uuid,
   p_ended_reason text,
@@ -209,7 +220,9 @@ DECLARE
   v_status app.call_status;
   v_reason text;
 BEGIN
-  IF p_ended_by_role NOT IN ('caller','listener','system') THEN RAISE EXCEPTION 'invalid_ended_by_role'; END IF;
+  IF p_ended_by_role NOT IN ('caller','listener','system') THEN
+    RAISE EXCEPTION 'invalid_ended_by_role';
+  END IF;
 
   SELECT cs.* INTO v_call
   FROM app.call_sessions cs
@@ -230,14 +243,18 @@ BEGIN
   END IF;
   IF v_call.status::text <> 'connected' THEN RAISE EXCEPTION 'call_not_settleable'; END IF;
   IF v_call.connected_at IS NULL THEN RAISE EXCEPTION 'call_missing_connected_at'; END IF;
-  IF v_call.listener_user_id IS NULL OR v_call.pricing_plan_id IS NULL OR v_call.max_billable_seconds IS NULL THEN
+  IF v_call.listener_user_id IS NULL
+     OR v_call.pricing_plan_id IS NULL
+     OR v_call.max_billable_seconds IS NULL THEN
     RAISE EXCEPTION 'call_missing_settlement_context';
   END IF;
 
   SELECT pp.billing_increment_seconds INTO v_increment
   FROM app.pricing_plans pp
   WHERE pp.id=v_call.pricing_plan_id;
-  IF v_increment IS NULL OR v_increment < 1 OR v_increment > 60 THEN RAISE EXCEPTION 'pricing_plan_unavailable'; END IF;
+  IF v_increment IS NULL OR v_increment < 1 OR v_increment > 60 THEN
+    RAISE EXCEPTION 'pricing_plan_unavailable';
+  END IF;
 
   v_connected_seconds := LEAST(
     v_call.max_billable_seconds,
@@ -259,7 +276,8 @@ BEGIN
 
   SELECT w.id, w.balance_minor, w.reserved_minor INTO v_wallet
   FROM app.wallets w
-  WHERE w.user_id=v_call.caller_user_id AND w.currency_code=v_call.currency_code
+  WHERE w.user_id=v_call.caller_user_id
+    AND w.currency_code=v_call.currency_code
   FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'wallet_unavailable'; END IF;
   IF v_wallet.reserved_minor < v_authorized THEN RAISE EXCEPTION 'wallet_reservation_missing'; END IF;
@@ -303,7 +321,10 @@ BEGIN
     ) VALUES (
       v_wallet.id,p_call_id,v_call.currency_code,'release',v_unused_hold,
       'unused_session_hold','call:' || p_call_id::text || ':hold:release:unused',
-      jsonb_build_object('authorizedMinor',v_authorized::text,'callerChargeMinor',v_charge::text)
+      jsonb_build_object(
+        'authorizedMinor',v_authorized::text,
+        'callerChargeMinor',v_charge::text
+      )
     ) ON CONFLICT (idempotency_key) DO NOTHING;
   END IF;
 
@@ -315,8 +336,20 @@ BEGIN
     ) ON CONFLICT (call_session_id) DO NOTHING;
   END IF;
 
-  v_status := CASE WHEN p_safety THEN 'safety_terminated'::app.call_status ELSE 'completed'::app.call_status END;
-  v_reason := LEFT(COALESCE(NULLIF(BTRIM(p_ended_reason),''), CASE WHEN p_safety THEN 'internet_voice_safety_exit' ELSE 'internet_voice_completed' END),120);
+  v_status := CASE
+    WHEN p_safety THEN 'safety_terminated'::app.call_status
+    ELSE 'completed'::app.call_status
+  END;
+  v_reason := LEFT(
+    COALESCE(
+      NULLIF(BTRIM(p_ended_reason),''),
+      CASE
+        WHEN p_safety THEN 'internet_voice_safety_exit'
+        ELSE 'internet_voice_completed'
+      END
+    ),
+    120
+  );
 
   UPDATE app.call_sessions
   SET status=v_status,
@@ -325,9 +358,12 @@ BEGIN
       billable_seconds=v_billable_seconds,
       caller_charge_minor=v_charge,
       listener_earning_minor=v_earning,
-      platform_contribution_minor=v_charge-v_earning-telephony_cost_minor-payment_cost_minor-other_variable_cost_minor,
+      platform_contribution_minor=
+        v_charge-v_earning-telephony_cost_minor-payment_cost_minor-other_variable_cost_minor,
       updated_at=now()
-  WHERE id=p_call_id AND status='connected' AND transport::text='internet_voice';
+  WHERE id=p_call_id
+    AND status='connected'
+    AND transport='internet_voice';
   IF NOT FOUND THEN RAISE EXCEPTION 'call_settlement_conflict'; END IF;
 
   INSERT INTO app.call_events(call_session_id,status,source,metadata)
@@ -349,11 +385,89 @@ BEGIN
 
   DELETE FROM app.internet_voice_signals WHERE call_session_id=p_call_id;
 
-  RETURN QUERY SELECT v_status::text,v_billable_seconds,v_charge,v_earning,false;
+  RETURN QUERY SELECT
+    v_status::text,v_billable_seconds,v_charge,v_earning,false;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION app.sweep_internet_voice_sessions(p_limit integer DEFAULT 100)
+CREATE OR REPLACE FUNCTION app.ensure_internet_voice_sweeper_job()
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_job_id bigint;
+  v_schedule text;
+  v_command text;
+BEGIN
+  PERFORM pg_advisory_xact_lock(742019912);
+
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') THEN
+    RAISE EXCEPTION 'internet_voice_pg_cron_not_installed';
+  END IF;
+
+  SELECT jobid,schedule,command
+  INTO v_job_id,v_schedule,v_command
+  FROM cron.job
+  WHERE jobname='yeki_hast_internet_voice_sweep'
+  ORDER BY jobid
+  LIMIT 1;
+
+  IF v_job_id IS NOT NULL
+     AND (
+       v_schedule <> '10 seconds'
+       OR v_command <> 'SELECT * FROM app.sweep_internet_voice_sessions(100);'
+     ) THEN
+    PERFORM cron.unschedule(v_job_id);
+    v_job_id := NULL;
+  END IF;
+
+  IF v_job_id IS NULL THEN
+    SELECT cron.schedule(
+      'yeki_hast_internet_voice_sweep',
+      '10 seconds',
+      'SELECT * FROM app.sweep_internet_voice_sessions(100);'
+    ) INTO v_job_id;
+  END IF;
+
+  RETURN v_job_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION app.stop_internet_voice_sweeper_if_idle()
+RETURNS boolean
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_job_id bigint;
+  v_stopped boolean := false;
+BEGIN
+  PERFORM pg_advisory_xact_lock(742019912);
+
+  IF EXISTS (
+    SELECT 1
+    FROM app.call_sessions
+    WHERE transport='internet_voice'
+      AND status IN ('calling_listener','connected')
+  ) THEN
+    RETURN false;
+  END IF;
+
+  FOR v_job_id IN
+    SELECT jobid
+    FROM cron.job
+    WHERE jobname='yeki_hast_internet_voice_sweep'
+  LOOP
+    PERFORM cron.unschedule(v_job_id);
+    v_stopped := true;
+  END LOOP;
+
+  RETURN v_stopped;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION app.sweep_internet_voice_sessions(
+  p_limit integer DEFAULT 100
+)
 RETURNS TABLE(
   no_answer_expired integer,
   connect_timeout_expired integer,
@@ -367,15 +481,17 @@ DECLARE
   v_connect_timeout integer := 0;
   v_cap integer := 0;
 BEGIN
-  IF p_limit < 1 OR p_limit > 1000 THEN RAISE EXCEPTION 'invalid_sweep_limit'; END IF;
+  IF p_limit < 1 OR p_limit > 1000 THEN
+    RAISE EXCEPTION 'invalid_sweep_limit';
+  END IF;
 
   DELETE FROM app.internet_voice_signals WHERE expires_at<=now();
 
   FOR v_call IN
     SELECT id
     FROM app.call_sessions
-    WHERE transport::text='internet_voice'
-      AND status::text='calling_listener'
+    WHERE transport='internet_voice'
+      AND status='calling_listener'
       AND voice_listener_answered_at IS NULL
       AND voice_offer_started_at IS NOT NULL
       AND voice_offer_started_at <= now()-interval '90 seconds'
@@ -383,30 +499,38 @@ BEGIN
     FOR UPDATE SKIP LOCKED
     LIMIT p_limit
   LOOP
-    PERFORM 1 FROM app.expire_internet_voice_preconnect(v_call.id,'internet_voice_no_answer');
+    PERFORM 1
+    FROM app.expire_internet_voice_preconnect(
+      v_call.id,
+      'internet_voice_no_answer'
+    );
     v_no_answer := v_no_answer+1;
   END LOOP;
 
   FOR v_call IN
     SELECT id
     FROM app.call_sessions
-    WHERE transport::text='internet_voice'
-      AND status::text='calling_listener'
+    WHERE transport='internet_voice'
+      AND status='calling_listener'
       AND voice_listener_answered_at IS NOT NULL
       AND voice_listener_answered_at <= now()-interval '120 seconds'
     ORDER BY voice_listener_answered_at,id
     FOR UPDATE SKIP LOCKED
     LIMIT p_limit
   LOOP
-    PERFORM 1 FROM app.expire_internet_voice_preconnect(v_call.id,'internet_voice_connect_timeout');
+    PERFORM 1
+    FROM app.expire_internet_voice_preconnect(
+      v_call.id,
+      'internet_voice_connect_timeout'
+    );
     v_connect_timeout := v_connect_timeout+1;
   END LOOP;
 
   FOR v_call IN
     SELECT id
     FROM app.call_sessions
-    WHERE transport::text='internet_voice'
-      AND status::text='connected'
+    WHERE transport='internet_voice'
+      AND status='connected'
       AND connected_at IS NOT NULL
       AND max_billable_seconds IS NOT NULL
       AND connected_at + make_interval(secs=>max_billable_seconds) <= now()
@@ -414,7 +538,8 @@ BEGIN
     FOR UPDATE SKIP LOCKED
     LIMIT p_limit
   LOOP
-    PERFORM 1 FROM app.settle_internet_voice_call(
+    PERFORM 1
+    FROM app.settle_internet_voice_call(
       v_call.id,
       'internet_voice_session_cap_reached',
       'system',
@@ -423,25 +548,44 @@ BEGIN
     v_cap := v_cap+1;
   END LOOP;
 
+  PERFORM app.stop_internet_voice_sweeper_if_idle();
+
   RETURN QUERY SELECT v_no_answer,v_connect_timeout,v_cap;
 END;
 $$;
 
--- Keep exactly one named minute-level job. pg_cron is supported by Neon and runs inside
--- Postgres, so this does not depend on Vercel Hobby Cron or an external scheduler account.
-DO $$
-DECLARE
-  v_job_id bigint;
+CREATE OR REPLACE FUNCTION app.manage_internet_voice_sweeper_on_call_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  FOR v_job_id IN SELECT jobid FROM cron.job WHERE jobname='yeki_hast_internet_voice_sweep'
-  LOOP
-    PERFORM cron.unschedule(v_job_id);
-  END LOOP;
+  IF NEW.transport='internet_voice'
+     AND NEW.status IN ('calling_listener','connected') THEN
+    PERFORM app.ensure_internet_voice_sweeper_job();
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
-SELECT cron.schedule(
-  'yeki_hast_internet_voice_sweep',
-  '* * * * *',
-  'SELECT * FROM app.sweep_internet_voice_sessions(100);'
-);
+DROP TRIGGER IF EXISTS call_sessions_internet_voice_sweeper_job
+  ON app.call_sessions;
+
+CREATE TRIGGER call_sessions_internet_voice_sweeper_job
+AFTER UPDATE OF status, transport ON app.call_sessions
+FOR EACH ROW
+EXECUTE FUNCTION app.manage_internet_voice_sweeper_on_call_change();
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM app.call_sessions
+    WHERE transport='internet_voice'
+      AND status IN ('calling_listener','connected')
+  ) THEN
+    PERFORM app.ensure_internet_voice_sweeper_job();
+  ELSE
+    PERFORM app.stop_internet_voice_sweeper_if_idle();
+  END IF;
+END;
+$$;

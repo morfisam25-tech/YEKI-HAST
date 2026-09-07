@@ -1,0 +1,109 @@
+name: One-shot patch v1.2 mobile Store copy
+
+on:
+  push:
+    branches: [fix/v12-privacy-store-alignment]
+    paths:
+      - .github/workflows/one-shot-patch-v12-mobile-store-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact patch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/v12-privacy-store-alignment
+          fetch-depth: 0
+
+      - name: Apply guarded Store-facing mobile copy and legal links
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'apps/mobile/App.tsx';
+          let text = fs.readFileSync(path, 'utf8');
+
+          function replaceOnce(before, after, label) {
+            const first = text.indexOf(before);
+            if (first < 0) throw new Error(`patch anchor missing: ${label}`);
+            if (text.indexOf(before, first + before.length) >= 0) throw new Error(`patch anchor duplicated: ${label}`);
+            text = text.slice(0, first) + after + text.slice(first + before.length);
+          }
+
+          replaceOnce(
+            "import {\n  SafeAreaView,",
+            "import {\n  Linking,\n  SafeAreaView,",
+            'react-native Linking import',
+          );
+          replaceOnce(
+            "caller_closed_beta_disabled: 'بتای Caller برای این محیط فعال نیست.',",
+            "caller_closed_beta_disabled: 'مسیر Caller برای این محیط فعال نیست.',",
+            'caller disabled copy',
+          );
+          replaceOnce(
+            "function screenForApplicationStatus(status: string): Screen {",
+            `const PUBLIC_LINKS = [\n  ['حریم خصوصی', 'https://yekihast.app/privacy'],\n  ['قوانین استفاده', 'https://yekihast.app/terms'],\n  ['حذف حساب', 'https://yekihast.app/account/delete'],\n  ['پشتیبانی', 'mailto:sales@uniqueholding.com.tr'],\n] as const;\n\nfunction LegalLinks({ compact = false }: { compact?: boolean }) {\n  return (\n    <View style={[styles.legalBox, compact && styles.legalBoxCompact]}>\n      {!compact && <Text style={styles.legalTitle}>اطلاعات و پشتیبانی</Text>}\n      <View style={styles.legalRow}>\n        {PUBLIC_LINKS.map(([label, url]) => (\n          <TouchableOpacity key={url} onPress={() => { void Linking.openURL(url).catch(() => undefined); }}>\n            <Text style={styles.legalLink}>{label}</Text>\n          </TouchableOpacity>\n        ))}\n      </View>\n    </View>\n  );\n}\n\nfunction screenForApplicationStatus(status: string): Screen {`,
+            'legal links component',
+          );
+          replaceOnce(
+            "? 'بتای بسته Caller برای این محیط فعال است. ورود با ایمیل انجام می‌شود و شماره تماس جداگانه تأیید می‌شود.'\n                  : 'بخش مکالمه برای Caller هنوز در بتای بسته است.'",
+            "? 'Caller در این محیط فعال است. ورود با ایمیل انجام می‌شود و تماس اصلی از اینترنت برقرار می‌شود؛ برای Internet Voice شماره تلفن لازم نیست.'\n                  : 'بخش مکالمه Caller در این محیط فعلاً فعال نیست.'",
+            'home Caller status copy',
+          );
+          replaceOnce(
+            "{callerBetaEnabled ? 'ورود به بتای Caller' : 'اطلاعات شروع Caller'}",
+            "{callerBetaEnabled ? 'ورود Caller' : 'اطلاعات Caller'}",
+            'home Caller button',
+          );
+          replaceOnce(
+            `<Text style={styles.titleSmall}>Caller هنوز باز نشده</Text>\n            <Text style={styles.body}>\n              ثبت Caller بعد از نهایی‌شدن سیاست سنی و فعال‌شدن بتای بسته باز می‌شود. فعلاً هیچ ثبت صوری انجام نمی‌دهیم.\n            </Text>`,
+            `<Text style={styles.titleSmall}>Caller در این محیط فعال نیست</Text>\n            <Text style={styles.body}>\n              این محیط گیت Caller را باز نکرده است. تا زمانی که همان گیت production فعال نباشد، ورود یا تماس Caller به‌صورت صوری باز نمی‌شود.\n            </Text>`,
+            'Caller unavailable screen',
+          );
+          replaceOnce(
+            '<View style={styles.rule}><Text style={styles.ruleText}>✓ شماره واقعی دو طرف نمایش داده نمی‌شود.</Text></View>',
+            '<View style={styles.rule}><Text style={styles.ruleText}>✓ تماس اصلی از اینترنت انجام می‌شود و شماره واقعی دو طرف برای آن لازم نیست یا نمایش داده نمی‌شود.</Text></View>',
+            'listener phone rule',
+          );
+          replaceOnce(
+            `        </View>\n        <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />`,
+            `        </View>\n        <LegalLinks compact />\n        <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />`,
+            'Caller legal links',
+          );
+          replaceOnce(
+            `        {token && (\n          <TouchableOpacity disabled={busy} onPress={logout} style={styles.logoutButton}>`,
+            `        <LegalLinks />\n\n        {token && (\n          <TouchableOpacity disabled={busy} onPress={logout} style={styles.logoutButton}>`,
+            'main legal links',
+          );
+          replaceOnce(
+            `  logoutText: { color: '#55564f', textAlign: 'center', fontWeight: '700' },\n  disabled: { opacity: 0.35 },`,
+            `  logoutText: { color: '#55564f', textAlign: 'center', fontWeight: '700' },\n  legalBox: { backgroundColor: '#ffffff', borderRadius: 16, padding: 14, gap: 10 },\n  legalBoxCompact: { marginHorizontal: 20, marginBottom: 8, paddingVertical: 10 },\n  legalTitle: { color: '#20211f', textAlign: 'right', fontSize: 13, fontWeight: '700' },\n  legalRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 14 },\n  legalLink: { color: '#55564f', fontSize: 13, textDecorationLine: 'underline' },\n  disabled: { opacity: 0.35 },`,
+            'legal link styles',
+          );
+
+          fs.writeFileSync(path, text);
+          NODE
+
+          grep -Fq 'برای Internet Voice شماره تلفن لازم نیست' apps/mobile/App.tsx
+          grep -Fq 'https://yekihast.app/privacy' apps/mobile/App.tsx
+          grep -Fq 'https://yekihast.app/account/delete' apps/mobile/App.tsx
+          ! grep -Fq 'ورود به بتای Caller' apps/mobile/App.tsx
+          ! grep -Fq 'شماره تماس جداگانه تأیید می‌شود' apps/mobile/App.tsx
+          rm .github/workflows/one-shot-patch-v12-mobile-store-copy.yml
+
+      - name: Commit only the guarded patch output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add apps/mobile/App.tsx .github/workflows/one-shot-patch-v12-mobile-store-copy.yml
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'mobile: align v1.2 Caller copy and legal links'
+          git push origin HEAD:fix/v12-privacy-store-alignment

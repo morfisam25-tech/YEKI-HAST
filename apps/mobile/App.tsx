@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -50,7 +51,7 @@ function Choice({ label, selected, onPress }: ChoiceProps) {
 
 function errorMessage(code: string): string {
   const messages: Record<string, string> = {
-    caller_closed_beta_disabled: 'بتای Caller برای این محیط فعال نیست.',
+    caller_closed_beta_disabled: 'مسیر Caller برای این محیط فعال نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
     listener_application_not_found: 'درخواست شنونده هنوز ساخته نشده.',
@@ -58,6 +59,28 @@ function errorMessage(code: string): string {
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'خطایی رخ داد. دوباره امتحان کن.';
+}
+
+const PUBLIC_LINKS = [
+  ['حریم خصوصی', 'https://yekihast.app/privacy'],
+  ['قوانین استفاده', 'https://yekihast.app/terms'],
+  ['حذف حساب', 'https://yekihast.app/account/delete'],
+  ['پشتیبانی', 'mailto:sales@uniqueholding.com.tr'],
+] as const;
+
+function LegalLinks({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={[styles.legalBox, compact && styles.legalBoxCompact]}>
+      {!compact && <Text style={styles.legalTitle}>اطلاعات و پشتیبانی</Text>}
+      <View style={styles.legalRow}>
+        {PUBLIC_LINKS.map(([label, url]) => (
+          <TouchableOpacity key={url} onPress={() => { void Linking.openURL(url).catch(() => undefined); }}>
+            <Text style={styles.legalLink}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 }
 
 function screenForApplicationStatus(status: string): Screen {
@@ -300,6 +323,7 @@ export default function App() {
             <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
           </TouchableOpacity>
         </View>
+        <LegalLinks compact />
         <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />
       </SafeAreaView>
     );
@@ -318,11 +342,11 @@ export default function App() {
               <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
               <Text style={styles.heroBody}>
                 {callerBetaEnabled
-                  ? 'بتای بسته Caller برای این محیط فعال است. ورود با ایمیل انجام می‌شود و شماره تماس جداگانه تأیید می‌شود.'
-                  : 'بخش مکالمه برای Caller هنوز در بتای بسته است.'}
+                  ? 'Caller در این محیط فعال است. ورود با ایمیل انجام می‌شود و تماس اصلی از اینترنت برقرار می‌شود؛ برای Internet Voice شماره تلفن لازم نیست.'
+                  : 'بخش مکالمه Caller در این محیط فعلاً فعال نیست.'}
               </Text>
               <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>
-                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود به بتای Caller' : 'اطلاعات شروع Caller'}</Text>
+                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود Caller' : 'اطلاعات Caller'}</Text>
               </TouchableOpacity>
             </View>
 
@@ -338,9 +362,9 @@ export default function App() {
 
         {screen === 'waitlist' && (
           <View style={styles.card}>
-            <Text style={styles.titleSmall}>Caller هنوز باز نشده</Text>
+            <Text style={styles.titleSmall}>Caller در این محیط فعال نیست</Text>
             <Text style={styles.body}>
-              ثبت Caller بعد از نهایی‌شدن سیاست سنی و فعال‌شدن بتای بسته باز می‌شود. فعلاً هیچ ثبت صوری انجام نمی‌دهیم.
+              این محیط گیت Caller را باز نکرده است. تا زمانی که همان گیت production فعال نباشد، ورود یا تماس Caller به‌صورت صوری باز نمی‌شود.
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('home')}>
               <Text style={styles.primaryButtonText}>برگشت</Text>
@@ -357,7 +381,7 @@ export default function App() {
             </Text>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ ساعات حضورت را خودت تعیین می‌کنی.</Text></View>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
-            <View style={styles.rule}><Text style={styles.ruleText}>✓ شماره واقعی دو طرف نمایش داده نمی‌شود.</Text></View>
+            <View style={styles.rule}><Text style={styles.ruleText}>✓ تماس اصلی از اینترنت انجام می‌شود و شماره واقعی دو طرف برای آن لازم نیست یا نمایش داده نمی‌شود.</Text></View>
             <TouchableOpacity style={styles.primaryButton} onPress={beginListenerAuth}>
               <Text style={styles.primaryButtonText}>ادامه با ایمیل</Text>
             </TouchableOpacity>
@@ -426,6 +450,8 @@ export default function App() {
           <ListenerWorkScreen token={token} onDone={() => setScreen('home')} />
         )}
 
+        <LegalLinks />
+
         {token && (
           <TouchableOpacity disabled={busy} onPress={logout} style={styles.logoutButton}>
             <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
@@ -470,5 +496,10 @@ const styles = StyleSheet.create({
   ruleText: { color: '#40413c', textAlign: 'right', lineHeight: 23 },
   logoutButton: { borderWidth: 1, borderColor: '#d8d5cd', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16 },
   logoutText: { color: '#55564f', textAlign: 'center', fontWeight: '700' },
+  legalBox: { backgroundColor: '#ffffff', borderRadius: 16, padding: 14, gap: 10 },
+  legalBoxCompact: { marginHorizontal: 20, marginBottom: 8, paddingVertical: 10 },
+  legalTitle: { color: '#20211f', textAlign: 'right', fontSize: 13, fontWeight: '700' },
+  legalRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 14 },
+  legalLink: { color: '#55564f', fontSize: 13, textDecorationLine: 'underline' },
   disabled: { opacity: 0.35 },
 });

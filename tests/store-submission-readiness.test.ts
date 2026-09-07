@@ -39,13 +39,17 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy explicitly covers current mobile listener beta data and deletion behavior', () => {
+test('privacy policy covers current v1.2 listener, Internet Voice and deletion behavior', () => {
   assert.match(privacyPage, /Web و اپ موبایل/);
   assert.match(privacyPage, /نام مستعار/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
-  assert.match(privacyPage, /تماس صوتی Caller/);
+  assert.match(privacyPage, /تماس صوتی اینترنتی/);
+  assert.match(privacyPage, /میکروفون/);
+  assert.match(privacyPage, /WebRTC/);
+  assert.match(privacyPage, /TURN relay/);
+  assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
   assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
   assert.match(privacyPage, /نگهداری ضروری/);
 });

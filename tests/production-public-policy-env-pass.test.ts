@@ -5,15 +5,28 @@ import test from 'node:test';
 const workflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
 
-for (const name of [
+const canonicalLegal = [
+  ['PRIVACY_POLICY_URL', 'https://yekihast.app/privacy'],
+  ['TERMS_OF_SERVICE_URL', 'https://yekihast.app/terms'],
+  ['ACCOUNT_DELETION_URL', 'https://yekihast.app/account/delete'],
+] as const;
+
+for (const [runtimeName, url] of canonicalLegal) {
+  test(`production legal surface ${runtimeName} is source-locked to the canonical domain`, () => {
+    assert.match(envSync, new RegExp(`const DEFAULT_${runtimeName} = '${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`));
+    assert.match(envSync, new RegExp(`setPlain\\('${runtimeName}',`));
+    assert.ok(workflow.includes(url), `production smoke must verify canonical ${runtimeName}`);
+  });
+}
+
+for (const legacyName of [
   'PRODUCTION_PRIVACY_POLICY_URL',
   'PRODUCTION_TERMS_OF_SERVICE_URL',
   'PRODUCTION_ACCOUNT_DELETION_URL',
 ]) {
-  test(`production workflow may pass legacy-compatible ${name} only through the locked sync guard`, () => {
-    const expected = name + ': ${{ secrets.' + name + ' }}';
-    assert.ok(workflow.includes(expected), `missing workflow env pass-through for ${name}`);
-    assert.match(envSync, new RegExp(`requireAbsentOrExact\\('${name}'`));
+  test(`production release ignores stale legacy ${legacyName} overrides`, () => {
+    assert.doesNotMatch(workflow, new RegExp(legacyName));
+    assert.doesNotMatch(envSync, new RegExp(legacyName));
   });
 }
 

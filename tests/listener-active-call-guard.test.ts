@@ -10,13 +10,15 @@ const workScreen = await readFile(new URL('../apps/mobile/src/ListenerWorkScreen
 
 test('listener active call read model is authenticated and listener-scoped', () => {
   assert.match(route, /requireAuth\(req\)/);
-  assert.match(route, /WHERE listener_user_id=\$1/);
+  assert.match(route, /WHERE cs?\.listener_user_id=\$1|WHERE listener_user_id=\$1/);
   assert.match(route, /status::text = ANY\(\$2::text\[\]\)/);
   assert.match(route, /LIMIT 2/);
   assert.match(route, /listener_active_call_conflict/);
 });
 
-test('listener active call response exposes no caller identity or raw bridge id', () => {
+test('listener active call response exposes safe transport state without caller identity or raw bridge id', () => {
+  assert.match(route, /transport: row\.transport/);
+  assert.match(route, /internetVoiceReady: row\.transport === 'internet_voice'/);
   assert.match(route, /telephonyReady: Boolean\(row\.provider_bridge_id\)/);
   assert.match(route, /providerBridgeIncluded: false/);
   assert.match(route, /callerIdentityIncluded: false/);
@@ -31,7 +33,7 @@ test('listener active call endpoint stays outside the Caller closed-beta gate', 
   assert.doesNotMatch(line, /requireCallerClosedBetaEnabled/);
 });
 
-test('mobile listener work mode uses foreground-only adaptive jittered polling and exposes Safety Exit', () => {
+test('mobile listener work mode uses foreground-only adaptive jittered polling and real Internet Voice controls', () => {
   assert.match(api, /getListenerActiveCall/);
   assert.match(api, /\/v1\/listener\/calls\/active/);
   assert.match(card, /setTimeout/);
@@ -42,12 +44,13 @@ test('mobile listener work mode uses foreground-only adaptive jittered polling a
   assert.match(card, /IDLE_POLL_BASE_MS = 20_000/);
   assert.match(card, /IDLE_POLL_JITTER_MS = 10_000/);
   assert.match(card, /Math\.random\(\)/);
-  assert.match(card, /appStateRef\.current !== 'active'/);
-  assert.match(card, /Boolean\(activeCallIdRef\.current\)/);
+  assert.match(card, /appStateRef\.current/);
   assert.match(card, /refreshInFlight/);
   assert.match(card, /AppState/);
-  assert.match(card, /safetyExitCall/);
-  assert.match(card, /activeCall\.telephonyReady/);
+  assert.match(card, /answerInternetCall/);
+  assert.match(card, /postInternetVoiceSignal/);
+  assert.match(card, /heartbeatInternetVoiceCall/);
+  assert.match(card, /safetyExitInternetVoiceCall/);
   assert.match(card, /activeCall\.status === 'calling_listener'/);
   assert.match(card, /activeCall\.status === 'connected'/);
   assert.doesNotMatch(card, /cancelCall|dispatchCall/);

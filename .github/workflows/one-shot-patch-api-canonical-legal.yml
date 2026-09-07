@@ -1,0 +1,75 @@
+name: One-shot patch API canonical legal URLs
+
+on:
+  push:
+    branches:
+      - fix/api-canonical-legal-urls
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/api-canonical-legal-urls
+          fetch-depth: 1
+
+      - name: Patch exact canonical legal URL invariants and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+
+          function replaceOnce(path, before, after) {
+            let text = fs.readFileSync(path, 'utf8');
+            const first = text.indexOf(before);
+            if (first < 0) throw new Error(`${path}: expected source text not found`);
+            if (text.indexOf(before, first + before.length) >= 0) throw new Error(`${path}: expected source text is not unique`);
+            text = text.slice(0, first) + after + text.slice(first + before.length);
+            fs.writeFileSync(path, text);
+          }
+
+          const sync = 'scripts/sync-vercel-production-env.mjs';
+          replaceOnce(sync,
+            "const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';",
+            "const DEFAULT_PRIVACY_POLICY_URL = 'https://yekihast.app/privacy';");
+          replaceOnce(sync,
+            "const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';",
+            "const DEFAULT_TERMS_OF_SERVICE_URL = 'https://yekihast.app/terms';");
+          replaceOnce(sync,
+            "const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';",
+            "const DEFAULT_ACCOUNT_DELETION_URL = 'https://yekihast.app/account/delete';");
+          replaceOnce(sync,
+            `// Public legal routes are checked-in first-party surfaces for this beta. Reject\n// stale optional secret overrides instead of allowing API bootstrap to drift from\n// the Web release that the frontend workflow actually verifies and publishes.\nrequireAbsentOrExact('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL);\nrequireAbsentOrExact('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL);\nrequireAbsentOrExact('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL);`,
+            `// Public legal routes are source-locked first-party canonical surfaces. Legacy\n// PRODUCTION_* URL secrets are deliberately ignored so a stale optional override cannot\n// move bootstrap away from the domain verified and published by the Web release.`);
+
+          const workflow = '.github/workflows/deploy-production-api.yml';
+          replaceOnce(workflow,
+            "privacyPolicyUrl: process.env.PRODUCTION_PRIVACY_POLICY_URL?.trim() || 'https://web-unique-6ff0.vercel.app/privacy',",
+            "privacyPolicyUrl: 'https://yekihast.app/privacy',");
+          replaceOnce(workflow,
+            "termsOfServiceUrl: process.env.PRODUCTION_TERMS_OF_SERVICE_URL?.trim() || 'https://web-unique-6ff0.vercel.app/terms',",
+            "termsOfServiceUrl: 'https://yekihast.app/terms',");
+          replaceOnce(workflow,
+            "accountDeletionUrl: process.env.PRODUCTION_ACCOUNT_DELETION_URL?.trim() || 'https://web-unique-6ff0.vercel.app/account/delete',",
+            "accountDeletionUrl: 'https://yekihast.app/account/delete',");
+
+          for (const [path, required] of [
+            [sync, ["https://yekihast.app/privacy", "https://yekihast.app/terms", "https://yekihast.app/account/delete"]],
+            [workflow, ["privacyPolicyUrl: 'https://yekihast.app/privacy'", "termsOfServiceUrl: 'https://yekihast.app/terms'", "accountDeletionUrl: 'https://yekihast.app/account/delete'"]],
+          ]) {
+            const text = fs.readFileSync(path, 'utf8');
+            for (const needle of required) if (!text.includes(needle)) throw new Error(`${path}: canonical invariant missing`);
+          }
+          NODE
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-shot-patch-api-canonical-legal.yml
+          git add scripts/sync-vercel-production-env.mjs .github/workflows/deploy-production-api.yml
+          git commit -m 'fix: use canonical public legal URLs for API releases'
+          git push origin HEAD:fix/api-canonical-legal-urls

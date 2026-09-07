@@ -45,6 +45,15 @@ test('booking API exposes Listener availability, Caller reservations, and due-se
   assert.doesNotMatch(bookings, /JOIN app\.listener_presence/);
 });
 
+test('expired booking commits missed status before the API returns booking_missed', async () => {
+  const bookings = await source('services/api/src/routes/bookings.ts');
+  const expiredBranch = bookings.match(/if \(now >= scheduledAt \+ booking\.max_billable_seconds \* 1000\) \{([\s\S]*?)\n    \}/)?.[1] ?? '';
+  assert.match(expiredBranch, /UPDATE app\.call_reservations SET status='missed'/);
+  assert.match(expiredBranch, /return \{ kind: 'missed' as const \}/);
+  assert.doesNotMatch(expiredBranch, /throw new HttpError/);
+  assert.match(bookings, /if \(call\.kind === 'missed'\) throw new HttpError\(409, 'booking_missed'\)/);
+});
+
 test('browser caller proxy permits booking reads and mutations without broadening arbitrary backend access', async () => {
   const proxy = await source('apps/web/app/api/caller/[...path]/route.ts');
   assert.match(proxy, /\^bookings\$\/|\^bookings\$|bookings/);

@@ -172,8 +172,9 @@ validatePublicHttpsUrl(termsOfServiceUrl, 'TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'ACCOUNT_DELETION_URL');
 validateEmail(supportEmail, 'SUPPORT_EMAIL');
 
-const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
-const listed = await vercelJson(listUrl);
+const projectEnvUrl = new URL(`${API_ORIGIN}/v10/projects/${PROJECT_ID}/env`);
+projectEnvUrl.searchParams.set('teamId', TEAM_ID);
+const listed = await vercelJson(projectEnvUrl.toString());
 const envs = Array.isArray(listed?.envs) ? listed.envs : [];
 const existingProductionKeys = new Set(
   envs.filter(productionTarget).map((env) => env?.key).filter((key) => typeof key === 'string'),
@@ -254,8 +255,9 @@ if (!hasEncryptionKeyId) {
   setSensitive('DATA_ENCRYPTION_KEYS', JSON.stringify({ [keyId]: key }));
 }
 
-const updateUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?upsert=true&teamId=${encodeURIComponent(TEAM_ID)}`;
-const updated = await vercelJson(updateUrl, { method: 'POST', body: JSON.stringify(entries) });
+const updateUrl = new URL(projectEnvUrl);
+updateUrl.searchParams.set('upsert', 'true');
+const updated = await vercelJson(updateUrl.toString(), { method: 'POST', body: JSON.stringify(entries) });
 if (Array.isArray(updated?.failed) && updated.failed.length > 0) {
   throw new Error(`Vercel environment sync reported ${updated.failed.length} failed item(s)`);
 }

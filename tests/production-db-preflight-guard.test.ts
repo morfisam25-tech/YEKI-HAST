@@ -23,6 +23,8 @@ test('production migration preflight is catalog/history read-only', () => {
   assert.match(script, /SELECT filename, sha256/);
   assert.match(script, /f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09/);
   assert.match(script, /3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90/);
+  assert.match(script, /46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b/);
+  assert.doesNotMatch(script, /efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254/);
   assert.match(script, /application schemas exist without tracked initial migration/);
   assert.match(script, /tracked initial migration is missing required application schemas/);
   assert.doesNotMatch(script, /to_regclass\('public\.yeki_hast_schema_migrations'\)::text/);

@@ -1,0 +1,114 @@
+name: Build vc5 physical-device screenshot kit
+
+on:
+  push:
+    branches:
+      - ops/vc5-permission-forensic
+
+permissions:
+  contents: read
+
+jobs:
+  build-kit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download exact final vc5 AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p screenshot-kit
+          curl --fail --location --retry 3 --output final.aab 'https://expo.dev/artifacts/eas/8kWgYhlJalu_Ou6H8pk4Mf2jr4XkIjZDXonlwqUU2QQ.aab'
+          actual="$(sha256sum final.aab | awk '{print $1}')"
+          test "$actual" = 'f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32'
+          printf '%s  %s\n' "$actual" 'final-vc5-store.aab' > screenshot-kit/final-vc5-store.aab.sha256
+
+      - name: Derive release-equivalent universal APK with disposable screenshot key
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output bundletool.jar 'https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar'
+          keytool -genkeypair -noprompt \
+            -keystore screenshot.jks \
+            -storepass screenshot-only \
+            -keypass screenshot-only \
+            -alias screenshot \
+            -keyalg RSA -keysize 2048 -validity 365 \
+            -dname 'CN=Yeki Hast Screenshot Only, OU=QA, O=Local, L=Local, S=Local, C=TR'
+          java -jar bundletool.jar build-apks \
+            --bundle=final.aab \
+            --output=app.apks \
+            --mode=universal \
+            --overwrite \
+            --ks=screenshot.jks \
+            --ks-pass=pass:screenshot-only \
+            --ks-key-alias=screenshot \
+            --key-pass=pass:screenshot-only
+          unzip -p app.apks universal.apk > screenshot-kit/yeki-hast-v1.0.0-vc5-screenshot-only.apk
+          test -s screenshot-kit/yeki-hast-v1.0.0-vc5-screenshot-only.apk
+          sha256sum screenshot-kit/yeki-hast-v1.0.0-vc5-screenshot-only.apk > screenshot-kit/yeki-hast-v1.0.0-vc5-screenshot-only.apk.sha256
+          jarsigner -verify -verbose screenshot-kit/yeki-hast-v1.0.0-vc5-screenshot-only.apk >/tmp/apk-signature.txt 2>&1
+          grep -q 'jar verified' /tmp/apk-signature.txt
+
+      - name: Add Windows install and capture helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > screenshot-kit/01_INSTALL_AND_OPEN.bat <<'BAT'
+          @echo off
+          setlocal
+          where adb >nul 2>nul || (echo ERROR: adb.exe not found. Install Google Android platform-tools and add it to PATH.& pause & exit /b 1)
+          adb devices
+          adb install -r -d "%~dp0yeki-hast-v1.0.0-vc5-screenshot-only.apk" || (echo INSTALL FAILED & pause & exit /b 1)
+          adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
+          echo App opened. Use the phone normally and capture only safe test data.
+          pause
+          BAT
+          cat > screenshot-kit/02_CAPTURE_CURRENT_SCREEN.bat <<'BAT'
+          @echo off
+          setlocal
+          where adb >nul 2>nul || (echo ERROR: adb.exe not found. Install Google Android platform-tools and add it to PATH.& pause & exit /b 1)
+          for /f "tokens=1-4 delims=/ " %%a in ("%date%") do set d=%%d-%%b-%%c
+          for /f "tokens=1-3 delims=:., " %%a in ("%time%") do set t=%%a-%%b-%%c
+          set out=%~dp0screenshot-%d%-%t%.png
+          adb exec-out screencap -p > "%out%"
+          echo Saved: %out%
+          pause
+          BAT
+          cat > screenshot-kit/README.txt <<'TXT'
+          یکی هست — vc5 physical-device screenshot kit
+
+          Source Store AAB:
+          - version 1.0.0
+          - versionCode 5
+          - package app.yekihast.mobile
+          - SHA-256 f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32
+          - EAS build 51dc645a-b56f-4428-91b5-73337898f870
+
+          IMPORTANT:
+          The APK in this kit is derived from the exact final vc5 Store AAB but re-signed with a disposable screenshot-only key.
+          NEVER upload this APK to Google Play. Upload only the final signed Store AAB from the release archive.
+
+          Windows use:
+          1. Install Google's official Android platform-tools so adb.exe is available.
+          2. Enable Developer options + USB debugging on the Android phone.
+          3. Connect the phone and approve the USB debugging prompt.
+          4. Run 01_INSTALL_AND_OPEN.bat.
+          5. Navigate only through real app states using safe test data.
+          6. Run 02_CAPTURE_CURRENT_SCREEN.bat for each screen.
+
+          Safety:
+          - No real personal email in screenshots.
+          - No OTP.
+          - No session/admin data.
+          - No credentials or secrets.
+          - Do not fabricate Caller/payment/KYC states.
+          - Prefer portrait screenshots at 1080x1920 or higher.
+          TXT
+
+      - name: Upload screenshot kit
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: yeki-hast-android-screenshot-kit-v1.0.0-vc5
+          path: screenshot-kit
+          retention-days: 90
+          if-no-files-found: error

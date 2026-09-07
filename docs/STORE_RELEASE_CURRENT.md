@@ -7,15 +7,15 @@ This file is the authoritative current Store-release status. When older Store do
 ## Production runtime — VERIFIED
 
 - Repository: `morfisam25-tech/YEKI-HAST`
-- Current application tree baseline: tree `587f67f0c1a07e9dc5927190fd05ceb97d9e7532`
-- Current `main` before this documentation branch: `98b9ac64fcea88ec5b18e239e51a064c49f01620`
-- Foundation QA on the v1.2 privacy/store application source passed, including Android native prebuild/export.
-- Web v1.2 privacy release: Actions run `34154499532` — SUCCESS.
-- Web production deployment: `dpl_2wbYQGhLUSxTD1yhY59kAoTCmZJy` — READY.
+- Current locked `main` before this reconciliation branch: `9a12a9db3cbce2904468806125d2fea956e72a55`
+- Main tree: `31fd03be8dc4fd0636b271d27785c4eba31279a4`
+- Foundation QA on that exact main: run `34160907768` — SUCCESS, including tests, security/invariants, typecheck, Web/Admin builds, Android native prebuild/export, iOS export and API bundle.
+- Web v1.2 privacy release currently deployed from the prior release: Actions run `34154499532` — SUCCESS.
 - Production API: `https://yeki-hast-unique-6ff0.vercel.app`.
-- Production API `/health` and `/ready` both returned HTTP 200 after the Web release.
+- Production API `/health` and `/ready` return HTTP 200.
+- Production API release SHA remains `d9cb1c35c12f751d428fa971868210150b4dbf84`.
 
-No Production DB migration is required for Store filing.
+No Production DB migration is required for Store filing or this privacy reconciliation.
 
 ## Public Store URLs
 
@@ -25,7 +25,7 @@ No Production DB migration is required for Store filing.
 - Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-The primary-domain surfaces were verified by the guarded Web V2 release workflow.
+The privacy wording is being reconciled to the actual closed production Caller/voice state before final Play submission.
 
 ## Account deletion
 
@@ -101,24 +101,42 @@ The exact vc5 AAB was downloaded from the completed EAS build, checksum-verified
 
 Upload the `.aab` inside the artifact to Google Play, not the outer artifact ZIP.
 
-## Privacy / microphone / Internet Voice
+## Production Caller / Internet Voice — CLOSED
 
-The v1.2 privacy page is live and states the current Internet Voice behavior:
+Two safe, non-secret production audits were run after vc5 verification:
 
-- microphone access is used for live Internet Voice when that feature is used;
-- media uses WebRTC and may traverse a TURN relay when direct peer connectivity is unavailable;
-- the application has no implemented conversation-audio recording/storage path;
-- do not claim that audio is never processed or never leaves the device.
+- TURN/provider audit `34161228428` — SUCCESS;
+- Caller gate audit `34161306558` — SUCCESS.
 
-Google Play filing must therefore use **Microphone: Yes**. Older Store documents saying Microphone: No are superseded.
+They confirmed:
 
-For Data Safety, Google defines collection as transmitting user data off-device and requires ephemeral processing to be represented in the form response even when it is not displayed as retained collection. Current live voice is intended to be transient real-time media, not stored audio. Use `GOOGLE_PLAY_FINAL_PACKET.md` for the filing baseline and recheck the exact TURN/provider role before final submission.
+- `CALLER_CLOSED_BETA_ENABLED=false`;
+- `COMMERCIAL_HOSTING_APPROVED=false`;
+- global TURN/ICE configuration absent;
+- Iran TURN configuration absent;
+- Iran domestic control plane absent;
+- payment, KYC and payout providers not configured;
+- live `/v1/bootstrap` reports `features.callerClosedBetaEnabled=false`.
+
+Therefore Internet Voice is implemented in the binary/codebase but **not operational in current public production**. The mobile app reads the server feature gate and does not expose an operational Caller call flow while it is false.
+
+## Privacy / microphone / Data Safety
+
+The exact vc5 AAB contains `RECORD_AUDIO`, so the manifest/permission surface must continue to state **Microphone permission: Yes**.
+
+For the current public production behavior, however, the Caller/voice gate is closed and no TURN relay exists. Therefore conversation audio is not currently transmitted by an operational public voice path. Current Google Play Data Safety baseline is consequently:
+
+- Audio files / Voice or sound recordings — Collected: **No**;
+- Audio files / Voice or sound recordings — Shared: **No**;
+- Microphone permission in APK — **Yes**.
+
+Do not confuse permission presence with current data collection. Before Caller/Internet Voice is ever opened in production, Privacy and Data Safety must be re-evaluated and updated first against the actual provider/runtime behavior.
 
 ## Android screenshots — vc5 kit READY
 
 The old vc3 screenshot kit is superseded.
 
-A new physical-device kit was derived from the exact final vc5 Store AAB without rebuilding the Store binary:
+A physical-device kit was derived from the exact final vc5 Store AAB without rebuilding the Store binary:
 
 - kit run: `34156520738` — SUCCESS;
 - artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc5`;
@@ -131,7 +149,7 @@ A new physical-device kit was derived from the exact final vc5 Store AAB without
 
 Hosted Android emulator capture remains closed because the previously tested GitHub-hosted KVM/HVF paths failed before Android booted. Do not spend Actions budget retrying hosted emulators.
 
-Final screenshot capture itself still requires a physical Android device. Use safe test data only; never expose real email, OTP, session/admin data or secrets.
+Final screenshot capture itself still requires a physical Android device. Use safe test data only; never expose real email, OTP, session/admin data or secrets. Screenshots must not fabricate an active Caller/voice/payment/KYC state.
 
 ## Google Play account gate
 
@@ -151,21 +169,26 @@ iOS remains intentionally parked. The known external blocker is one-time interac
 
 ## Remaining Android-first work
 
-1. Capture/QC current vc5 screenshots on a real Android device using artifact `10031149382`.
-2. Complete Google Play developer-account organization/identity setup.
-3. Pay any Google registration fee only after explicit owner approval.
-4. Create the app record for `app.yekihast.mobile`.
-5. Upload the exact vc5 AAB and locked artwork.
-6. File listing/App access/Data Safety/content/target-audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
-7. Confirm the final production TURN/provider role before locking the live-audio Shared answer.
-8. Run Play pre-launch/review checks and fix only evidence-backed findings.
-9. Submit to the selected track after the exact uploaded artifact passes the desired smoke/review gate.
+1. Finish and deploy the privacy reconciliation that reflects the closed Caller/voice production state.
+2. Reconcile the production bootstrap legal URLs to the canonical `yekihast.app` policy URLs without running DB migrations.
+3. Capture/QC current vc5 screenshots on a real Android device using artifact `10031149382`.
+4. Complete Google Play developer-account organization/identity setup.
+5. Pay any Google registration fee only after explicit owner approval.
+6. Create the app record for `app.yekihast.mobile`.
+7. Upload the exact vc5 AAB and locked artwork.
+8. File listing/App access/Data Safety/content/target-audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
+9. Run Play pre-launch/review checks and fix only evidence-backed findings.
+10. Submit to the selected track after the exact uploaded artifact passes the desired smoke/review gate.
+
+TURN/provider setup is not a blocker for this Store release while Caller/voice remains closed; it becomes a pre-enable requirement for a future voice-enabled production release.
 
 ## Do not do
 
 - Do not use vc2, vc3 or vc4 as the final Store binary.
 - Do not rebuild Android without a real binary/runtime reason.
-- Do not claim Microphone: No for vc5.
+- Do not claim the current public production release has operational Internet Voice.
+- Do not claim vc5 lacks microphone permission; `RECORD_AUDIO` is present.
+- Do not open Caller/voice after filing current `Audio = No` without first updating Privacy/Data Safety.
 - Do not treat receiver `android:permission="android.permission.DUMP"` as an app-requested permission.
 - Do not retry hosted Android emulator screenshot workflows.
 - Do not upload the screenshot-only APK to Google Play.

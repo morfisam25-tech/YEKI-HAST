@@ -1,0 +1,190 @@
+name: Apply v1.2 server sweeper patch
+
+on:
+  push:
+    branches: [feat/v1-2-internet-voice-foundation]
+    paths:
+      - .github/workflows/apply-v12-server-sweeper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+
+      - name: Apply exact locally-tested patch
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64, gzip
+
+          MIG_B64 = "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"
+          TEST_B64 = "H4sIADRFnmoC/6VWbW/bNhD+nl9xnyo5s2WnW4u+TAHSxMGMpnEQO8OAaRAY6WxzkSiNpOxkRf/7jiL9Fju2gwFFHVGnu+eee3h3PC8LqYEphfQzkkUOnihS/GRP2kpLnmjv8xG3hhrVmpl5Xr79DhJZeskzhB+rViPVLumJK1RkfJQUgrzkfCyZ5oWAENiMcb342Bc4g7vbK98LgnbJkgc2RtVO79uLT1S70+m8j7nQKAXqeFrwBGNCPEUZqxliiTJQ/2ReEyy0IEfNgkpmjSZ4lR598BqfHQ4tmVDG5tv/BfTzc0AL14disf7wcABKJg4EBlodEqJGtjuA4ZGMVJuVvI4gi4oK3Z5n16p9HBjPRHjaHc+E4SLFx70uj4zefG8pHVkJgRK4SLIqRQV6gnDxpVXMBKbQc3jh9zpnpwtgIzqG6UnwFlQywZwtpWjC+w0IT+H7EbhbEeRMJxPfsdwEU+l3sShiqu2M5DYpsjTmKRJqjSJ5ikyx/4xUNPjreL9Ka+s2pbY1HEGigOe33bNhF7p/DLvXg17/GnqXcN0f0kFvMBxAOY4TWYg9TowJBaOE0yrDyHcIn/CBxxOm9AZMg88ZedExrPzzTKgfy3LYjBb8EvkKRNGy/DTB/mLauq90qxIkC4GJpvponiMpy1ikMGEyhYSVoFDrDHMUel8xbGIWbjEaGVI1k+Q5Zhp+DQnDLPKjRqvObMoy8D52yD0BSJW3hy7rNeOKakqO5zm86Pnk7cGunxG9UNLrPnM0xo7EfdWfk24SiH6CnD1gPEcf+YRchac5e4zveZax+8zItE4maqzk+zqE1O0VvYipqDHde6O8PQ4u+7dwd3NhxD742ruBq/751+7FM7VdfFmRCF1dKQupoBDYspDBpMDFGJjkekJdhCe1wAQakeJjgpjaRsEqPSkk/xdr4R2otg2G4FMIRI4/jZckz18R01OiOZEWbAtOiM+ovXpoDo5XD/YJM07oqozRhqUnlmVRYP4nmZoOFdMdjHMuqGWbn0Ja/xuwCdu7jxbO+87eoMikMKSuRV1cj1fEPTAitbhFpqf050qthr91r+H2rDcwLfG8ezM0LdFbaiJ2NV58U/vcdysl1m0stdjD9cfWKoBnerQD9eymB0SAIkYUuIZoriZ1pLxUMCI66hYFdYuqBYmPZcYTGopXjkbXKV8WYh3qxZYXnvfPrrqD827kbzdoumu89SLPfT/QJIYwDMFzaODNG5AFrXT14bzk3g4XL/fODYjbjNZhrjBNO2RaJXbu0x7BBTUYGDGeKUiyQpE0KpGZMzcRm4uRNKKxU39neLcahb+LeyoBxX+Z73p3oYTwUQuWY+g5x9uSn9vWIePtrVBFvnkxprHf2OFi90zeFdtN93DPwO7RXgolbfbmRi+XKdshZ9Q23SY1NqVhZlSXGdOk4bylShMMkiKrcgEpl9Twsqc1Cu3e59zflaldaDfX7ECR/NHf8qJeBvsj33PDgJVl4PzFhITWi7L0Gqs8pAWq60J/q+lYC020zMHHFvxGo4rUcbiF1edudvXY8Bda9ToHONndMsO3H5wbU63/AJ7ZrKKdDQAA"
+
+          Path('packages/db/migrations/0006_internet_voice_server_sweeper.sql').write_bytes(gzip.decompress(base64.b64decode(MIG_B64)))
+          Path('tests/internet-voice-server-sweeper.test.ts').write_bytes(gzip.decompress(base64.b64decode(TEST_B64)))
+
+          def once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if s.count(old) != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {s.count(old)}')
+              p.write_text(s.replace(old, new, 1))
+
+          # 0003: platform spread is a GENERATED column; only its source rates may be updated.
+          once('packages/db/migrations/0003_internet_voice_transport.sql',
+               '    platform_spread_per_minute_minor=12000,\n', '', 'generated spread assignment')
+
+          # Migration runner.
+          once('packages/db/src/migrate.ts',
+               "  {\n    filename: '0005_no_answer_hold_idempotency.sql',\n    path: join(migrationsDir, '0005_no_answer_hold_idempotency.sql'),\n  },\n",
+               "  {\n    filename: '0005_no_answer_hold_idempotency.sql',\n    path: join(migrationsDir, '0005_no_answer_hold_idempotency.sql'),\n  },\n  {\n    filename: '0006_internet_voice_server_sweeper.sql',\n    path: join(migrationsDir, '0006_internet_voice_server_sweeper.sql'),\n  },\n", 'migration runner')
+
+          # Persist explicit server timestamps used by the DB-owned sweeper.
+          once('services/api/src/routes/internet-voice.ts',
+               "      UPDATE app.call_sessions\n      SET status='calling_listener', transport='internet_voice',\n          transport_session_id=$2, updated_at=now()\n      WHERE id=$1 AND status='routing' AND transport IS NULL AND transport_session_id IS NULL\n",
+               "      UPDATE app.call_sessions\n      SET status='calling_listener', transport='internet_voice',\n          transport_session_id=$2,\n          voice_offer_started_at=COALESCE(voice_offer_started_at,now()),\n          updated_at=now()\n      WHERE id=$1 AND status='routing' AND transport IS NULL AND transport_session_id IS NULL\n", 'offer timestamp')
+          once('services/api/src/routes/internet-voice.ts',
+               "    if (kind === 'offer' && role !== 'caller') throw new HttpError(403, 'voice_offer_caller_only');\n    if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');\n\n    await deleteExpiredSignals(client);\n",
+               "    if (kind === 'offer' && role !== 'caller') throw new HttpError(403, 'voice_offer_caller_only');\n    if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');\n\n    if (kind === 'answer' && role === 'listener') {\n      await client.query(`\n        UPDATE app.call_sessions\n        SET voice_listener_answered_at=COALESCE(voice_listener_answered_at,now()),\n            updated_at=now()\n        WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'\n      `, [rawCallId]);\n    }\n\n    await deleteExpiredSignals(client);\n", 'answer timestamp')
+
+          # Production readiness migration hashes and scheduler checks.
+          p = Path('api/index.ts'); s = p.read_text()
+          s = s.replace("['0003_internet_voice_transport.sql', '369ad1642a0cb2abe42f6b241c5024434b9308829ad31d697ca8f7edc7ec5225']", "['0003_internet_voice_transport.sql', '5a2943f0cf6238776b607836b3b3bbf0b464ba0548e80373db781ce1a7c9359d']")
+          s = s.replace("  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],\n]);", "  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],\n  ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],\n]);")
+          s = s.replace("version: '0.0.10'", "version: '0.0.11'")
+          s = s.replace("        call_reservations_ready: boolean;\n", "        call_reservations_ready: boolean;\n        pg_cron_ready: boolean;\n        internet_voice_sweeper_ready: boolean;\n")
+          s = s.replace("          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready\n", "          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready,\n          EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron_ready,\n          to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS internet_voice_sweeper_ready\n")
+          s = s.replace("        && row?.call_reservations_ready\n", "        && row?.call_reservations_ready\n        && row?.pg_cron_ready\n        && row?.internet_voice_sweeper_ready\n")
+          s = s.replace("          callReservations: Boolean(row?.call_reservations_ready),\n", "          callReservations: Boolean(row?.call_reservations_ready),\n          pgCron: Boolean(row?.pg_cron_ready),\n          internetVoiceSweeper: Boolean(row?.internet_voice_sweeper_ready),\n")
+          s = s.replace("          '0005_no_answer_hold_idempotency.sql'\n", "          '0005_no_answer_hold_idempotency.sql',\n          '0006_internet_voice_server_sweeper.sql'\n")
+          marker = "      const migrations = await pool.query<{ filename: string; sha256: string }>(`\n"
+          if marker not in s: raise SystemExit('readiness migration marker missing')
+          cron = """      const cronJob = await pool.query(`
+        SELECT 1
+        FROM cron.job
+        WHERE jobname='yeki_hast_internet_voice_sweep'
+          AND schedule='* * * * *'
+          AND active=true
+        LIMIT 1
+      `);
+      if (!cronJob.rowCount) {
+        console.error('readiness_internet_voice_sweeper_job_missing');
+        sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+        return;
+      }
+
+"""
+          s = s.replace(marker, cron + marker, 1)
+          p.write_text(s)
+
+          # Production preflight accepts only a valid prefix of the locked migration chain.
+          p = Path('scripts/preflight-production-db-migration.mjs'); s = p.read_text()
+          a = s.index('const expectedMigrations = new Map(['); b = s.index(']);', a) + 3
+          decl = """const expectedMigrationEntries = [
+  ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
+  ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+  ['0003_internet_voice_transport.sql', '5a2943f0cf6238776b607836b3b3bbf0b464ba0548e80373db781ce1a7c9359d'],
+  ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
+  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
+  ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
+];
+const expectedMigrations = new Map(expectedMigrationEntries);
+"""
+          s = s[:a] + decl + s[b:]
+          old = """    const applied = new Map();
+    for (const migration of migrations.rows) {
+      const filename = String(migration.filename ?? '');
+      const sha256 = String(migration.sha256 ?? '');
+      const expectedSha = expectedMigrations.get(filename);
+      if (!expectedSha) throw new Error(`unexpected production migration record: ${filename || 'unknown'}`);
+      if (sha256 !== expectedSha) throw new Error(`production migration hash mismatch: ${filename}`);
+      applied.set(filename, sha256);
+    }
+
+    if (applied.has('0002_email_auth.sql') && !applied.has('0001_initial.sql')) {
+      throw new Error('production migration history is out of order');
+    }
+"""
+          new = """    const applied = new Map();
+    for (let index = 0; index < migrations.rows.length; index += 1) {
+      const migration = migrations.rows[index];
+      const filename = String(migration.filename ?? '');
+      const sha256 = String(migration.sha256 ?? '');
+      const expectedEntry = expectedMigrationEntries[index];
+      if (!expectedEntry || filename !== expectedEntry[0]) {
+        throw new Error(`production migration history is out of order or unexpected: ${filename || 'unknown'}`);
+      }
+      const expectedSha = expectedMigrations.get(filename);
+      if (sha256 !== expectedSha) throw new Error(`production migration hash mismatch: ${filename}`);
+      applied.set(filename, sha256);
+    }
+
+"""
+          if old not in s: raise SystemExit('preflight loop missing')
+          p.write_text(s.replace(old, new, 1))
+
+          # Full production verifier requires all six migrations and the scheduled DB job.
+          p = Path('scripts/verify-production-db.mjs'); s = p.read_text()
+          s = s.replace("    ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],\n  ]);", "    ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],\n    ['0003_internet_voice_transport.sql', '5a2943f0cf6238776b607836b3b3bbf0b464ba0548e80373db781ce1a7c9359d'],\n    ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],\n    ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],\n    ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],\n  ]);")
+          s = s.replace("    'app.wallet_transactions',\n    'app.payment_attempts',\n", "    'app.wallet_transactions',\n    'app.wallet_hold_events',\n    'app.internet_voice_signals',\n    'app.listener_availability',\n    'app.call_reservations',\n    'app.payment_attempts',\n")
+          marker = "  const emailSchema = await pool.query(`\n"
+          checks = """  const sweeper = await pool.query(`
+    SELECT
+      EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron,
+      to_regprocedure('app.expire_internet_voice_preconnect(uuid,text)') IS NOT NULL AS preconnect_fn,
+      to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean)') IS NOT NULL AS settlement_fn,
+      to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS sweep_fn
+  `);
+  const sweeperRow = sweeper.rows[0] ?? {};
+  if (sweeperRow.pg_cron !== true) throw new Error('pg_cron extension missing');
+  if (sweeperRow.preconnect_fn !== true) throw new Error('Internet Voice preconnect finalizer missing');
+  if (sweeperRow.settlement_fn !== true) throw new Error('Internet Voice settlement function missing');
+  if (sweeperRow.sweep_fn !== true) throw new Error('Internet Voice sweeper function missing');
+
+  const cronJob = await pool.query(`
+    SELECT 1 FROM cron.job
+    WHERE jobname='yeki_hast_internet_voice_sweep'
+      AND schedule='* * * * *' AND active=true
+    LIMIT 1
+  `);
+  if (!cronJob.rowCount) throw new Error('Internet Voice sweeper cron job missing');
+
+"""
+          if marker not in s: raise SystemExit('verify marker missing')
+          p.write_text(s.replace(marker, checks + marker, 1))
+
+          # Existing booking/readiness guard now covers the full migration chain.
+          p = Path('tests/booking-v12-guard.test.ts'); s = p.read_text()
+          s = s.replace("  assert.match(migrate, /0004_booking\\.sql/);", "  assert.match(migrate, /0004_booking\\.sql/);\n  assert.match(migrate, /0005_no_answer_hold_idempotency\\.sql/);\n  assert.match(migrate, /0006_internet_voice_server_sweeper\\.sql/);")
+          s = s.replace("  assert.match(ready, /0004_booking\\.sql/);", "  assert.match(ready, /0004_booking\\.sql/);\n  assert.match(ready, /0005_no_answer_hold_idempotency\\.sql/);\n  assert.match(ready, /0006_internet_voice_server_sweeper\\.sql/);\n  assert.match(ready, /sweep_internet_voice_sessions/);")
+          p.write_text(s)
+
+      - name: Verify patch hashes and focused guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '5a2943f0cf6238776b607836b3b3bbf0b464ba0548e80373db781ce1a7c9359d  packages/db/migrations/0003_internet_voice_transport.sql' | sha256sum -c -
+          echo 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254  packages/db/migrations/0006_internet_voice_server_sweeper.sql' | sha256sum -c -
+          node --experimental-strip-types --test tests/internet-voice-server-sweeper.test.ts tests/booking-v12-guard.test.ts
+          git diff --check
+
+      - name: Commit patch to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add packages/db/migrations/0003_internet_voice_transport.sql \
+                  packages/db/migrations/0006_internet_voice_server_sweeper.sql \
+                  packages/db/src/migrate.ts api/index.ts \
+                  scripts/preflight-production-db-migration.mjs scripts/verify-production-db.mjs \
+                  services/api/src/routes/internet-voice.ts \
+                  tests/booking-v12-guard.test.ts tests/internet-voice-server-sweeper.test.ts
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: enforce Internet Voice expiry and caps server-side'
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

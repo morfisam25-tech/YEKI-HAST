@@ -47,15 +47,15 @@ export async function browseBookableListeners(req: IncomingMessage, res: ServerR
     WITH ctx AS (
       SELECT p.id product_id, s.id service_id, m.id market_id
       FROM app.products p
-      JOIN app.service_catalog s ON s.code=$7 AND s.status='active'
-      JOIN app.markets m ON m.code=$8 AND m.is_active=true
-      WHERE p.code=$6
+      JOIN app.service_catalog s ON s.code=$6 AND s.status='active'
+      JOIN app.markets m ON m.code=$7 AND m.is_active=true
+      WHERE p.code=$5
       LIMIT 1
     ), caller AS (
       SELECT (
         SELECT cp.declared_gender::text
         FROM app.caller_profiles cp
-        WHERE cp.user_id=$5
+        WHERE cp.user_id=$4
       ) AS declared_gender
     )
     SELECT
@@ -91,7 +91,7 @@ export async function browseBookableListeners(req: IncomingMessage, res: ServerR
       ON a.listener_user_id=lp.user_id
       AND a.product_id=c.product_id AND a.service_id=c.service_id AND a.market_id=c.market_id
       AND a.status='open' AND a.ends_at>now()
-    WHERE lp.user_id<>$5::uuid
+    WHERE lp.user_id<>$4::uuid
       AND ($1::text IS NULL OR lp.gender::text=$1)
       AND ($2::text IS NULL OR EXISTS (
         SELECT 1
@@ -106,15 +106,15 @@ export async function browseBookableListeners(req: IncomingMessage, res: ServerR
       )
       AND NOT EXISTS (
         SELECT 1 FROM app.blocks b
-        WHERE ((b.blocker_user_id=$5 AND b.blocked_user_id=lp.user_id)
-            OR (b.blocker_user_id=lp.user_id AND b.blocked_user_id=$5))
+        WHERE ((b.blocker_user_id=$4 AND b.blocked_user_id=lp.user_id)
+            OR (b.blocker_user_id=lp.user_id AND b.blocked_user_id=$4))
           AND (b.expires_at IS NULL OR b.expires_at>now())
       )
     GROUP BY lp.user_id, lp.nickname, lp.gender, lp.reliability_score,
              sp.short_intro, sp.style_text, sp.completed_calls, sp.rating_average, sp.rating_count
     ORDER BY MIN(a.starts_at), sp.rating_average DESC NULLS LAST, lp.reliability_score DESC
     LIMIT $3
-  `, [gender, language, limit, null, userId, productCode, serviceCode, marketCode]);
+  `, [gender, language, limit, userId, productCode, serviceCode, marketCode]);
 
   sendJson(res, 200, {
     listeners: result.rows.map((row) => ({

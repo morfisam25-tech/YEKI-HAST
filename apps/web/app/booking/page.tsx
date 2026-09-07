@@ -335,11 +335,12 @@ export default function BookingPage() {
               <span className={styles.meta}>وضعیت: {booking.status}</span>
               {booking.status === 'booked' && (
                 <div className={styles.row}>
+                  <a className={styles.primary} href={`/booking/call?bookingId=${encodeURIComponent(booking.id)}`}>ورود به تماس رزروشده</a>
                   <button type="button" disabled={busy} className={styles.danger} onClick={() => void cancelReservation(booking.id)}>لغو رزرو</button>
                 </div>
               )}
               {booking.status === 'initiated' && booking.callId && (
-                <a className={styles.link} href={`/talk?callId=${encodeURIComponent(booking.callId)}`}>ادامه تماس</a>
+                <a className={styles.link} href={`/booking/call?callId=${encodeURIComponent(booking.callId)}`}>ادامه تماس</a>
               )}
             </div>
           ))}

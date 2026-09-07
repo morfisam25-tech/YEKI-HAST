@@ -1,0 +1,52 @@
+name: One-shot patch API canonical legal script
+
+on:
+  push:
+    branches:
+      - fix/api-canonical-legal-urls-final11
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/api-canonical-legal-urls-final11
+          fetch-depth: 1
+
+      - name: Patch sync script and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'scripts/sync-vercel-production-env.mjs';
+          let text = fs.readFileSync(path, 'utf8');
+          const replacements = [
+            ["const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';", "const DEFAULT_PRIVACY_POLICY_URL = 'https://yekihast.app/privacy';"],
+            ["const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';", "const DEFAULT_TERMS_OF_SERVICE_URL = 'https://yekihast.app/terms';"],
+            ["const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';", "const DEFAULT_ACCOUNT_DELETION_URL = 'https://yekihast.app/account/delete';"],
+            ["// Public legal routes are checked-in first-party surfaces for this beta. Reject\n// stale optional secret overrides instead of allowing API bootstrap to drift from\n// the Web release that the frontend workflow actually verifies and publishes.\nrequireAbsentOrExact('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL);\nrequireAbsentOrExact('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL);\nrequireAbsentOrExact('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL);", "// Public legal routes are source-locked first-party canonical surfaces. Legacy\n// PRODUCTION_* URL secret values are ignored so stale optional overrides cannot\n// move bootstrap away from the domain verified and published by the Web release."]
+          ];
+          for (const [before, after] of replacements) {
+            const count = text.split(before).length - 1;
+            if (count !== 1) throw new Error(`expected exactly one source occurrence, found ${count}`);
+            text = text.replace(before, after);
+          }
+          for (const required of [
+            "const DEFAULT_PRIVACY_POLICY_URL = 'https://yekihast.app/privacy';",
+            "const DEFAULT_TERMS_OF_SERVICE_URL = 'https://yekihast.app/terms';",
+            "const DEFAULT_ACCOUNT_DELETION_URL = 'https://yekihast.app/account/delete';",
+          ]) if (!text.includes(required)) throw new Error('canonical invariant missing');
+          fs.writeFileSync(path, text);
+          NODE
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-shot-patch-api-canonical-script.yml
+          git add scripts/sync-vercel-production-env.mjs
+          git commit -m 'fix: source-lock API legal URLs to canonical domain'
+          git push origin HEAD:fix/api-canonical-legal-urls-final11

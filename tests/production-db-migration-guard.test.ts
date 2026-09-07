@@ -82,10 +82,22 @@ test('production DB migration is idempotent and followed by read-only verificati
 
 test('production DB verifier checks exact migration history and relation existence without regclass display-name assumptions', () => {
   assert.match(productionDbVerifier, /SELECT filename, sha256[\s\S]*ORDER BY filename/);
+  assert.match(productionDbVerifier, /46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b/);
+  assert.doesNotMatch(productionDbVerifier, /efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254/);
   assert.match(productionDbVerifier, /unexpected production migration record/);
   assert.match(productionDbVerifier, /production migration history is incomplete/);
   assert.match(productionDbVerifier, /to_regclass\(r\.relation_name\) IS NOT NULL AS present/);
   assert.doesNotMatch(productionDbVerifier, /to_regclass\(r\.relation_name\)::text AS resolved/);
+});
+
+test('production DB verifier matches the on-demand 10-second Internet Voice sweeper contract', () => {
+  assert.match(productionDbVerifier, /settle_internet_voice_call\(uuid,text,text,boolean,timestamptz\)/);
+  assert.match(productionDbVerifier, /ensure_internet_voice_sweeper_job\(\)/);
+  assert.match(productionDbVerifier, /stop_internet_voice_sweeper_if_idle\(\)/);
+  assert.match(productionDbVerifier, /current_setting\('cron\.database_name', true\)=current_database\(\)/);
+  assert.match(productionDbVerifier, /schedule='10 seconds'/);
+  assert.match(productionDbVerifier, /activeVoiceCalls > 0 && validJobs !== 1/);
+  assert.doesNotMatch(productionDbVerifier, /schedule='\* \* \* \* \*'/);
 });
 
 test('all API production configuration paths stay aligned with Vercel iad1 while DB target remains us-east-1', () => {

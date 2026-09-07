@@ -101,6 +101,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         internet_voice_sweeper_ready: boolean;
         internet_voice_sweeper_ensure_ready: boolean;
         internet_voice_sweeper_stop_ready: boolean;
+        internet_voice_liveness_columns_ready: boolean;
+        internet_voice_liveness_settlement_ready: boolean;
       }>(`
         SELECT
           to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migrations_ready,
@@ -117,7 +119,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           current_setting('cron.database_name', true)=current_database() AS pg_cron_database_ready,
           to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS internet_voice_sweeper_ready,
           to_regprocedure('app.ensure_internet_voice_sweeper_job()') IS NOT NULL AS internet_voice_sweeper_ensure_ready,
-          to_regprocedure('app.stop_internet_voice_sweeper_if_idle()') IS NOT NULL AS internet_voice_sweeper_stop_ready
+          to_regprocedure('app.stop_internet_voice_sweeper_if_idle()') IS NOT NULL AS internet_voice_sweeper_stop_ready,
+          (
+            SELECT count(*)=2
+            FROM information_schema.columns
+            WHERE table_schema='app'
+              AND table_name='call_sessions'
+              AND column_name IN ('caller_voice_heartbeat_at','listener_voice_heartbeat_at')
+          ) AS internet_voice_liveness_columns_ready,
+          to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean,timestamptz)') IS NOT NULL
+            AS internet_voice_liveness_settlement_ready
       `);
       const row = critical.rows[0];
       const relationsReady = Boolean(
@@ -136,6 +147,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.internet_voice_sweeper_ready
         && row?.internet_voice_sweeper_ensure_ready
         && row?.internet_voice_sweeper_stop_ready
+        && row?.internet_voice_liveness_columns_ready
+        && row?.internet_voice_liveness_settlement_ready
       );
       if (!relationsReady) {
         console.error('readiness_schema_incomplete', {
@@ -154,6 +167,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           internetVoiceSweeper: Boolean(row?.internet_voice_sweeper_ready),
           internetVoiceSweeperEnsure: Boolean(row?.internet_voice_sweeper_ensure_ready),
           internetVoiceSweeperStop: Boolean(row?.internet_voice_sweeper_stop_ready),
+          internetVoiceLivenessColumns: Boolean(row?.internet_voice_liveness_columns_ready),
+          internetVoiceLivenessSettlement: Boolean(row?.internet_voice_liveness_settlement_ready),
         });
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;

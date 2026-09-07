@@ -38,6 +38,15 @@ test('liveness settlement does not bill the crash-detection grace window', () =>
   assert.match(migration, /v_call\.effective_end_at/);
 });
 
+test('readiness fails closed if liveness columns or effective-end settlement are absent', () => {
+  assert.match(ready, /caller_voice_heartbeat_at','listener_voice_heartbeat_at/);
+  assert.match(ready, /internet_voice_liveness_columns_ready/);
+  assert.match(ready, /settle_internet_voice_call\(uuid,text,text,boolean,timestamptz\)/);
+  assert.match(ready, /internet_voice_liveness_settlement_ready/);
+  assert.match(ready, /row\?\.internet_voice_liveness_columns_ready/);
+  assert.match(ready, /row\?\.internet_voice_liveness_settlement_ready/);
+});
+
 test('readiness pins the exact liveness-aware migration bytes', () => {
   const hash = createHash('sha256').update(migration).digest('hex');
   assert.match(ready, new RegExp(`0006_internet_voice_server_sweeper\.sql', '${hash}`));

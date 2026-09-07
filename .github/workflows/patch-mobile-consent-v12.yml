@@ -1,0 +1,217 @@
+name: One-shot mobile consent parity patch
+
+on:
+  push:
+    branches:
+      - feat/v1-2-internet-voice-foundation
+    paths:
+      - .github/workflows/patch-mobile-consent-v12.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+          fetch-depth: 0
+
+      - name: Enforce explicit Caller consent parity on mobile
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          api = Path('apps/mobile/src/api.ts')
+          api_text = api.read_text()
+          old_api = """export function confirmCallerAge(token: string): Promise<{ ok: true; minimumAge: number; policyVersion: string }> {
+  return request('/v1/caller/age-gate', { method: 'POST', body: JSON.stringify({ confirmed: true }) }, token);
+}
+"""
+          new_api = """export function confirmCallerAge(
+  token: string,
+  input: { termsAccepted: boolean; safetyAccepted: boolean },
+): Promise<{
+  ok: true;
+  minimumAge: number;
+  policyVersion: string;
+  termsVersion: string;
+  safetyProtocolVersion: string;
+}> {
+  return request('/v1/caller/age-gate', {
+    method: 'POST',
+    body: JSON.stringify({
+      confirmed: true,
+      termsAccepted: input.termsAccepted,
+      safetyAccepted: input.safetyAccepted,
+    }),
+  }, token);
+}
+"""
+          if old_api not in api_text:
+              raise SystemExit('mobile caller age API target not found')
+          api.write_text(api_text.replace(old_api, new_api, 1))
+
+          screen = Path('apps/mobile/src/CallerClosedBetaScreen.tsx')
+          text = screen.read_text()
+
+          old_message = """    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
+    caller_call_already_active:"""
+          new_message = """    caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
+    caller_consent_required: 'برای ادامه باید قوانین استفاده و مرزبندی ایمنی را بپذیری.',
+    caller_call_already_active:"""
+          if old_message not in text:
+              raise SystemExit('mobile caller message target not found')
+          text = text.replace(old_message, new_message, 1)
+
+          old_state = """  const [minimumAge, setMinimumAge] = useState<number | null>(null);
+  const [listeners, setListeners] = useState<BrowseListener[]>([]);"""
+          new_state = """  const [minimumAge, setMinimumAge] = useState<number | null>(null);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
+  const [listeners, setListeners] = useState<BrowseListener[]>([]);"""
+          if old_state not in text:
+              raise SystemExit('mobile consent state target not found')
+          text = text.replace(old_state, new_state, 1)
+
+          old_ref = """  const noAnswerExpiryInFlightRef = useRef(false);
+
+  function cleanupRtc() {"""
+          new_ref = """  const noAnswerExpiryInFlightRef = useRef(false);
+  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted;
+
+  function cleanupRtc() {"""
+          if old_ref not in text:
+              raise SystemExit('mobile policiesReady target not found')
+          text = text.replace(old_ref, new_ref, 1)
+
+          old_accept = """  async function acceptAgeGate() {
+    if (recoveryBlocked) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await confirmCallerAge(token);
+      setMinimumAge(result.minimumAge);
+      const browse = await browseListeners(token, { limit: 20 });
+      setListeners(browse.listeners);
+      setStage('browse');
+    } catch (cause) {
+      setError(messageFor(getErrorCode(cause)));
+    } finally { setBusy(false); }
+  }
+"""
+          new_accept = """  async function acceptAgeGate() {
+    if (recoveryBlocked || !policiesReady) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await confirmCallerAge(token, { termsAccepted, safetyAccepted });
+      setMinimumAge(result.minimumAge);
+      const browse = await browseListeners(token, { limit: 20 });
+      setListeners(browse.listeners);
+      setStage('browse');
+    } catch (cause) {
+      setError(messageFor(getErrorCode(cause)));
+    } finally { setBusy(false); }
+  }
+"""
+          if old_accept not in text:
+              raise SystemExit('mobile age gate function target not found')
+          text = text.replace(old_accept, new_accept, 1)
+
+          old_gate = """      {recoveryComplete && !recoveryBlocked && stage === 'age-gate' && (
+        <View style={styles.card}>
+          <Text style={styles.heading}>تأیید شرط سنی</Text>
+          <Text style={styles.body}>قبل از دیدن مسیر تماس باید شرط سنی نسخه جاری سرور را تأیید کنی.</Text>
+          <TouchableOpacity disabled={busy} style={styles.primary} onPress={acceptAgeGate}><Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text></TouchableOpacity>
+        </View>
+      )}
+"""
+          new_gate = """      {recoveryComplete && !recoveryBlocked && stage === 'age-gate' && (
+        <View style={styles.card}>
+          <Text style={styles.heading}>تأیید سن و قوانین</Text>
+          <Text style={styles.body}>قبل از دیدن شنونده‌ها هر سه مورد را جداگانه تأیید کن.</Text>
+          <TouchableOpacity disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
+            <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</Text>
+          </TouchableOpacity>
+          <TouchableOpacity disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
+            <Text style={styles.policyText}>{termsAccepted ? '☑' : '☐'} قوانین استفاده را خواندم و می‌پذیرم. لینک «قوانین استفاده» پایین صفحه در دسترس است.</Text>
+          </TouchableOpacity>
+          <TouchableOpacity disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
+            <Text style={styles.policyText}>{safetyAccepted ? '☑' : '☐'} می‌پذیرم محترمانه رفتار کنم؛ اینجا محل دوست‌یابی یا مشاوره تخصصی نیست و اطلاعات تماس شخصی ردوبدل نمی‌کنم.</Text>
+          </TouchableOpacity>
+          <TouchableOpacity disabled={busy || !policiesReady} style={[styles.primary, !policiesReady && styles.disabled]} onPress={acceptAgeGate}>
+            <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+"""
+          if old_gate not in text:
+              raise SystemExit('mobile age gate UI target not found')
+          text = text.replace(old_gate, new_gate, 1)
+
+          old_listener = """                <Text style={styles.meta}>{listener.verified ? 'وضعیت تأییدشده' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری: {listener.shortIntro}</Text>}"""
+          new_listener = """                <Text style={styles.meta}>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}"""
+          if old_listener not in text:
+              raise SystemExit('mobile listener disclosure target not found')
+          text = text.replace(old_listener, new_listener, 1)
+
+          old_style = """  primary: { backgroundColor: '#171717', borderRadius: 12, padding: 14 },
+  primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
+  listener:"""
+          new_style = """  primary: { backgroundColor: '#171717', borderRadius: 12, padding: 14 },
+  primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
+  disabled: { opacity: 0.45 },
+  policyRow: { borderWidth: 1, borderColor: '#D8D1C7', borderRadius: 12, padding: 12, backgroundColor: '#FFF' },
+  policyRowActive: { borderColor: '#171717', backgroundColor: '#F3F0EA' },
+  policyText: { fontSize: 13, lineHeight: 21, textAlign: 'right' },
+  listener:"""
+          if old_style not in text:
+              raise SystemExit('mobile policy styles target not found')
+          text = text.replace(old_style, new_style, 1)
+          screen.write_text(text)
+
+          test = Path('tests/caller-mobile-closed-beta.test.ts')
+          test_text = test.read_text()
+          old_test = """test('closed-beta caller shell requires server age confirmation before browse flow', () => {
+  const age = caller.indexOf('await confirmCallerAge(token)');
+  const browse = caller.indexOf('await browseListeners(token');
+  assert.ok(age >= 0 && browse > age);
+  assert.match(caller, /stage === 'age-gate'/);
+});
+"""
+          new_test = """test('closed-beta caller shell requires explicit current age, Terms and safety consent before browse flow', () => {
+  const consent = caller.indexOf('await confirmCallerAge(token, { termsAccepted, safetyAccepted })');
+  const browse = caller.indexOf('await browseListeners(token');
+  assert.ok(consent >= 0 && browse > consent);
+  assert.match(caller, /const policiesReady = ageConfirmed && termsAccepted && safetyAccepted/);
+  assert.match(caller, /disabled=\{busy \|\| !policiesReady\}/);
+  assert.match(caller, /قوانین استفاده را خواندم و می‌پذیرم/);
+  assert.match(caller, /اینجا محل دوست‌یابی یا مشاوره تخصصی نیست/);
+  assert.match(api, /termsAccepted: input\.termsAccepted/);
+  assert.match(api, /safetyAccepted: input\.safetyAccepted/);
+  assert.match(caller, /stage === 'age-gate'/);
+});
+"""
+          if old_test not in test_text:
+              raise SystemExit('mobile caller consent test target not found')
+          test.write_text(test_text.replace(old_test, new_test, 1))
+          PY
+
+      - name: Commit patch and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-mobile-consent-v12.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/mobile/src/api.ts apps/mobile/src/CallerClosedBetaScreen.tsx tests/caller-mobile-closed-beta.test.ts .github/workflows/patch-mobile-consent-v12.yml
+          git diff --cached --check
+          git commit -m "feat: enforce caller consent parity on mobile"
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

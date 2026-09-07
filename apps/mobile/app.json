@@ -29,6 +29,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "blockedPermissions": [
+        "android.permission.CAMERA",
         "android.permission.DUMP",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",

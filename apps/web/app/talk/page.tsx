@@ -480,9 +480,9 @@ export default function TalkPage() {
                   onClick={() => setSelected(listener)}
                 >
                   <strong>{listener.nickname}</strong>
-                  <span>{listener.verified ? 'هویت تأییدشده' : 'اطلاعات تأیید نشده'}</span>
+                  <span>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأیید نشده'}</span>
                   <span>{listener.ratingAverage === null ? 'بدون امتیاز' : `امتیاز ${listener.ratingAverage.toFixed(1)} از ${faNumber(listener.ratingCount)} نظر`}</span>
-                  {listener.shortIntro && <small>{listener.shortIntro}</small>}
+                  {listener.shortIntro && <small>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</small>}
                 </button>
               ))}
               {!listeners.length && !error && <p>الان شنونده آنلاین پیدا نشد.</p>}

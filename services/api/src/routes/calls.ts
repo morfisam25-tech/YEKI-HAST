@@ -259,12 +259,12 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
+    caller_charge_minor: string; transport: 'internet_voice' | 'masked_pstn' | null; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
     SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
            cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
            cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
-           cs.provider_bridge_id,
+           cs.transport::text, cs.provider_bridge_id,
            EXISTS (
              SELECT 1
              FROM app.call_events ce
@@ -290,6 +290,7 @@ export async function getActiveCall(req: IncomingMessage, res: ServerResponse) {
       currencyCode: row.currency_code,
       authorizedMinor: row.authorized_minor,
       maxBillableSeconds: row.max_billable_seconds,
+      transport: row.transport,
       telephonyReady: Boolean(row.provider_bridge_id),
       terminationInProgress: row.termination_in_progress,
       requestedAt: row.requested_at,
@@ -308,12 +309,12 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     id: string; status: string; listener_user_id: string | null; currency_code: string;
     authorized_minor: string; max_billable_seconds: number | null; requested_at: string;
     connected_at: string | null; ended_at: string | null; billable_seconds: number;
-    caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;
+    caller_charge_minor: string; transport: 'internet_voice' | 'masked_pstn' | null; provider_bridge_id: string | null; termination_in_progress: boolean;
   }>(`
     SELECT cs.id::text, cs.status::text, cs.listener_user_id::text, cs.currency_code,
            cs.authorized_minor::text, cs.max_billable_seconds, cs.requested_at::text,
            cs.connected_at::text, cs.ended_at::text, cs.billable_seconds, cs.caller_charge_minor::text,
-           cs.provider_bridge_id,
+           cs.transport::text, cs.provider_bridge_id,
            EXISTS (
              SELECT 1
              FROM app.call_events ce
@@ -332,6 +333,7 @@ export async function getCall(req: IncomingMessage, res: ServerResponse, callId:
     currencyCode: row.currency_code,
     authorizedMinor: row.authorized_minor,
     maxBillableSeconds: row.max_billable_seconds,
+    transport: row.transport,
     telephonyReady: Boolean(row.provider_bridge_id),
     terminationInProgress: row.termination_in_progress,
     requestedAt: row.requested_at,

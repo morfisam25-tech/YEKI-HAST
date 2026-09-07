@@ -62,8 +62,14 @@ const ACTIVE_POLL_BASE_MS = 3_000;
 const ACTIVE_POLL_JITTER_MS = 2_000;
 const IDLE_POLL_BASE_MS = 20_000;
 const IDLE_POLL_JITTER_MS = 10_000;
-const SIGNAL_POLL_MS = 1_000;
-const HEARTBEAT_MS = 5_000;
+const SIGNAL_POLL_BASE_MS = 900;
+const SIGNAL_POLL_JITTER_MS = 500;
+const HEARTBEAT_BASE_MS = 4_500;
+const HEARTBEAT_JITTER_MS = 1_500;
+
+function voicePollDelayMs(base: number, jitter: number): number {
+  return base + Math.floor(Math.random() * (jitter + 1));
+}
 
 function nextPollDelayMs(hasActiveCall: boolean): number {
   const base = hasActiveCall ? ACTIVE_POLL_BASE_MS : IDLE_POLL_BASE_MS;
@@ -239,7 +245,7 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
     }
   }
 
-  async function consumeCallerSignal(signal: InternetVoiceSignal) {
+  async function consumeCallerSignal(callId: string, signal: InternetVoiceSignal) {
     const peer = peerRef.current;
     if (!peer || signal.senderRole !== 'caller' || processedSignalIdsRef.current.has(signal.id)) return;
     if (signal.kind === 'offer') {
@@ -247,7 +253,7 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
       processedSignalIdsRef.current.add(signal.id);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      await postInternetVoiceSignal(token, activeCallIdRef.current ?? '', 'answer', { type: answer.type, sdp: answer.sdp });
+      await postInternetVoiceSignal(token, callId, 'answer', { type: answer.type, sdp: answer.sdp });
       return;
     }
     if (signal.kind === 'ice') {
@@ -287,9 +293,9 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
       const signals = await getInternetVoiceSignals(token, activeCall.callId);
       const offer = [...signals.signals].reverse().find((signal) => signal.senderRole === 'caller' && signal.kind === 'offer');
       if (!offer) throw new Error('voice_offer_not_ready');
-      await consumeCallerSignal(offer);
+      await consumeCallerSignal(activeCall.callId, offer);
       for (const signal of signals.signals) {
-        if (signal.kind === 'ice' && signal.senderRole === 'caller') await consumeCallerSignal(signal);
+        if (signal.kind === 'ice' && signal.senderRole === 'caller') await consumeCallerSignal(activeCall.callId, signal);
       }
       setVoiceReady(true);
       setNotice('پاسخ تماس ثبت شد؛ اتصال صوتی در حال تکمیل است.');
@@ -311,7 +317,7 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
         const result = await getInternetVoiceSignals(token, callId);
         if (disposed) return;
         for (const signal of result.signals) {
-          try { await consumeCallerSignal(signal); }
+          try { await consumeCallerSignal(callId, signal); }
           catch (cause) { if (!disposed) setError(messageFor(getInternetVoiceErrorCode(cause))); }
         }
         if (result.status === 'connected') setActiveCall((current) => current?.callId === callId ? { ...current, status: 'connected' } : current);
@@ -319,9 +325,14 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
         if (!disposed && getInternetVoiceErrorCode(cause) !== 'network_error') setError(messageFor(getInternetVoiceErrorCode(cause)));
       }
     }
-    void pollSignals();
-    const timer = setInterval(() => { void pollSignals(); }, SIGNAL_POLL_MS);
-    return () => { disposed = true; clearInterval(timer); };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    async function scheduleSignals() {
+      if (disposed) return;
+      if (appStateRef.current === 'active') await pollSignals();
+      if (!disposed) timer = setTimeout(() => { void scheduleSignals(); }, voicePollDelayMs(SIGNAL_POLL_BASE_MS, SIGNAL_POLL_JITTER_MS));
+    }
+    void scheduleSignals();
+    return () => { disposed = true; if (timer) clearTimeout(timer); };
   }, [token, voiceReady, activeCall?.callId, activeCall?.transport]);
 
   useEffect(() => {
@@ -341,9 +352,14 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
         if (!disposed && getInternetVoiceErrorCode(cause) !== 'network_error') setError(messageFor(getInternetVoiceErrorCode(cause)));
       }
     }
-    void heartbeat();
-    const timer = setInterval(() => { void heartbeat(); }, HEARTBEAT_MS);
-    return () => { disposed = true; clearInterval(timer); };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    async function scheduleHeartbeat() {
+      if (disposed) return;
+      if (appStateRef.current === 'active') await heartbeat();
+      if (!disposed) timer = setTimeout(() => { void scheduleHeartbeat(); }, voicePollDelayMs(HEARTBEAT_BASE_MS, HEARTBEAT_JITTER_MS));
+    }
+    void scheduleHeartbeat();
+    return () => { disposed = true; if (timer) clearTimeout(timer); };
   }, [token, activeCall?.callId, activeCall?.status, activeCall?.transport]);
 
   async function endActiveCall() {

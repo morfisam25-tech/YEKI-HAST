@@ -484,7 +484,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
       {!recoveryComplete && <View style={styles.card}><Text style={styles.heading}>بررسی تماس جاری</Text><Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text></View>}
 
-      {recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token={token} />}
+      {recoveryComplete && !recoveryBlocked && stage === 'browse' && <CallerWalletCard token={token} />}
 
       {recoveryComplete && recoveryBlocked && (
         <View style={styles.card}><Text style={styles.heading}>نیاز به بررسی تماس</Text><Text style={styles.body}>چند تماس فعال همزمان در سرور ثبت شده است. شروع تماس جدید تا بررسی این وضعیت بسته می‌ماند.</Text></View>

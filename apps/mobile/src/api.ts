@@ -101,6 +101,8 @@ export type ListenerActiveCall = {
   status: 'requested' | 'routing' | 'calling_caller' | 'caller_answered' | 'calling_listener' | 'connected';
   currencyCode: string;
   maxBillableSeconds: number | null;
+  transport: 'internet_voice' | 'masked_pstn' | null;
+  internetVoiceReady: boolean;
   telephonyReady: boolean;
   terminationInProgress: boolean;
   requestedAt: string;
@@ -182,6 +184,7 @@ export type CallResponse = {
   currencyCode?: string;
   authorizedMinor?: string;
   maxBillableSeconds?: number | null;
+  transport?: 'internet_voice' | 'masked_pstn' | null;
   requestedAt?: string;
   connectedAt?: string | null;
   endedAt?: string | null;

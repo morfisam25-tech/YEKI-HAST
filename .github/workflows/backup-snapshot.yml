@@ -1,0 +1,74 @@
+name: One-shot repository backup
+
+on:
+  push:
+    branches: [feat/v1-2-internet-voice-foundation]
+    paths:
+      - .github/workflows/backup-snapshot.yml
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 5e575c6b2046adabee8709e1766088265d1ce684
+
+      - name: Build complete tracked repository backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='YEKI-HAST_BACKUP_2026-09-07'
+          ZIP='YEKI-HAST_BACKUP_2026-09-07_SHA-5e575c6.zip'
+          mkdir -p "$ROOT"
+          git archive 5e575c6b2046adabee8709e1766088265d1ce684 | tar -x -C "$ROOT"
+          cat > "$ROOT/BACKUP_MANIFEST.txt" <<'EOF'
+          PROJECT: Listener APP / YEKI-HAST
+          REPOSITORY: morfisam25-tech/YEKI-HAST
+          SNAPSHOT_BRANCH: feat/v1-2-internet-voice-foundation
+          SNAPSHOT_SHA: 5e575c6b2046adabee8709e1766088265d1ce684
+          PR: #32 - v1.2: Internet Voice transport foundation
+          CREATED_FOR: local recovery / continuation if chat context is lost
+
+          CONTENTS:
+          - all tracked source code
+          - tests and test guards
+          - database migrations
+          - GitHub workflows
+          - root and workspace package manifests / lockfile
+          - application and API configuration
+          - scripts
+          - tracked documentation and launch-status files
+          - tracked assets and other repository files
+
+          NOT INCLUDED:
+          - .git history/database
+          - node_modules or generated build outputs that are not tracked
+          - untracked local files
+          - external service secrets/credentials that are not committed to Git
+
+          RESTORE ANCHOR:
+          git checkout 5e575c6b2046adabee8709e1766088265d1ce684
+
+          IMPORTANT EXTERNAL STATE STILL OUTSIDE THIS ZIP:
+          - production provider credentials/secrets
+          - external dashboard configuration
+          - production database contents
+          - Vercel/Google Workspace/NextPay/TURN account-side state
+          EOF
+          (cd "$ROOT" && zip -qr "../$ZIP" .)
+          sha256sum "$ZIP" > "$ZIP.sha256"
+          echo "backup_zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: YEKI-HAST-CODE-BACKUP-2026-09-07
+          path: |
+            YEKI-HAST_BACKUP_2026-09-07_SHA-5e575c6.zip
+            YEKI-HAST_BACKUP_2026-09-07_SHA-5e575c6.zip.sha256
+          retention-days: 1

@@ -90,7 +90,7 @@ function faNumber(value: number): string {
 }
 
 function formatMoney(amountMinor: string, currencyCode: string): string {
-  if (currencyCode === 'IRR') return `${faNumber(Number(BigInt(amountMinor) / 10n))} تومان`;
+  if (currencyCode === 'IRR') return `${faNumber(Number(BigInt(amountMinor) / BigInt(10)))} تومان`;
   return `${amountMinor} ${currencyCode}`;
 }
 
@@ -254,7 +254,7 @@ export default function ListenerWorkPage() {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const schedule = (hasActiveCall: boolean) => {
-      if (cancelled || document.hidden) return;
+      if (cancelled) return;
       timer = setTimeout(async () => {
         try {
           const next = await refreshActive();

@@ -1,0 +1,41 @@
+name: One-shot Internet Voice liveness hardening
+
+on:
+  push:
+    branches:
+      - feat/v1-2-internet-voice-foundation
+    paths:
+      - .github/workflows/patch-internet-voice-liveness.yml
+      - .github/scripts/patch-internet-voice-liveness.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+          fetch-depth: 0
+
+      - name: Apply liveness patch
+        run: python .github/scripts/patch-internet-voice-liveness.py
+
+      - name: Run focused liveness and migration guards
+        run: |
+          node --experimental-strip-types --test tests/internet-voice-liveness.test.ts
+          node --experimental-strip-types --test tests/internet-voice-server-sweeper.test.ts
+
+      - name: Commit patch and remove temporary files
+        shell: bash
+        run: |
+          rm .github/workflows/patch-internet-voice-liveness.yml
+          rm .github/scripts/patch-internet-voice-liveness.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/db/migrations/0006_internet_voice_server_sweeper.sql services/api/src/routes/internet-voice.ts services/api/src/routes/internet-voice-heartbeat.ts api/index.ts tests/internet-voice-liveness.test.ts .github/workflows/patch-internet-voice-liveness.yml .github/scripts/patch-internet-voice-liveness.py
+          git diff --cached --check
+          git commit -m "fix: settle Internet Voice on participant liveness loss"
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

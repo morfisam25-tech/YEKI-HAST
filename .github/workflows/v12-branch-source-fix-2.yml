@@ -1,0 +1,95 @@
+name: Apply corrected v1.2 source patch
+
+on:
+  push:
+    branches: [feat/v1-2-internet-voice-foundation]
+    paths:
+      - .github/workflows/v12-branch-source-fix-2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+      - name: Patch source
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def require(text, needle, label, minimum=1):
+              count = text.count(needle)
+              if count < minimum:
+                  raise SystemExit(f'{label}: expected at least {minimum}, got {count}')
+
+          p = Path('services/api/src/routes/calls.ts')
+          s = p.read_text()
+          old_type = 'caller_charge_minor: string; provider_bridge_id: string | null; termination_in_progress: boolean;'
+          require(s, old_type, 'caller read types', 2)
+          s = s.replace(old_type, "caller_charge_minor: string; transport: 'internet_voice' | 'masked_pstn' | null; provider_bridge_id: string | null; termination_in_progress: boolean;")
+          old_select = 'cs.provider_bridge_id,\n           EXISTS ('
+          require(s, old_select, 'caller transport selects', 2)
+          s = s.replace(old_select, 'cs.transport::text, cs.provider_bridge_id,\n           EXISTS (')
+          old_active = '      maxBillableSeconds: row.max_billable_seconds,\n      telephonyReady: Boolean(row.provider_bridge_id),'
+          require(s, old_active, 'active transport response')
+          s = s.replace(old_active, '      maxBillableSeconds: row.max_billable_seconds,\n      transport: row.transport,\n      telephonyReady: Boolean(row.provider_bridge_id),', 1)
+          old_get = '    maxBillableSeconds: row.max_billable_seconds,\n    telephonyReady: Boolean(row.provider_bridge_id),'
+          require(s, old_get, 'get transport response')
+          # The first occurrence is snapshotCall; getCall is the last occurrence. Replace the last one only.
+          pos = s.rfind(old_get)
+          s = s[:pos] + s[pos:].replace(old_get, '    maxBillableSeconds: row.max_billable_seconds,\n    transport: row.transport,\n    telephonyReady: Boolean(row.provider_bridge_id),', 1)
+          p.write_text(s)
+
+          p = Path('apps/mobile/src/api.ts')
+          s = p.read_text()
+          old = '  maxBillableSeconds: number | null;\n  telephonyReady: boolean;'
+          require(s, old, 'listener transport type')
+          s = s.replace(old, "  maxBillableSeconds: number | null;\n  transport: 'internet_voice' | 'masked_pstn' | null;\n  internetVoiceReady: boolean;\n  telephonyReady: boolean;", 1)
+          old = '  maxBillableSeconds?: number | null;\n  requestedAt?: string;'
+          require(s, old, 'caller transport type')
+          s = s.replace(old, "  maxBillableSeconds?: number | null;\n  transport?: 'internet_voice' | 'masked_pstn' | null;\n  requestedAt?: string;", 1)
+          p.write_text(s)
+
+          p = Path('apps/mobile/src/CallerClosedBetaScreen.tsx')
+          s = p.read_text()
+          old = "{recoveryComplete && !recoveryBlocked && stage !== 'call' && <CallerWalletCard token={token} />}"
+          require(s, old, 'wallet age gate')
+          s = s.replace(old, "{recoveryComplete && !recoveryBlocked && stage === 'browse' && <CallerWalletCard token={token} />}", 1)
+          p.write_text(s)
+
+          p = Path('apps/mobile/src/ListenerActiveCallCard.tsx')
+          s = p.read_text()
+          old = 'const SIGNAL_POLL_MS = 1_000;\nconst HEARTBEAT_MS = 5_000;'
+          require(s, old, 'voice timer constants')
+          s = s.replace(old, "const SIGNAL_POLL_BASE_MS = 900;\nconst SIGNAL_POLL_JITTER_MS = 500;\nconst HEARTBEAT_BASE_MS = 4_500;\nconst HEARTBEAT_JITTER_MS = 1_500;\n\nfunction voicePollDelayMs(base: number, jitter: number): number {\n  return base + Math.floor(Math.random() * (jitter + 1));\n}", 1)
+          s = s.replace('async function consumeCallerSignal(signal: InternetVoiceSignal) {', 'async function consumeCallerSignal(callId: string, signal: InternetVoiceSignal) {', 1)
+          s = s.replace("postInternetVoiceSignal(token, activeCallIdRef.current ?? '', 'answer'", "postInternetVoiceSignal(token, callId, 'answer'", 1)
+          s = s.replace('await consumeCallerSignal(offer);', 'await consumeCallerSignal(activeCall.callId, offer);', 1)
+          s = s.replace("if (signal.kind === 'ice' && signal.senderRole === 'caller') await consumeCallerSignal(signal);", "if (signal.kind === 'ice' && signal.senderRole === 'caller') await consumeCallerSignal(activeCall.callId, signal);", 1)
+          s = s.replace('try { await consumeCallerSignal(signal); }', 'try { await consumeCallerSignal(callId, signal); }', 1)
+          old = "    void pollSignals();\n    const timer = setInterval(() => { void pollSignals(); }, SIGNAL_POLL_MS);\n    return () => { disposed = true; clearInterval(timer); };"
+          require(s, old, 'signal interval')
+          s = s.replace(old, "    let timer: ReturnType<typeof setTimeout> | null = null;\n    async function scheduleSignals() {\n      if (disposed) return;\n      if (appStateRef.current === 'active') await pollSignals();\n      if (!disposed) timer = setTimeout(() => { void scheduleSignals(); }, voicePollDelayMs(SIGNAL_POLL_BASE_MS, SIGNAL_POLL_JITTER_MS));\n    }\n    void scheduleSignals();\n    return () => { disposed = true; if (timer) clearTimeout(timer); };", 1)
+          old = "    void heartbeat();\n    const timer = setInterval(() => { void heartbeat(); }, HEARTBEAT_MS);\n    return () => { disposed = true; clearInterval(timer); };"
+          require(s, old, 'heartbeat interval')
+          s = s.replace(old, "    let timer: ReturnType<typeof setTimeout> | null = null;\n    async function scheduleHeartbeat() {\n      if (disposed) return;\n      if (appStateRef.current === 'active') await heartbeat();\n      if (!disposed) timer = setTimeout(() => { void scheduleHeartbeat(); }, voicePollDelayMs(HEARTBEAT_BASE_MS, HEARTBEAT_JITTER_MS));\n    }\n    void scheduleHeartbeat();\n    return () => { disposed = true; if (timer) clearTimeout(timer); };", 1)
+          if 'setInterval' in s:
+              raise SystemExit('listener still contains setInterval')
+          if "activeCallIdRef.current ?? ''" in s:
+              raise SystemExit('listener still answers with inferred call id')
+          p.write_text(s)
+
+      - name: Commit source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add services/api/src/routes/calls.ts apps/mobile/src/api.ts apps/mobile/src/CallerClosedBetaScreen.tsx apps/mobile/src/ListenerActiveCallCard.tsx
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: align v1.2 voice recovery and foreground polling'
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

@@ -142,6 +142,50 @@ export default function TalkPage() {
     return () => clearInterval(timer);
   }, [connectedAt, maxBillableSeconds, phase]);
 
+  useEffect(() => {
+    if (phase !== 'connected' || !callId) return;
+    let active = true;
+    let running = false;
+
+    const heartbeat = async () => {
+      if (!active || running) return;
+      running = true;
+      try {
+        const result = await api<{
+          status: string;
+          terminal: boolean;
+          capReached: boolean;
+          timing: { remainingSeconds: number | null; warning: 60 | 120 | null };
+          settlement?: { billableSeconds: number };
+        }>(`calls/${callId}/voice/heartbeat`, { method: 'POST', body: '{}' });
+        if (!active) return;
+        if (result.timing.remainingSeconds !== null) setRemainingSeconds(result.timing.remainingSeconds);
+        setWarning(result.timing.warning);
+        if (result.terminal) {
+          setPhase('ended');
+          setRemainingSeconds(0);
+          setWarning(null);
+          setNotice(result.capReached
+            ? 'سقف زمان تماس رسید و تماس به‌صورت خودکار پایان یافت.'
+            : 'تماس پایان یافت.');
+          cleanupRtc();
+          void refreshMarketplace();
+        }
+      } catch {
+        // The local timer keeps running; the next heartbeat retries server authority.
+      } finally {
+        running = false;
+      }
+    };
+
+    void heartbeat();
+    const timer = setInterval(() => void heartbeat(), 5_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [callId, cleanupRtc, phase, refreshMarketplace]);
+
   const syncCallTiming = useCallback(async (id: string) => {
     const details = await api<{
       status: string;

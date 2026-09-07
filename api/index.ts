@@ -5,6 +5,8 @@ import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.t
 const EXPECTED_MIGRATIONS = new Map([
   ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
   ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
+  ['0003_internet_voice_transport.sql', '369ad1642a0cb2abe42f6b241c5024434b9308829ad31d697ca8f7edc7ec5225'],
+  ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
 ]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -88,6 +90,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         pricing_ready: boolean;
         audit_ready: boolean;
         email_otp_ready: boolean;
+        internet_voice_signals_ready: boolean;
+        wallet_hold_events_ready: boolean;
+        listener_availability_ready: boolean;
+        call_reservations_ready: boolean;
       }>(`
         SELECT
           to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migrations_ready,
@@ -95,7 +101,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           to_regclass('private_data.auth_sessions') IS NOT NULL AS sessions_ready,
           to_regclass('app.pricing_plans') IS NOT NULL AS pricing_ready,
           to_regclass('app.audit_logs') IS NOT NULL AS audit_ready,
-          to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready
+          to_regclass('private_data.email_otp_challenges') IS NOT NULL AS email_otp_ready,
+          to_regclass('app.internet_voice_signals') IS NOT NULL AS internet_voice_signals_ready,
+          to_regclass('app.wallet_hold_events') IS NOT NULL AS wallet_hold_events_ready,
+          to_regclass('app.listener_availability') IS NOT NULL AS listener_availability_ready,
+          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready
       `);
       const row = critical.rows[0];
       const relationsReady = Boolean(
@@ -105,6 +115,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.pricing_ready
         && row?.audit_ready
         && row?.email_otp_ready
+        && row?.internet_voice_signals_ready
+        && row?.wallet_hold_events_ready
+        && row?.listener_availability_ready
+        && row?.call_reservations_ready
       );
       if (!relationsReady) {
         console.error('readiness_schema_incomplete', {
@@ -114,6 +128,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           pricing: Boolean(row?.pricing_ready),
           audit: Boolean(row?.audit_ready),
           emailOtp: Boolean(row?.email_otp_ready),
+          internetVoiceSignals: Boolean(row?.internet_voice_signals_ready),
+          walletHoldEvents: Boolean(row?.wallet_hold_events_ready),
+          listenerAvailability: Boolean(row?.listener_availability_ready),
+          callReservations: Boolean(row?.call_reservations_ready),
         });
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;
@@ -122,7 +140,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const migrations = await pool.query<{ filename: string; sha256: string }>(`
         SELECT filename, sha256
         FROM public.yeki_hast_schema_migrations
-        WHERE filename IN ('0001_initial.sql','0002_email_auth.sql')
+        WHERE filename IN (
+          '0001_initial.sql',
+          '0002_email_auth.sql',
+          '0003_internet_voice_transport.sql',
+          '0004_booking.sql'
+        )
       `);
       const migrationMap = new Map(migrations.rows.map((migration) => [migration.filename, migration.sha256]));
       for (const [filename, expectedSha] of EXPECTED_MIGRATIONS) {

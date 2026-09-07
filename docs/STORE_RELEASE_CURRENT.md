@@ -114,13 +114,24 @@ Google Play filing must therefore use **Microphone: Yes**. Older Store documents
 
 For Data Safety, Google defines collection as transmitting user data off-device and requires ephemeral processing to be represented in the form response even when it is not displayed as retained collection. Current live voice is intended to be transient real-time media, not stored audio. Use `GOOGLE_PLAY_FINAL_PACKET.md` for the filing baseline and recheck the exact TURN/provider role before final submission.
 
-## Android screenshots
+## Android screenshots — vc5 kit READY
 
-The old vc3 screenshot kit is superseded as a release-equivalence claim because the final Store binary is now vc5.
+The old vc3 screenshot kit is superseded.
+
+A new physical-device kit was derived from the exact final vc5 Store AAB without rebuilding the Store binary:
+
+- kit run: `34156520738` — SUCCESS;
+- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc5`;
+- artifact ID: `10031149382`;
+- artifact digest: `sha256:8060d391e4f05fda0a63437fcbc7156e9e69d0f6bd62b841f7d4fc1d2493f54f`;
+- artifact expiry: `2026-12-06`;
+- source AAB checksum was verified against the locked vc5 SHA before APK derivation;
+- the kit contains a universal APK derived from vc5, Windows ADB install/open and screenshot helpers, checksums and safety instructions;
+- the APK is re-signed with a disposable screenshot-only key and **MUST NOT** be uploaded to Google Play.
 
 Hosted Android emulator capture remains closed because the previously tested GitHub-hosted KVM/HVF paths failed before Android booted. Do not spend Actions budget retrying hosted emulators.
 
-Use a physical Android device for final screenshots. Screenshots must be captured from vc5 or a release-equivalent APK derived from vc5, with no real email, OTP, session/admin data or secrets visible.
+Final screenshot capture itself still requires a physical Android device. Use safe test data only; never expose real email, OTP, session/admin data or secrets.
 
 ## Google Play account gate
 
@@ -140,14 +151,15 @@ iOS remains intentionally parked. The known external blocker is one-time interac
 
 ## Remaining Android-first work
 
-1. Capture/QC current vc5 screenshots on a real Android device.
+1. Capture/QC current vc5 screenshots on a real Android device using artifact `10031149382`.
 2. Complete Google Play developer-account organization/identity setup.
 3. Pay any Google registration fee only after explicit owner approval.
 4. Create the app record for `app.yekihast.mobile`.
 5. Upload the exact vc5 AAB and locked artwork.
 6. File listing/App access/Data Safety/content/target-audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
-7. Run Play pre-launch/review checks and fix only evidence-backed findings.
-8. Submit to the selected track after the exact uploaded artifact passes the desired smoke/review gate.
+7. Confirm the final production TURN/provider role before locking the live-audio Shared answer.
+8. Run Play pre-launch/review checks and fix only evidence-backed findings.
+9. Submit to the selected track after the exact uploaded artifact passes the desired smoke/review gate.
 
 ## Do not do
 
@@ -156,6 +168,7 @@ iOS remains intentionally parked. The known external blocker is one-time interac
 - Do not claim Microphone: No for vc5.
 - Do not treat receiver `android:permission="android.permission.DUMP"` as an app-requested permission.
 - Do not retry hosted Android emulator screenshot workflows.
+- Do not upload the screenshot-only APK to Google Play.
 - Do not rerun Production DB migrations for Store work.
 - Do not replace Android signing credentials.
 - Do not open payment/KYC/payout/telephony/SMS gates for Store cosmetics.

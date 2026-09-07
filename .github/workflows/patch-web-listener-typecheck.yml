@@ -1,0 +1,49 @@
+name: One-shot Web Listener cleanup
+
+on:
+  push:
+    branches:
+      - feat/v1-2-internet-voice-foundation
+    paths:
+      - .github/workflows/patch-web-listener-typecheck.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/v1-2-internet-voice-foundation
+          fetch-depth: 0
+      - name: Fix Web target compatibility and polling resume
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('apps/web/app/listener/work/page.tsx')
+          text = path.read_text()
+          old_bigint = "BigInt(amountMinor) / 10n"
+          new_bigint = "BigInt(amountMinor) / BigInt(10)"
+          old_schedule = "if (cancelled || document.hidden) return;"
+          new_schedule = "if (cancelled) return;"
+          if old_bigint not in text:
+              raise SystemExit('BigInt target not found')
+          if old_schedule not in text:
+              raise SystemExit('poll schedule target not found')
+          text = text.replace(old_bigint, new_bigint, 1)
+          text = text.replace(old_schedule, new_schedule, 1)
+          path.write_text(text)
+          PY
+      - name: Commit cleanup and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/patch-web-listener-typecheck.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/app/listener/work/page.tsx .github/workflows/patch-web-listener-typecheck.yml
+          git diff --cached --check
+          git commit -m "fix: make Web Listener target-safe and resume polling"
+          git push origin HEAD:feat/v1-2-internet-voice-foundation

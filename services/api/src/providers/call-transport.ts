@@ -103,7 +103,8 @@ function isMaskedPstnConfigured(): boolean {
 
 export function getCallTransportReadiness(): CallTransportReadiness {
   const primary = readTransport(process.env.CALL_PRIMARY_TRANSPORT, 'internet_voice');
-  const fallback = readFallbackTransport(process.env.CALL_FALLBACK_TRANSPORT ?? 'masked_pstn');
+  // PSTN is an explicit operational fallback, never an implicit launch dependency.
+  const fallback = readFallbackTransport(process.env.CALL_FALLBACK_TRANSPORT ?? 'none');
   const iceServers = parseIceServers(process.env.INTERNET_VOICE_ICE_SERVERS_JSON);
   const iranIceServers = parseIceServers(process.env.INTERNET_VOICE_IRAN_ICE_SERVERS_JSON);
   const iranControlPlaneBaseUrl = isPublicHttpsUrl(process.env.INTERNET_VOICE_IRAN_CONTROL_PLANE_BASE_URL);

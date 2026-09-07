@@ -15,7 +15,10 @@ test('web landing states v1.2 Internet Voice scope and primary email OTP purpose
   assert.match(page, /ورود با ایمیل/);
   assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
   assert.match(page, /شماره تلفن[\s\S]*برای آن لازم نیست|شماره تماس[\s\S]*برای آن لازم نیست/);
-  assert.match(page, /رفتن به صفحه تماس/);
+  assert.match(page, /href="\/talk"/);
+  assert.match(page, /می‌خواهم با یک شنونده حرف بزنم/);
+  assert.match(page, /href="\/listener"/);
+  assert.match(page, /می‌خواهم شنونده باشم/);
   assert.doesNotMatch(page, /تماس صوتی هنوز فعال نیست/);
   assert.doesNotMatch(page, /ورود با شماره موبایل|پیامک‌شده/);
 });

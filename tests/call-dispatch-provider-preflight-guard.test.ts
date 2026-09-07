@@ -26,7 +26,8 @@ test('PSTN provider configuration failure leaves its fallback call retryable or 
 });
 
 test('Android primary transport starts Internet Voice and does not invoke PSTN dispatch', () => {
-  assert.match(mobile, /startInternetVoiceCall\(token, requested\.callId\)/);
+  assert.match(mobile, /const startedCallId = requested\.callId/);
+  assert.match(mobile, /startInternetVoiceCall\(token, startedCallId\)/);
   assert.doesNotMatch(mobile, /dispatchCall\(/);
   assert.doesNotMatch(mobile, /telephony_not_configured:/);
 });

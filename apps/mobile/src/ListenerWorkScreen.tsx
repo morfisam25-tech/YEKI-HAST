@@ -9,6 +9,7 @@ import {
 } from './api';
 import CallPhoneSetupCard from './CallPhoneSetupCard';
 import ListenerActiveCallCard from './ListenerActiveCallCard';
+import ListenerBookingCard from './ListenerBookingCard';
 import ListenerEarningsCard from './ListenerEarningsCard';
 
 type Props = { token: string; onDone: () => void };
@@ -219,6 +220,7 @@ export default function ListenerWorkScreen({ token, onDone }: Props) {
       )}
 
       <CallPhoneSetupCard token={token} onVerifiedChange={setCallPhoneVerified} />
+      <ListenerBookingCard token={token} acceptsMale={acceptsMale} acceptsFemale={acceptsFemale} />
       <ListenerActiveCallCard token={token} onActiveCallConflictChange={setActiveCallConflict} />
       <ListenerEarningsCard token={token} />
 

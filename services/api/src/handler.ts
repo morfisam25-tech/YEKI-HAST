@@ -150,6 +150,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && voiceNoAnswerMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { expireInternetVoiceNoAnswer } = await import('./routes/internet-voice.ts'); return await expireInternetVoiceNoAnswer(req, res, voiceNoAnswerMatch[1]); }
     const voiceExtendMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/extend$/);
     if (method === 'POST' && voiceExtendMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { extendInternetVoiceCall } = await import('./routes/internet-voice-extension.ts'); return await extendInternetVoiceCall(req, res, voiceExtendMatch[1]); }
+    const voiceHeartbeatMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/heartbeat$/);
+    if (method === 'POST' && voiceHeartbeatMatch) { ensureDatabaseReady(); const { heartbeatInternetVoiceCall } = await import('./routes/internet-voice-heartbeat.ts'); return await heartbeatInternetVoiceCall(req, res, voiceHeartbeatMatch[1]); }
     const voiceEndMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/end$/);
     if (method === 'POST' && voiceEndMatch) { ensureDatabaseReady(); const { endInternetVoiceCall } = await import('./routes/internet-voice-end.ts'); return await endInternetVoiceCall(req, res, voiceEndMatch[1]); }
     const voiceSafetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/safety-exit$/);

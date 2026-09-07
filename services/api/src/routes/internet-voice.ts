@@ -345,14 +345,33 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
     if (listenerAnswered.rowCount) throw new HttpError(409, 'listener_already_answered');
 
     const authorized = BigInt(row.authorized_minor);
+    let releasedWalletId: string | null = null;
     if (authorized > 0n) {
-      const released = await client.query(`
+      const released = await client.query<{ id: string }>(`
         UPDATE app.wallets
         SET reserved_minor=reserved_minor-$3::bigint, version=version+1, updated_at=now()
         WHERE user_id=$1 AND currency_code=$2 AND reserved_minor >= $3::bigint
-        RETURNING id
+        RETURNING id::text
       `, [row.caller_user_id, row.currency_code, authorized.toString()]);
       if (!released.rowCount) throw new HttpError(409, 'wallet_release_conflict');
+      releasedWalletId = released.rows[0].id;
+    }
+
+    if (releasedWalletId && authorized > 0n) {
+      await client.query(`
+        INSERT INTO app.wallet_hold_events(
+          wallet_id, call_session_id, currency_code, event_type,
+          amount_minor, reason_code, idempotency_key, metadata
+        ) VALUES ($1,$2,$3,'release',$4,'internet_voice_no_answer',$5,$6::jsonb)
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        releasedWalletId,
+        rawCallId,
+        row.currency_code,
+        authorized.toString(),
+        `call:${rawCallId}:hold:release:no_answer`,
+        JSON.stringify({ noAnswerSeconds: NO_ANSWER_SECONDS, chargedMinor: '0' }),
+      ]);
     }
 
     if (row.listener_user_id) {
@@ -390,6 +409,7 @@ export async function expireInternetVoiceNoAnswer(req: IncomingMessage, res: Ser
       reason: 'internet_voice_no_answer',
       transport: 'internet_voice',
       holdReleased: true,
+      holdReleasedMinor: authorized.toString(),
       listenerAutoOffline: true,
       noAnswerSeconds: NO_ANSWER_SECONDS,
     })]);

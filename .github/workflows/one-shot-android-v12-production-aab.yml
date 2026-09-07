@@ -1,0 +1,217 @@
+name: One-shot Android v1.2 Production AAB
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-android-v12-production-aab.yml
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  BASELINE_SHA: fca227760802a65b4b4f7e16df1908196ad980e8
+  CONTROLLER_PATH: .github/workflows/one-shot-android-v12-production-aab.yml
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  EAS_CLI_VERSION: 23.2.0
+  BUNDLETOOL_VERSION: 1.18.3
+  EXPECTED_PROJECT_ID: 58b9f62d-db82-421a-ad59-edccac70c316
+  EXPECTED_PACKAGE: app.yekihast.mobile
+  EXPECTED_VERSION: 1.0.0
+  PREVIOUS_STORE_VERSION_CODE: '3'
+  EXPECTED_TARGET_SDK: '36'
+
+jobs:
+  build-verify-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout exact one-shot commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Restore exact QA-passed source before Store build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD^)" = "$BASELINE_SHA"
+          test -n "${EXPO_TOKEN:-}"
+          rm "$CONTROLLER_PATH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$CONTROLLER_PATH"
+          git commit -m "chore: remove one-shot Android v1.2 Store builder"
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          test "$(git rev-parse "$BASELINE_SHA^{tree}")" = "$(git rev-parse HEAD^{tree})"
+          git push origin HEAD:main
+          echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+          echo 'one-shot Store builder removed; exact application tree restored'
+
+      - name: Require unchanged remote main and green Foundation QA
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$RELEASE_SHA"
+          GITHUB_SHA="$RELEASE_SHA" node scripts/require-green-foundation-qa.mjs
+          echo 'Store source QA lineage PASS'
+
+      - name: Setup exact release Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Install locked dependencies and reproduce artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --workspace @yeki-hast/mobile run generate:artwork
+          git diff --exit-code -- apps/mobile package.json package-lock.json
+          echo 'locked mobile source/artwork reproducibility PASS'
+
+      - name: Verify exact Expo project access
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@${EAS_CLI_VERSION} whoami
+          npx --yes eas-cli@${EAS_CLI_VERSION} project:info
+          echo 'Expo/EAS project access PASS'
+
+      - name: Build signed Android production AAB with existing EAS credential
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@${EAS_CLI_VERSION} build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json | tee /tmp/eas-android-v12-build.json
+
+      - name: Lock exact EAS build identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifact
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const raw = fs.readFileSync('/tmp/eas-android-v12-build.json', 'utf8');
+          const start = raw.indexOf('[');
+          if (start < 0) throw new Error('EAS JSON output not found');
+          const data = JSON.parse(raw.slice(start));
+          const b = Array.isArray(data) ? data[0] : data;
+          if (!b?.id) throw new Error('Missing EAS build id');
+          const expected = {
+            status: 'FINISHED',
+            platform: 'ANDROID',
+            distribution: 'STORE',
+            projectId: process.env.EXPECTED_PROJECT_ID,
+            package: process.env.EXPECTED_PACKAGE,
+            version: process.env.EXPECTED_VERSION,
+            profile: 'production',
+          };
+          const actual = {
+            status: b.status,
+            platform: b.platform,
+            distribution: b.distribution,
+            projectId: b.app?.id,
+            package: b.appIdentifier,
+            version: b.appVersion,
+            profile: b.buildProfile,
+          };
+          for (const [key, value] of Object.entries(expected)) {
+            if (actual[key] !== value) throw new Error(`${key} mismatch: ${actual[key]} != ${value}`);
+            console.log(`${key} PASS: ${value}`);
+          }
+          const buildVersion = Number.parseInt(String(b.appBuildVersion ?? ''), 10);
+          const previous = Number.parseInt(process.env.PREVIOUS_STORE_VERSION_CODE, 10);
+          if (!Number.isInteger(buildVersion) || buildVersion <= previous) {
+            throw new Error(`Store versionCode did not advance: ${b.appBuildVersion} <= ${previous}`);
+          }
+          const commit = b.gitCommitHash ?? b.gitCommit?.hash ?? null;
+          if (commit && commit !== process.env.RELEASE_SHA) {
+            throw new Error(`EAS source commit mismatch: ${commit} != ${process.env.RELEASE_SHA}`);
+          }
+          const url = b.artifacts?.applicationArchiveUrl ?? b.artifacts?.buildUrl;
+          if (!url || !url.includes('.aab')) throw new Error(`AAB artifact missing: ${url}`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `EAS_BUILD_ID=${b.id}\nBUILD_VERSION=${buildVersion}\nAAB_URL=${url}\n`);
+          fs.writeFileSync('release-artifact/build-info.txt', [
+            `EAS_BUILD_ID=${b.id}`,
+            `RELEASE_SHA=${process.env.RELEASE_SHA}`,
+            `PACKAGE=${b.appIdentifier}`,
+            `VERSION=${b.appVersion}`,
+            `VERSION_CODE=${buildVersion}`,
+            `DISTRIBUTION=${b.distribution}`,
+            `PROFILE=${b.buildProfile}`,
+          ].join('\n') + '\n');
+          console.log(`versionCode PASS: ${buildVersion} > ${previous}`);
+          NODE
+
+      - name: Download and checksum exact Store AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="release-artifact/yeki-hast-${EXPECTED_VERSION}-vc${BUILD_VERSION}-v1.2.aab"
+          curl --fail --location --retry 3 --output "$AAB" "$AAB_URL"
+          test -s "$AAB"
+          sha256sum "$AAB" | tee "${AAB}.sha256"
+          echo "AAB_PATH=$AAB" >> "$GITHUB_ENV"
+
+      - name: Verify AAB archive and signing integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t "$AAB_PATH" >/tmp/aab-unzip.txt
+          tail -n 2 /tmp/aab-unzip.txt
+          unzip -l "$AAB_PATH" | grep -q 'base/manifest/AndroidManifest.xml'
+          jarsigner -verify -verbose "$AAB_PATH" >/tmp/aab-jarsigner.txt 2>&1
+          grep -q 'jar verified' /tmp/aab-jarsigner.txt
+          grep 'jar verified' /tmp/aab-jarsigner.txt
+          echo 'AAB archive/signature integrity PASS'
+
+      - name: Verify package target SDK and v1.2 permission surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLETOOL="/tmp/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          curl --fail --location --retry 3 \
+            --output "$BUNDLETOOL" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar "$BUNDLETOOL" dump manifest --bundle="$AAB_PATH" > release-artifact/aab-manifest.xml
+          grep -F 'package="app.yekihast.mobile"' release-artifact/aab-manifest.xml
+          grep -E 'targetSdkVersion="36"|targetSdkVersion="0x24"' release-artifact/aab-manifest.xml
+          grep -Fq 'android.permission.RECORD_AUDIO' release-artifact/aab-manifest.xml || {
+            echo '::error::v1.2 Internet Voice requires RECORD_AUDIO in the Store AAB'; exit 1;
+          }
+          if grep -Eq 'android.permission.(CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS|WRITE_CONTACTS|READ_CALL_LOG|WRITE_CALL_LOG|READ_SMS|RECEIVE_SMS|SEND_SMS|AD_ID|SYSTEM_ALERT_WINDOW|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' release-artifact/aab-manifest.xml; then
+            echo '::error::Unexpected sensitive or unused permission found in v1.2 Store AAB'; exit 1;
+          fi
+          grep -o 'android.permission.[A-Z0-9_]*' release-artifact/aab-manifest.xml | sort -u > release-artifact/declared-permissions.txt || true
+          cat release-artifact/declared-permissions.txt
+          echo 'AAB package/targetSdk=36/v1.2 permission audit PASS'
+
+      - name: Require source still current after remote build
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$RELEASE_SHA"
+          echo 'Store artifact source still equals current main PASS'
+
+      - name: Upload exact verified v1.2 Store AAB archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: yeki-hast-final-android-aab-v1.2-production
+          path: release-artifact/
+          if-no-files-found: error
+          retention-days: 90

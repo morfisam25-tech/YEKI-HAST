@@ -566,6 +566,7 @@ export async function startBooking(req: IncomingMessage, res: ServerResponse, bo
       const row = existing.rows[0];
       if (!row) throw new HttpError(409, 'booking_call_missing');
       return {
+        kind: 'call' as const,
         callId: row.id,
         status: row.status,
         listenerId: row.listener_user_id,
@@ -585,7 +586,7 @@ export async function startBooking(req: IncomingMessage, res: ServerResponse, bo
         "UPDATE app.call_reservations SET status='missed', updated_at=now() WHERE id=$1 AND status='booked'",
         [bookingId],
       );
-      throw new HttpError(409, 'booking_missed');
+      return { kind: 'missed' as const };
     }
 
     await client.query(
@@ -684,6 +685,7 @@ export async function startBooking(req: IncomingMessage, res: ServerResponse, bo
     `, [booking.id, row.id]);
 
     return {
+      kind: 'call' as const,
       callId: row.id,
       status: row.status,
       listenerId: row.listener_user_id,
@@ -694,5 +696,7 @@ export async function startBooking(req: IncomingMessage, res: ServerResponse, bo
     };
   });
 
-  sendJson(res, 201, { ok: true, ...call });
+  if (call.kind === 'missed') throw new HttpError(409, 'booking_missed');
+  const { kind: _kind, ...response } = call;
+  sendJson(res, 201, { ok: true, ...response });
 }

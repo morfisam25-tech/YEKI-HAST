@@ -73,13 +73,19 @@ test('current mobile package has no known analytics or advertising SDK that woul
   }
 });
 
-test('store submission packet is pinned to real current identifiers and public policy surfaces', () => {
+test('store submission packet is pinned to final vc5 identifiers and current public policy surfaces', () => {
   assert.match(submissionPacket, /app\.yekihast\.mobile/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/privacy/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/account\/delete/);
-  assert.match(submissionPacket, /Technical Beta is email-first and listener-focused/);
-  assert.match(submissionPacket, /Caller voice, payment, KYC, payout, telephony/);
   assert.match(submissionPacket, /GOOGLE_PLAY_FINAL_PACKET\.md/);
-  assert.match(submissionPacket, /Android reviewer\/Data Safety baseline/);
-  assert.match(submissionPacket, /Apple \/ iOS — parked, not deleted/);
+  assert.match(submissionPacket, /final versionCode: `5`/);
+  assert.match(submissionPacket, /target SDK: Android 16 \/ API 36/);
+  assert.match(submissionPacket, /51dc645a-b56f-4428-91b5-73337898f870/);
+  assert.match(submissionPacket, /f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32/);
+  assert.match(submissionPacket, /RECORD_AUDIO/);
+  assert.match(submissionPacket, /Microphone: \*\*Yes\*\*/);
+  assert.match(submissionPacket, /Camera is not requested/);
+  assert.match(submissionPacket, /vc2\/vc3\/vc4 are superseded/);
+  assert.match(submissionPacket, /AndroidX ProfileInstaller receiver protection/);
+  assert.match(submissionPacket, /Apple \/ iOS — parked/);
 });

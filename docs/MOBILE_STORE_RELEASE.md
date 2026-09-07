@@ -23,7 +23,7 @@ This document is the cross-platform Store handoff/index. When facts conflict, us
 - Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-The v1.2 Privacy update is live on production.
+The Privacy page is being reconciled to the verified closed Caller/voice production state before final Play submission.
 
 ## Expo / EAS
 
@@ -58,7 +58,7 @@ Final signed Android Store artifact:
 
 Exact AAB verification confirmed archive/signature integrity, package/version/versionCode, target SDK 36 and the requested-permission surface.
 
-Requested permissions include `RECORD_AUDIO` for v1.2 Internet Voice. The exact AAB does not request camera, location, contacts, phone/call-log, SMS, advertising ID, overlay or external-storage/media-read access.
+Requested permissions include `RECORD_AUDIO` for the implemented v1.2 Internet Voice capability. The exact AAB does not request camera, location, contacts, phone/call-log, SMS, advertising ID, overlay or external-storage/media-read access.
 
 The earlier verification failure on `android.permission.DUMP` was a false positive: AndroidX ProfileInstaller uses DUMP as the permission protecting an exported receiver, not as an app-requested `<uses-permission>`. Corrected forensic run `34156081233` confirmed this on the exact vc5 AAB.
 
@@ -72,24 +72,41 @@ The earlier verification failure on `android.permission.DUMP` was a false positi
 
 The artifact contains the exact vc5 AAB plus checksum, manifest and requested-permission evidence. Upload the `.aab`, not the outer artifact ZIP, to Google Play.
 
-## v1.2 Internet Voice / privacy
+## v1.2 Internet Voice — implementation vs production availability
 
-Current Store/privacy semantics:
+The vc5 binary contains the Internet Voice/WebRTC implementation and `RECORD_AUDIO`, but the current public production gate is closed.
 
-- Android Microphone declaration: **Yes**;
-- `RECORD_AUDIO` is present in the final Store AAB;
-- microphone access is for live Internet Voice;
-- media uses WebRTC and may traverse TURN when direct peer connectivity is unavailable;
-- there is no implemented conversation-audio recording/storage path;
-- do not claim that audio is never processed or never leaves the device.
+Verified production audit results:
 
-Google Play Data Safety must be filed from this behavior, not from the old listener-only vc3 baseline.
+- TURN/provider audit `34161228428` — SUCCESS;
+- Caller gate audit `34161306558` — SUCCESS;
+- `CALLER_CLOSED_BETA_ENABLED=false`;
+- `COMMERCIAL_HOSTING_APPROVED=false`;
+- no production TURN/ICE relay configuration;
+- no Iran TURN/domestic control plane;
+- production bootstrap reports `callerClosedBetaEnabled=false`.
+
+Therefore current Store/privacy semantics are:
+
+- Android Microphone permission in the AAB: **Yes**;
+- operational public Caller/Internet Voice: **No**;
+- current conversation-audio collection: **No**;
+- current conversation-audio sharing: **No**;
+- backend conversation-audio recording/storage path: not implemented.
+
+Google Play Data Safety must describe the behavior actually reachable in the submitted production environment, not merely dormant code or manifest permissions. Before Caller/Internet Voice is enabled later, re-file Privacy/Data Safety against the actual then-active WebRTC/TURN/provider behavior.
 
 ## Android screenshots
 
 The old vc3 screenshot kit is no longer release-equivalent to the final vc5 Store binary. Hosted emulator capture remains closed because the previously tested GitHub-hosted Linux/macOS virtualization paths failed before Android booted.
 
-Capture final screenshots on a physical Android phone using vc5 or a release-equivalent vc5-derived APK. Do not expose real email, OTP, session/admin data or secrets.
+Use the physical-device vc5 screenshot kit:
+
+- artifact ID: `10031149382`;
+- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc5`;
+- source AAB checksum is locked to the final vc5 SHA.
+
+Capture only real current states. Do not fabricate active Caller/voice/payment/KYC screens. Do not expose real email, OTP, session/admin data or secrets.
 
 ## Google Play account — external gate
 
@@ -124,8 +141,10 @@ Do not resume Apple setup or create replacement credentials without owner direct
 ## Do not do
 
 - Do not upload vc2/vc3/vc4 as the final Android release.
-- Do not declare Microphone: No for vc5.
-- Do not rebuild Android merely for listing/account/screenshot changes.
+- Do not claim current public Internet Voice is operational.
+- Do not claim the AAB lacks microphone permission; `RECORD_AUDIO` is present.
+- Do not open Caller/voice after filing current audio collection as No without updating Privacy/Data Safety first.
+- Do not rebuild Android merely for listing/account/privacy/screenshot changes.
 - Do not retry hosted emulator capture workflows.
 - Do not replace Android signing credentials.
 - Do not rerun Production DB migrations for Store work.

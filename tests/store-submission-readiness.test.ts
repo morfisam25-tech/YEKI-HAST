@@ -8,6 +8,7 @@ const mobileRoot = await readFile(new URL('../apps/mobile/RootApp.tsx', import.m
 const privacyPage = await readFile(new URL('../apps/web/app/privacy/page.tsx', import.meta.url), 'utf8');
 const deletionPage = await readFile(new URL('../apps/web/app/account/delete/page.tsx', import.meta.url), 'utf8');
 const submissionPacket = await readFile(new URL('../docs/STORE_SUBMISSION_ANSWERS.md', import.meta.url), 'utf8');
+const playPacket = await readFile(new URL('../docs/GOOGLE_PLAY_FINAL_PACKET.md', import.meta.url), 'utf8');
 const platformRequirements = await readFile(new URL('../docs/STORE_PLATFORM_REQUIREMENTS.md', import.meta.url), 'utf8');
 
 const allMobileDeps = {
@@ -39,17 +40,22 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy covers current v1.2 listener, Internet Voice and deletion behavior', () => {
+test('privacy policy covers current listener path and truthfully marks Caller and Internet Voice closed in production', () => {
   assert.match(privacyPage, /Web و اپ موبایل/);
   assert.match(privacyPage, /نام مستعار/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
+  assert.match(privacyPage, /مسیر عمومی Caller/);
   assert.match(privacyPage, /تماس صوتی اینترنتی/);
-  assert.match(privacyPage, /میکروفون/);
+  assert.match(privacyPage, /فعال نیستند/);
+  assert.match(privacyPage, /RECORD_AUDIO/);
+  assert.match(privacyPage, /مسیر عمومی Caller و تماس صوتی در وضعیت فعلی production بسته است/);
+  assert.match(privacyPage, /صدای مکالمه از این قابلیت جمع‌آوری یا منتقل نمی‌شود/);
   assert.match(privacyPage, /WebRTC/);
   assert.match(privacyPage, /TURN relay/);
   assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
+  assert.match(privacyPage, /پیش از باز شدن Caller یا Internet Voice در production/);
   assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
   assert.match(privacyPage, /نگهداری ضروری/);
 });
@@ -73,7 +79,7 @@ test('current mobile package has no known analytics or advertising SDK that woul
   }
 });
 
-test('store submission packet is pinned to final vc5 identifiers and current public policy surfaces', () => {
+test('store submission packet is pinned to final vc5 identifiers and current closed production voice gate', () => {
   assert.match(submissionPacket, /app\.yekihast\.mobile/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/privacy/);
   assert.match(submissionPacket, /https:\/\/yekihast\.app\/account\/delete/);
@@ -83,9 +89,27 @@ test('store submission packet is pinned to final vc5 identifiers and current pub
   assert.match(submissionPacket, /51dc645a-b56f-4428-91b5-73337898f870/);
   assert.match(submissionPacket, /f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32/);
   assert.match(submissionPacket, /RECORD_AUDIO/);
-  assert.match(submissionPacket, /Microphone: \*\*Yes\*\*/);
-  assert.match(submissionPacket, /Camera is not requested/);
+  assert.match(submissionPacket, /Microphone permission: \*\*Yes\*\*/);
+  assert.match(submissionPacket, /Camera permission: No/);
+  assert.match(submissionPacket, /Audio files \/ Voice or sound recordings — Collected: \*\*No\*\*/);
+  assert.match(submissionPacket, /Audio files \/ Voice or sound recordings — Shared: \*\*No\*\*/);
+  assert.match(submissionPacket, /Caller closed beta is disabled/);
+  assert.match(submissionPacket, /no TURN\/ICE relay is configured/);
   assert.match(submissionPacket, /vc2\/vc3\/vc4 are superseded/);
   assert.match(submissionPacket, /AndroidX ProfileInstaller receiver protection/);
   assert.match(submissionPacket, /Apple \/ iOS — parked/);
+});
+
+test('authoritative Play packet separates microphone permission from current audio collection and locks re-file gate', () => {
+  assert.match(playPacket, /RECORD_AUDIO/);
+  assert.match(playPacket, /CALLER_CLOSED_BETA_ENABLED=false/);
+  assert.match(playPacket, /COMMERCIAL_HOSTING_APPROVED=false/);
+  assert.match(playPacket, /34161228428/);
+  assert.match(playPacket, /34161306558/);
+  assert.match(playPacket, /Audio files \/ Voice or sound recordings/);
+  assert.match(playPacket, /Collected: \*\*No\*\*/);
+  assert.match(playPacket, /Shared: \*\*No\*\*/);
+  assert.match(playPacket, /Microphone permission: \*\*Yes\*\*/);
+  assert.match(playPacket, /Before `CALLER_CLOSED_BETA_ENABLED`/);
+  assert.match(playPacket, /update Privacy and Store disclosures \*\*before\*\* enabling the feature/);
 });

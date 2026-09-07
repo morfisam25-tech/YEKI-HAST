@@ -80,7 +80,7 @@ Google may display organization/developer identity information on Google Play, i
 
 ## What is already ready before account creation
 
-Repository-side Android preparation is now aligned to v1.2 vc5:
+Repository-side Android preparation is aligned to v1.2 vc5:
 
 - final signed Android AAB: `1.0.0`, versionCode `5`;
 - package: `app.yekihast.mobile`;
@@ -88,12 +88,14 @@ Repository-side Android preparation is now aligned to v1.2 vc5:
 - EAS build ID: `51dc645a-b56f-4428-91b5-73337898f870`;
 - final AAB SHA-256: `f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32`;
 - exact vc5 archive artifact ID: `10031041956`;
-- privacy / terms / account-deletion URLs live;
 - listing icon ready;
 - feature graphic ready;
-- Android filing/reviewer/Data Safety packet updated for Microphone: Yes and v1.2 Internet Voice.
+- physical-device screenshot kit artifact ID: `10031149382`;
+- Android permission surface verified: `RECORD_AUDIO` present, camera absent;
+- production Caller/voice gate independently verified closed;
+- current filing baseline: Microphone permission **Yes**, current production Audio collection/sharing **No** while Caller/voice remains closed.
 
-Do not rebuild the Android binary merely because the Play developer account is created later.
+The privacy page and production bootstrap legal URLs must be reconciled to this verified state before final Play submission. Do not rebuild the Android binary merely because account setup or Store metadata changes.
 
 ## Owner-controlled sequence when work resumes
 
@@ -106,7 +108,9 @@ Do not rebuild the Android binary merely because the Play developer account is c
 7. Stop at the one-time registration payment until explicit owner approval is given.
 8. After account activation, create the app record for `app.yekihast.mobile`.
 9. Upload the exact vc5 AAB and continue from `GOOGLE_PLAY_FINAL_PACKET.md`.
-10. Before final Data Safety submission, confirm the production TURN/provider role for the live-audio Shared answer.
+10. File current Audio collection/sharing as documented in the final packet while Caller/voice remains closed.
+
+TURN/provider verification is not a current account-registration or Store-submission blocker because public Internet Voice is disabled. If Caller/voice is opened later, verify the actual provider/runtime and update Privacy/Data Safety before enabling it.
 
 ## Do not do
 
@@ -116,6 +120,7 @@ Do not rebuild the Android binary merely because the Play developer account is c
 - Do not upload identity documents into GitHub or chat.
 - Do not put Play credentials/secrets in source.
 - Do not rebuild vc5 for account setup or Store metadata.
+- Do not open Caller/voice after filing current Audio collection as No without updating Privacy/Data Safety first.
 - Do not touch Apple/iOS while the Android-first path is active.
 
 ## Official references

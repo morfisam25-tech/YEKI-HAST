@@ -44,23 +44,40 @@ Locked final Android binary facts:
 
 vc2/vc3/vc4 are superseded. Do not upload them.
 
-## Android permission/Data Safety baseline
+## Production gate truth
 
-Final vc5 exact requested permissions include `RECORD_AUDIO` for v1.2 Internet Voice. Camera is not requested.
+Safe production audits `34161228428` and `34161306558` confirmed:
 
-Store filing must therefore use:
+- Caller closed beta is disabled;
+- commercial hosting approval gate is false;
+- no TURN/ICE relay is configured;
+- no Iran TURN/domestic voice control plane is configured;
+- production bootstrap reports `callerClosedBetaEnabled=false`.
 
-- Microphone: **Yes**
-- Camera: No
-- Location: No
-- Contacts: No
-- SMS/call-log/phone: No
+Internet Voice therefore exists in the vc5 implementation but is not an operational public feature of the submitted production environment.
+
+## Android permission / Data Safety baseline
+
+Final vc5 exact requested permissions include `RECORD_AUDIO`; camera is not requested.
+
+Permission/manifest answers:
+
+- Microphone permission: **Yes**
+- Camera permission: No
+- Location permission: No
+- Contacts permission: No
+- SMS/call-log/phone permission: No
 - Advertising ID: No
 - Ads: No
 
-Live microphone audio is real-time WebRTC media and may traverse TURN. The application has no implemented conversation-audio recording/storage path. Google Play Data Safety answers must follow `GOOGLE_PLAY_FINAL_PACKET.md`; do not reuse the old listener-only `Microphone: No` baseline.
+Current production Data Safety audio answers while the Caller/voice gate remains closed:
 
-The `android.permission.DUMP` string in the merged manifest belongs to AndroidX ProfileInstaller receiver protection and is not an app-requested `<uses-permission>`.
+- Audio files / Voice or sound recordings — Collected: **No**
+- Audio files / Voice or sound recordings — Shared: **No**
+
+Permission presence is not the same as collection. Before Caller/Internet Voice is enabled later, Privacy and Data Safety must be rechecked and updated against the actual then-active provider/runtime first.
+
+The application has no implemented conversation-audio recording/storage path. The `android.permission.DUMP` string in the merged manifest belongs to AndroidX ProfileInstaller receiver protection and is not an app-requested `<uses-permission>`.
 
 ## Account deletion
 
@@ -71,7 +88,7 @@ The `android.permission.DUMP` string in the merged manifest belongs to AndroidX 
 
 ## Android screenshots
 
-The old vc3 screenshot kit is superseded as release-equivalence evidence. Final screenshots must come from vc5 or a release-equivalent vc5-derived APK on a physical Android device.
+The old vc3 screenshot kit is superseded. Use vc5 physical-device screenshot artifact `10031149382` and capture only real current states; do not fabricate active Caller/voice/payment/KYC screens.
 
 Do not retry the prior GitHub-hosted Android emulator paths; Linux KVM and macOS HVF both failed before Android booted.
 
@@ -96,7 +113,9 @@ iOS source/export remains parked. Known external blocker: one-time interactive A
 ## Do not do
 
 - Do not use vc2/vc3/vc4.
-- Do not declare Microphone: No for vc5.
+- Do not claim the current public production release has operational Internet Voice.
+- Do not claim vc5 lacks microphone permission.
+- Do not open Caller/voice after filing current audio collection as No without updating Privacy/Data Safety first.
 - Do not rebuild Android merely because Store copy/account/screenshots change.
 - Do not retry hosted Android emulator screenshot workflows.
 - Do not rerun Production DB migrations.

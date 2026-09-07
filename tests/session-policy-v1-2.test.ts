@@ -104,7 +104,7 @@ test('migration records initial HOLDs and rejects arbitrary Wave 1 initial durat
 test('Internet Voice no-answer records the zero-charge HOLD release in the append-only ledger', () => {
   assert.match(migrationSource, /record_internet_voice_no_answer_hold_release/);
   assert.match(migrationSource, /NEW\.ended_reason IS DISTINCT FROM 'internet_voice_no_answer'/);
-  assert.match(migrationSource, /'call:' \|\| NEW\.id::text \|\| ':hold:no_answer_release'/);
+  assert.match(migrationSource, /'call:' \|\| NEW\.id::text \|\| ':hold:release:no_answer'/);
   assert.match(migrationSource, /'release',[\s\S]*'internet_voice_no_answer'/);
 });
 

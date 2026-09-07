@@ -281,7 +281,7 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
       processedSignalIdsRef.current.clear();
       postedMediaConnectedRef.current = false;
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
-      peer.onicecandidate = (event) => {
+      peer.onicecandidate = (event: { candidate: RTCIceCandidate | null }) => {
         if (!event.candidate) return;
         void postInternetVoiceSignal(token, activeCall.callId, 'ice', event.candidate.toJSON()).catch((cause) => setError(messageFor(getInternetVoiceErrorCode(cause))));
       };

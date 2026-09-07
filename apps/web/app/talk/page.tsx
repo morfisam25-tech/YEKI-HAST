@@ -54,7 +54,7 @@ function faNumber(value: number): string {
 function formatWallet(wallet: Wallet | null): string {
   if (!wallet) return 'اعتبار ثبت نشده';
   const value = BigInt(wallet.availableMinor);
-  if (wallet.currencyCode === 'IRR') return `${faNumber(Number(value / 10n))} تومان`;
+  if (wallet.currencyCode === 'IRR') return `${faNumber(Number(value / BigInt(10)))} تومان`;
   return `${wallet.availableMinor} ${wallet.currencyCode}`;
 }
 

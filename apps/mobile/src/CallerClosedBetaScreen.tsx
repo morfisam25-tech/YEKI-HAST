@@ -208,7 +208,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     peerRef.current = peer;
     stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
-    peer.onicecandidate = (event) => {
+    peer.onicecandidate = (event: { candidate: RTCIceCandidate | null }) => {
       if (!event.candidate) return;
       void postInternetVoiceSignal(token, callId, 'ice', event.candidate.toJSON()).catch((cause) => {
         setError(messageFor(getInternetVoiceErrorCode(cause)));
@@ -362,15 +362,16 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       setCall(requested as CallerCallResponse);
       setStage('call');
 
-      const started = await startInternetVoiceCall(token, requested.callId);
+      const startedCallId = requested.callId;
+      const started = await startInternetVoiceCall(token, startedCallId);
       voiceStarted = true;
-      setCall((current) => current?.callId === requested?.callId ? {
+      setCall((current) => current && current.callId === startedCallId ? {
         ...current,
         status: started.status,
         transport: 'internet_voice',
       } : current);
       setNoAnswerDeadlineMs(Date.now() + started.noAnswerSeconds * 1_000);
-      await createCallerPeer(requested.callId, started.client, stream);
+      await createCallerPeer(startedCallId, started.client, stream);
     } catch (cause) {
       const code = getInternetVoiceErrorCode(cause) === 'network_error' ? getErrorCode(cause) : getInternetVoiceErrorCode(cause);
       if (requested) {

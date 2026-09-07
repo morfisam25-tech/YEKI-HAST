@@ -13,7 +13,7 @@ This file tracks branch-only work for `feat/v1-2-internet-voice-foundation`. It 
 - Connected Internet Voice calls persist separate Caller and Listener liveness heartbeats. If either side stops confirming a live media connection for 30 seconds, the DB sweeper terminates the call instead of letting a dead session bill until its cap.
 - Liveness-timeout settlement uses the older of the two latest participant heartbeat timestamps as the effective billing end, so the crash/network-detection grace window itself is not charged.
 - Web Caller, Web Listener, Mobile Caller and Mobile Listener send billing liveness only while their actual `RTCPeerConnection` state is `connected`.
-- The four WebRTC clients now publish authenticated `reconnecting` / `reconnected` signaling state on peer disconnect/recovery. A manual or Safety End may move billing earlier only when the authenticated counterparty has an unresolved `reconnecting` signal; the ending client cannot submit its own billing timestamp or impersonate the counterparty role.
+- The four WebRTC clients publish authenticated `reconnecting` / `reconnected` signaling state on peer disconnect/recovery. A manual or Safety End may move billing earlier only when the authenticated counterparty has an unresolved `reconnecting` signal; the ending client cannot submit its own billing timestamp or impersonate the counterparty role.
 - Manual/Safety settlement therefore stops at the counterparty's server-stamped unresolved disconnect when one exists, while a recovered or normally connected call continues to settle against server time.
 - API readiness fails closed unless both liveness columns and the effective-end settlement function are installed in the database.
 - Web/PWA Caller has a real browser WebRTC flow with microphone permission, signaling, connected-time display, warnings, extension, end and safety exit.
@@ -41,12 +41,12 @@ This file tracks branch-only work for `feat/v1-2-internet-voice-foundation`. It 
 
 ## QA status
 
-- Full Foundation QA succeeded on branch SHA `ad0cbe89cc02e58f6430ddcf96d96733f3b9b2e8`: Foundation tests, invariants/security verification, workspace typecheck, Web/Admin production builds, Android prebuild/export, iOS export and API bundle all passed.
-- Focused regression guards then passed for manual disconnect settlement, Mobile Internet Voice behavior and the server-owned liveness sweeper on patch SHA `72f451cb4d25aa5a3d0847670fcd8a857a10116c`.
+- Full Foundation QA succeeded on branch SHA `174d6df8f8f9936e78ac9db83351ab0e126aac6c`: Foundation tests, invariant/security verification, workspace typecheck, Web/Admin production builds, Android prebuild/export, iOS export and production API bundle/upload all passed.
+- Focused regression guards passed on patch SHA `72f451cb4d25aa5a3d0847670fcd8a857a10116c` for manual disconnect settlement, Mobile Internet Voice behavior and the server-owned liveness sweeper before the final full run.
 - Earlier focused regression guards also passed for Listener assessment state hardening, Listener KYC/Mobile post-onboarding state hardening, server liveness settlement and all four client heartbeat gates.
 - A prior full QA run correctly exposed one stale KYC test assertion after authentication was intentionally moved before provider-readiness disclosure; the assertion was updated to preserve the stronger order `auth -> provider gate -> body read -> encryption/write` without weakening fail-closed payload handling.
 - Bot-authored patch commits may cause pull-request workflow runs to stop at `action_required` before jobs are created; those are not test failures.
-- A fresh full Foundation QA run is required on the current exact branch HEAD after the manual-disconnect settlement change before this branch is branch-QA complete.
+- Branch engineering is QA-complete for the current v1.2 code. Any remaining launch blockers are provider/infrastructure/release actions listed below, not known unfinished branch code.
 
 ## Not authorized by this branch work
 

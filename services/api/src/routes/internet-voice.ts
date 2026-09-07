@@ -91,7 +91,9 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     const updated = await client.query(`
       UPDATE app.call_sessions
       SET status='calling_listener', transport='internet_voice',
-          transport_session_id=$2, updated_at=now()
+          transport_session_id=$2,
+          voice_offer_started_at=COALESCE(voice_offer_started_at,now()),
+          updated_at=now()
       WHERE id=$1 AND status='routing' AND transport IS NULL AND transport_session_id IS NULL
       RETURNING id
     `, [row.id, expectedSessionId]);
@@ -186,6 +188,15 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
 
     if (kind === 'offer' && role !== 'caller') throw new HttpError(403, 'voice_offer_caller_only');
     if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');
+
+    if (kind === 'answer' && role === 'listener') {
+      await client.query(`
+        UPDATE app.call_sessions
+        SET voice_listener_answered_at=COALESCE(voice_listener_answered_at,now()),
+            updated_at=now()
+        WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
+      `, [rawCallId]);
+    }
 
     await deleteExpiredSignals(client);
     await client.query(`

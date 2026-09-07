@@ -186,7 +186,6 @@ FOR EACH ROW EXECUTE FUNCTION app.enforce_wave1_initial_session_cap();
 UPDATE app.pricing_plans pp
 SET caller_rate_per_minute_minor=40000,
     listener_rate_per_minute_minor=28000,
-    platform_spread_per_minute_minor=12000,
     billing_increment_seconds=1
 FROM app.products p, app.service_catalog s, app.markets m
 WHERE pp.product_id=p.id

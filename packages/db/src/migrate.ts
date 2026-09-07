@@ -37,6 +37,10 @@ const migrationSources: MigrationSource[] = [
     filename: '0005_no_answer_hold_idempotency.sql',
     path: join(migrationsDir, '0005_no_answer_hold_idempotency.sql'),
   },
+  {
+    filename: '0006_internet_voice_server_sweeper.sql',
+    path: join(migrationsDir, '0006_internet_voice_server_sweeper.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

@@ -21,8 +21,13 @@ test('migration runner and production readiness both require Booking and Interne
   const ready = await source('api/index.ts');
   assert.match(migrate, /0003_internet_voice_transport\.sql/);
   assert.match(migrate, /0004_booking\.sql/);
+  assert.match(migrate, /0005_no_answer_hold_idempotency\.sql/);
+  assert.match(migrate, /0006_internet_voice_server_sweeper\.sql/);
   assert.match(ready, /0003_internet_voice_transport\.sql/);
   assert.match(ready, /0004_booking\.sql/);
+  assert.match(ready, /0005_no_answer_hold_idempotency\.sql/);
+  assert.match(ready, /0006_internet_voice_server_sweeper\.sql/);
+  assert.match(ready, /sweep_internet_voice_sessions/);
   assert.match(ready, /app\.internet_voice_signals/);
   assert.match(ready, /app\.wallet_hold_events/);
   assert.match(ready, /app\.listener_availability/);

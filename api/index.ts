@@ -5,9 +5,10 @@ import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.t
 const EXPECTED_MIGRATIONS = new Map([
   ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
   ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
-  ['0003_internet_voice_transport.sql', '369ad1642a0cb2abe42f6b241c5024434b9308829ad31d697ca8f7edc7ec5225'],
+  ['0003_internet_voice_transport.sql', '5a2943f0cf6238776b607836b3b3bbf0b464ba0548e80373db781ce1a7c9359d'],
   ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
   ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
+  ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
 ]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -59,7 +60,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, {
       ok: true,
       service: 'yeki-hast-api',
-      version: '0.0.10',
+      version: '0.0.11',
       ...(sha ? { releaseSha: sha } : {}),
       ...(url.pathname === '/' ? { endpoints: ['/health', '/ready', '/v1/bootstrap'] } : {}),
     });
@@ -95,6 +96,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         wallet_hold_events_ready: boolean;
         listener_availability_ready: boolean;
         call_reservations_ready: boolean;
+        pg_cron_ready: boolean;
+        internet_voice_sweeper_ready: boolean;
       }>(`
         SELECT
           to_regclass('public.yeki_hast_schema_migrations') IS NOT NULL AS migrations_ready,
@@ -106,7 +109,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           to_regclass('app.internet_voice_signals') IS NOT NULL AS internet_voice_signals_ready,
           to_regclass('app.wallet_hold_events') IS NOT NULL AS wallet_hold_events_ready,
           to_regclass('app.listener_availability') IS NOT NULL AS listener_availability_ready,
-          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready
+          to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready,
+          EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron_ready,
+          to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS internet_voice_sweeper_ready
       `);
       const row = critical.rows[0];
       const relationsReady = Boolean(
@@ -120,6 +125,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.wallet_hold_events_ready
         && row?.listener_availability_ready
         && row?.call_reservations_ready
+        && row?.pg_cron_ready
+        && row?.internet_voice_sweeper_ready
       );
       if (!relationsReady) {
         console.error('readiness_schema_incomplete', {
@@ -133,7 +140,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           walletHoldEvents: Boolean(row?.wallet_hold_events_ready),
           listenerAvailability: Boolean(row?.listener_availability_ready),
           callReservations: Boolean(row?.call_reservations_ready),
+          pgCron: Boolean(row?.pg_cron_ready),
+          internetVoiceSweeper: Boolean(row?.internet_voice_sweeper_ready),
         });
+        sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+        return;
+      }
+
+      const cronJob = await pool.query(`
+        SELECT 1
+        FROM cron.job
+        WHERE jobname='yeki_hast_internet_voice_sweep'
+          AND schedule='* * * * *'
+          AND active=true
+        LIMIT 1
+      `);
+      if (!cronJob.rowCount) {
+        console.error('readiness_internet_voice_sweeper_job_missing');
         sendJson(res, 503, { ok: false, error: 'service_not_ready' });
         return;
       }
@@ -146,7 +169,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           '0002_email_auth.sql',
           '0003_internet_voice_transport.sql',
           '0004_booking.sql',
-          '0005_no_answer_hold_idempotency.sql'
+          '0005_no_answer_hold_idempotency.sql',
+          '0006_internet_voice_server_sweeper.sql'
         )
       `);
       const migrationMap = new Map(migrations.rows.map((migration) => [migration.filename, migration.sha256]));

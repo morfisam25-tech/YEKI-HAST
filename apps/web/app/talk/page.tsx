@@ -246,7 +246,19 @@ export default function TalkPage() {
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') void markMediaConnected();
+      if (pc.connectionState === 'connected') {
+        void api(`calls/${id}/voice/signals`, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'reconnected', payload: { source: 'peer_connection_state' } }),
+        }).catch(() => undefined);
+        void markMediaConnected();
+      }
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        void api(`calls/${id}/voice/signals`, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'reconnecting', payload: { source: 'peer_connection_state' } }),
+        }).catch(() => undefined);
+      }
       if (pc.connectionState === 'disconnected') setNotice('اتصال ضعیف شده؛ در حال تلاش برای برگشت…');
       if (pc.connectionState === 'failed') setError('اتصال صوتی قطع شد. تماس را پایان بده و دوباره تلاش کن.');
     };

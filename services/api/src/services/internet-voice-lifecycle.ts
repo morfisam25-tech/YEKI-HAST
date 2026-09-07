@@ -14,6 +14,7 @@ export async function settleInternetVoiceCall(input: {
   endedByRole: ParticipantRole;
   safety?: boolean;
   endedReason?: string;
+  effectiveEndAt?: string | null;
 }): Promise<{
   callId: string;
   status: 'completed' | 'safety_terminated';
@@ -54,14 +55,16 @@ export async function settleInternetVoiceCall(input: {
              connected_at::text,
              CASE
                WHEN connected_at IS NULL THEN 0
-               ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - connected_at)))::int)
+               ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (
+                 LEAST(now(), COALESCE($2::timestamptz, now())) - connected_at
+               )))::int)
              END AS connected_seconds,
              billable_seconds, caller_charge_minor::text,
              listener_earning_minor::text
       FROM app.call_sessions
       WHERE id=$1
       FOR UPDATE
-    `, [input.callId]);
+    `, [input.callId, input.effectiveEndAt ?? null]);
     const row = call.rows[0];
     if (!row) throw new Error('call_not_found');
     if (row.transport !== 'internet_voice') throw new Error('call_not_internet_voice');
@@ -207,6 +210,7 @@ export async function settleInternetVoiceCall(input: {
       reason: endedReason,
       transport: 'internet_voice',
       endedByRole: input.endedByRole,
+      effectiveEndAt: input.effectiveEndAt ?? null,
       connectedSecondsObserved: boundedConnectedSeconds,
       billableSeconds: settlement.billableSeconds,
       callerChargeMinor: charge.toString(),

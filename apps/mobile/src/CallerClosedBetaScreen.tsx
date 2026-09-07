@@ -220,7 +220,13 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       });
     };
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'connected') void postMediaConnected(callId);
+      if (peer.connectionState === 'connected') {
+        void postInternetVoiceSignal(token, callId, 'reconnected', { source: 'peer_connection_state' }).catch(() => undefined);
+        void postMediaConnected(callId);
+      }
+      if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
+        void postInternetVoiceSignal(token, callId, 'reconnecting', { source: 'peer_connection_state' }).catch(() => undefined);
+      }
       if (peer.connectionState === 'failed' || peer.connectionState === 'closed') setVoiceReady(false);
     };
 
@@ -246,7 +252,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       processedSignalIdsRef.current.add(signal.id);
       return;
     }
-    if (signal.kind === 'media_connected') {
+    if (signal.kind === 'media_connected' || signal.kind === 'reconnecting' || signal.kind === 'reconnected') {
       processedSignalIdsRef.current.add(signal.id);
     }
   }

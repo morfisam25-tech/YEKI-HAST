@@ -510,7 +510,19 @@ export default function ListenerWorkPage() {
         }).catch(() => undefined);
       };
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') void markMediaConnected(activeCall.callId);
+        if (pc.connectionState === 'connected') {
+          void api(`calls/${activeCall.callId}/voice/signals`, {
+            method: 'POST',
+            body: JSON.stringify({ kind: 'reconnected', payload: { source: 'peer_connection_state' } }),
+          }).catch(() => undefined);
+          void markMediaConnected(activeCall.callId);
+        }
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          void api(`calls/${activeCall.callId}/voice/signals`, {
+            method: 'POST',
+            body: JSON.stringify({ kind: 'reconnecting', payload: { source: 'peer_connection_state' } }),
+          }).catch(() => undefined);
+        }
         if (pc.connectionState === 'disconnected') setNotice('اتصال ضعیف شده؛ در حال تلاش برای برگشت…');
         if (pc.connectionState === 'failed') setError('اتصال صوتی قطع شد. پایان تماس را بزن و وضعیت را تازه کن.');
       };

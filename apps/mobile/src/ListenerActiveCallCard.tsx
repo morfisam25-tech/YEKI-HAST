@@ -262,7 +262,9 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
       processedSignalIdsRef.current.add(signal.id);
       return;
     }
-    if (signal.kind === 'media_connected') processedSignalIdsRef.current.add(signal.id);
+    if (signal.kind === 'media_connected' || signal.kind === 'reconnecting' || signal.kind === 'reconnected') {
+      processedSignalIdsRef.current.add(signal.id);
+    }
   }
 
   async function answerInternetCall() {
@@ -286,7 +288,13 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
         void postInternetVoiceSignal(token, activeCall.callId, 'ice', event.candidate.toJSON()).catch((cause) => setError(messageFor(getInternetVoiceErrorCode(cause))));
       };
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'connected') void postMediaConnected(activeCall.callId);
+        if (peer.connectionState === 'connected') {
+          void postInternetVoiceSignal(token, activeCall.callId, 'reconnected', { source: 'peer_connection_state' }).catch(() => undefined);
+          void postMediaConnected(activeCall.callId);
+        }
+        if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') {
+          void postInternetVoiceSignal(token, activeCall.callId, 'reconnecting', { source: 'peer_connection_state' }).catch(() => undefined);
+        }
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') setVoiceReady(false);
       };
 

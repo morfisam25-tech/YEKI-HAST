@@ -161,7 +161,34 @@ async function prepareVoiceEnd(input: {
     }
 
     if (row.status !== 'connected') throw new HttpError(409, 'call_not_live');
-    return { kind: 'connected' as const, role, status: row.status, safetyEventId };
+
+    // Billing cutoff must never trust a timestamp or role supplied by the ending client.
+    // Only an unresolved disconnect signal emitted by the authenticated counterparty can
+    // move the effective end earlier than this request's server time. A later reconnected
+    // signal from that same counterparty clears the cutoff.
+    const disconnect = await client.query<{ effective_end_at: string | null }>(`
+      SELECT min(reconnecting.created_at)::text AS effective_end_at
+      FROM app.internet_voice_signals reconnecting
+      WHERE reconnecting.call_session_id=$1
+        AND reconnecting.sender_role <> $2
+        AND reconnecting.signal_kind='reconnecting'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM app.internet_voice_signals recovered
+          WHERE recovered.call_session_id=reconnecting.call_session_id
+            AND recovered.sender_role=reconnecting.sender_role
+            AND recovered.signal_kind='reconnected'
+            AND recovered.created_at > reconnecting.created_at
+        )
+    `, [input.callId, role]);
+
+    return {
+      kind: 'connected' as const,
+      role,
+      status: row.status,
+      safetyEventId,
+      effectiveEndAt: disconnect.rows[0]?.effective_end_at ?? null,
+    };
   });
 }
 
@@ -230,6 +257,7 @@ export async function endInternetVoiceCall(
       endedByRole: prepared.role,
       safety,
       endedReason,
+      effectiveEndAt: prepared.effectiveEndAt,
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'call_not_settleable') {

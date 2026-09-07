@@ -17,7 +17,7 @@ const exactTerminationReasons = [
   'safety_termination_confirmed',
 ];
 
-test('caller and listener active-call reads derive termination state only from exact durable markers', () => {
+test('caller and listener active-call reads derive fallback termination state only from exact durable markers', () => {
   for (const source of [calls, listenerCalls]) {
     assert.match(source, /AS termination_in_progress/);
     assert.match(source, /ce\.metadata->>'reason' = ANY\(\$3::text\[\]\)/);
@@ -29,22 +29,23 @@ test('caller and listener active-call reads derive termination state only from e
   assert.equal((listenerCalls.match(/ce\.metadata->>'reason' = ANY\(\$3::text\[\]\)/g) ?? []).length, 1);
 });
 
-test('participant mobile contract exposes only a boolean termination signal', () => {
+test('participant mobile contract exposes transport plus only a boolean fallback termination signal', () => {
   assert.match(api, /terminationInProgress: boolean/);
   assert.match(api, /terminationInProgress\?: boolean/);
+  assert.match(api, /transport/);
   assert.doesNotMatch(api, /terminationReason|terminationState|providerBridgeId/);
 });
 
-test('caller hides all termination controls while termination is already in progress', () => {
-  assert.match(caller, /const terminationInProgress = Boolean\(call\?\.terminationInProgress\)/);
-  assert.match(caller, /!terminalStatuses\.has\(call\.status\) && !telephonyUnresolved && !terminationInProgress/);
-  assert.match(caller, /call\.terminationInProgress\) return/);
-  assert.match(caller, /terminationInProgress: true/);
+test('caller primary Internet Voice uses its own idempotent end routes instead of PSTN termination state', () => {
+  assert.match(caller, /endInternetVoiceCall\(token, call\.callId\)/);
+  assert.match(caller, /safetyExitInternetVoiceCall\(token, call\.callId\)/);
+  assert.doesNotMatch(caller, /dispatchCall\(/);
 });
 
-test('listener hides Safety Exit while termination is already in progress', () => {
-  assert.match(listener, /&& !activeCall\.terminationInProgress/);
-  assert.match(listener, /activeCall\.terminationInProgress &&/);
+test('listener preserves fallback termination lock while Internet Voice uses transport-specific end routes', () => {
+  assert.match(listener, /activeCall\.terminationInProgress/);
   assert.match(listener, /terminationInProgress: true/);
-  assert.match(listener, /Safety Exit قفل است/);
+  assert.match(listener, /safetyExitInternetVoiceCall\(token, activeCall\.callId\)/);
+  assert.match(listener, /safetyExitCall\(token, activeCall\.callId\)/);
+  assert.match(listener, /کنترل پایان دوباره ارسال نمی‌شود/);
 });

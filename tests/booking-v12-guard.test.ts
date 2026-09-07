@@ -54,6 +54,26 @@ test('expired booking commits missed status before the API returns booking_misse
   assert.match(bookings, /if \(call\.kind === 'missed'\) throw new HttpError\(409, 'booking_missed'\)/);
 });
 
+test('Internet Voice is primary and PSTN fallback stays opt-in', async () => {
+  const transport = await source('services/api/src/providers/call-transport.ts');
+  const workMode = await source('apps/mobile/src/ListenerWorkScreen.tsx');
+  assert.match(transport, /readTransport\(process\.env\.CALL_PRIMARY_TRANSPORT, 'internet_voice'\)/);
+  assert.match(transport, /CALL_FALLBACK_TRANSPORT \?\? 'none'/);
+  assert.doesNotMatch(workMode, /verified_phone_required/);
+  assert.doesNotMatch(workMode, /callPhoneVerified/);
+  assert.doesNotMatch(workMode, /CallPhoneSetupCard/);
+  assert.match(workMode, /آماده دریافت تماس اینترنتی/);
+});
+
+test('Listener active call payload exposes transport without provider bridge secrets', async () => {
+  const listenerCalls = await source('services/api/src/routes/listener-calls.ts');
+  assert.match(listenerCalls, /cs\.transport::text/);
+  assert.match(listenerCalls, /transport: row\.transport/);
+  assert.match(listenerCalls, /internetVoiceReady: row\.transport === 'internet_voice'/);
+  assert.match(listenerCalls, /providerBridgeIncluded: false/);
+  assert.match(listenerCalls, /callerIdentityIncluded: false/);
+});
+
 test('browser caller proxy permits booking reads and mutations without broadening arbitrary backend access', async () => {
   const proxy = await source('apps/web/app/api/caller/[...path]/route.ts');
   assert.match(proxy, /\^bookings\$\/|\^bookings\$|bookings/);

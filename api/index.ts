@@ -7,6 +7,7 @@ const EXPECTED_MIGRATIONS = new Map([
   ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
   ['0003_internet_voice_transport.sql', '369ad1642a0cb2abe42f6b241c5024434b9308829ad31d697ca8f7edc7ec5225'],
   ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
+  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
 ]);
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -144,7 +145,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           '0001_initial.sql',
           '0002_email_auth.sql',
           '0003_internet_voice_transport.sql',
-          '0004_booking.sql'
+          '0004_booking.sql',
+          '0005_no_answer_hold_idempotency.sql'
         )
       `);
       const migrationMap = new Map(migrations.rows.map((migration) => [migration.filename, migration.sha256]));

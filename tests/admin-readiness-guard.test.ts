@@ -13,6 +13,7 @@ test('integration readiness validates providers and sensitive-data security with
   assert.match(source, /validatePaymentProviderEnv/);
   assert.match(source, /validatePayoutProviderEnv/);
   assert.match(source, /validateTelephonyEnv/);
+  assert.match(source, /validatePrimaryCallTransportEnv/);
   assert.match(source, /validateKycInquiryProviderEnv/);
   assert.match(source, /validateSecurityEnv/);
   assert.match(source, /const sensitiveDataReady = ready\(\(\) => validateSecurityEnv\(\)\)/);
@@ -60,10 +61,13 @@ test('commercial hosting is an explicit fail-closed Caller launch dependency', (
   assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*&& commercialHostingApproved/);
 });
 
-test('Caller launch readiness stays fail-closed until every launch dependency is ready', () => {
+test('Caller launch readiness stays fail-closed until every v1.2 primary-transport dependency is ready', () => {
   assert.match(source, /isCallerClosedBetaConfigured/);
   assert.match(source, /isCallerClosedBetaEnabled/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*commercialHostingApproved[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callPhoneVerificationReady[\s\S]*paymentReady[\s\S]*telephonyReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown[\s\S]*publicRelease\.ready/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*commercialHostingApproved[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callTransportReady[\s\S]*paymentReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown[\s\S]*publicRelease\.ready/);
+  const callerLaunchBlock = source.match(/const callerLaunchReady =[\s\S]*?;/)?.[0] ?? '';
+  assert.doesNotMatch(callerLaunchBlock, /callPhoneVerificationReady/);
+  assert.doesNotMatch(callerLaunchBlock, /telephonyReady/);
   assert.match(source, /callerClosedBeta: \{ configured: callerClosedBetaConfigured, enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
 });

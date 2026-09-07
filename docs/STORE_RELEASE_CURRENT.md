@@ -1,21 +1,23 @@
 # یکی هست — Current Store Release Status
 
-Last verified: 2026-09-05
+Last verified: 2026-09-07
 
 This file is the authoritative current Store-release status. When older Store docs conflict with it, use this file and `GOOGLE_PLAY_FINAL_PACKET.md`.
 
 ## Production runtime — VERIFIED
 
 - Repository: `morfisam25-tech/YEKI-HAST`
-- Current runtime/config baseline: `501c5227ea288a451301f5ce7e81ae7b652539f6`
-- Current docs-only `main` before this archive-status update: `c8b94641a53be96e6c6edb0078d59c317f057121`
-- Runtime baseline includes the Android Store permission hardening merged through PR #26.
-- Web production release V2: Actions run `33931970953` — SUCCESS.
-- Web production deployment: `dpl_CjotkNAvNfYQq2T7pjZrfa9tCvjF` — READY.
+- Current application tree baseline: tree `587f67f0c1a07e9dc5927190fd05ceb97d9e7532`
+- Current `main` before this documentation branch: `98b9ac64fcea88ec5b18e239e51a064c49f01620`
+- Foundation QA on the v1.2 privacy/store application source passed, including Android native prebuild/export.
+- Web v1.2 privacy release: Actions run `34154499532` — SUCCESS.
+- Web production deployment: `dpl_2wbYQGhLUSxTD1yhY59kAoTCmZJy` — READY.
 - Production API: `https://yeki-hast-unique-6ff0.vercel.app`.
-- No API/Admin/DB redeploy is required merely for Store metadata or screenshot preparation.
+- Production API `/health` and `/ready` both returned HTTP 200 after the Web release.
 
-## Public Store URLs — USE THESE
+No Production DB migration is required for Store filing.
+
+## Public Store URLs
 
 - Website: `https://yekihast.app`
 - Privacy: `https://yekihast.app/privacy`
@@ -23,16 +25,14 @@ This file is the authoritative current Store-release status. When older Store do
 - Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-Primary-domain `/`, `/privacy`, `/terms`, and `/account/delete` were production-smoke-tested. Secondary/www domains redirect to the primary domain.
+The primary-domain surfaces were verified by the guarded Web V2 release workflow.
 
-## Account deletion — STORE-READY
+## Account deletion
 
 - clean account -> physical deletion;
-- retention-sensitive account -> `202 review_required`;
-- active operations admin -> `409` before destructive side effects;
-- public reviewer-facing deletion page -> `https://yekihast.app/account/delete`.
-
-Do not describe the current implementation as support-only or request-only deletion.
+- retention-sensitive account -> review/retention state;
+- active operations admin -> blocked before destructive side effects;
+- public deletion resource -> `https://yekihast.app/account/delete`.
 
 ## Mobile identity
 
@@ -42,161 +42,135 @@ Do not describe the current implementation as support-only or request-only delet
 - iOS bundle ID: `app.yekihast.mobile`
 - Expo owner: `saimorfis-team`
 - EAS project ID: `58b9f62d-db82-421a-ad59-edccac70c316`
-- Expo SDK: `~57.0.9`
-- Android target baseline: API 36
-- iOS/Xcode baseline: 26
+- Android target SDK: API 36 / Android 16
 
-## Expo / EAS access — VERIFIED
+## Android signed Store binary — FINAL vc5
 
-Verification run `33941384314` succeeded.
+Use only this Android Store AAB:
 
-- authenticated Expo identity: `saimorfi`;
-- owner access to `saimorfi` and `saimorfis-team`;
-- exact EAS project: `@saimorfis-team/yeki-hast`;
-- project ID matches the value above;
-- Expo plan observed: Free;
-- no replacement Expo project or credential is needed.
-
-## Production artwork — LOCKED
-
-Approved direction: black/graphite 3D tile with warm gold/ivory opposing conversation bubbles and no text.
-
-Deterministic generator: `apps/mobile/scripts/generate-artwork.mjs`.
-
-Generated release assets include:
-
-- app icon 1024×1024;
-- Android adaptive foreground 1024×1024;
-- Android monochrome mark 1024×1024;
-- Google Play listing icon 512×512;
-- Google Play feature graphic 1024×500 opaque PNG.
-
-Do not reopen the icon direction unless a Store returns a concrete technical rejection.
-
-## Android signed Store binary — FINAL BINARY COMPLETE
-
-The old versionCode 2 AAB is superseded. Use only the hardened versionCode 3 release.
-
-Final build facts:
-
-- GitHub build workflow run: `33946371769` — SUCCESS;
-- source commit: `cee6d1f545e166ff27b8b71e5c7f422af9e7cb1a`;
-- runtime/config parent: `501c5227ea288a451301f5ce7e81ae7b652539f6`;
+- EAS build ID: `51dc645a-b56f-4428-91b5-73337898f870`;
+- source commit recorded by EAS: `c2e2918c9ae171bf03f9b603f5bc665d00f3db0f`;
 - app version: `1.0.0`;
-- versionCode: `3`;
+- versionCode: `5`;
 - package: `app.yekihast.mobile`;
-- distribution: Store;
-- profile: production;
-- final AAB SHA-256: `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3`;
-- existing EAS-managed Android signing key retained.
+- distribution: `STORE`;
+- build profile: `production`;
+- targetSdkVersion: `36`;
+- final AAB SHA-256: `f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32`;
+- signing credential: existing EAS-managed `Build Credentials 9ASUP-JZQW (default)`; no replacement credential was created.
 
-Exact AAB verification confirmed:
+Exact-binary checks passed:
 
-- archive/signature integrity;
-- package identity;
-- Android 16 / targetSdkVersion 36;
-- no requested camera, microphone, location, contacts, SMS/call-log or advertising-ID permission;
-- unused overlay and legacy external-storage permissions were removed before this build.
+- archive integrity;
+- `jarsigner` verification;
+- package/version/versionCode;
+- target SDK 36;
+- requested-permission audit.
 
-Do not rebuild Android unless app/runtime source changes or Google Play returns an evidence-backed binary problem.
+Requested Android permissions in the exact vc5 AAB are:
 
-## Final AAB archival backup — READY
+- `android.permission.ACCESS_NETWORK_STATE`
+- `android.permission.BLUETOOTH`
+- `android.permission.INTERNET`
+- `android.permission.MODIFY_AUDIO_SETTINGS`
+- `android.permission.RECORD_AUDIO`
+- `android.permission.USE_BIOMETRIC`
+- `android.permission.USE_FINGERPRINT`
+- `android.permission.VIBRATE`
+- `android.permission.WAKE_LOCK`
+- app-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
 
-To avoid depending only on the temporary Expo artifact lifetime, the exact final Store AAB was copied into a checksum-verified GitHub Actions artifact without rebuilding the app.
+The AAB does **not** request camera, location, contacts, phone/call-log, SMS, advertising ID, overlay, legacy external storage, media-read, or `android.permission.DUMP`.
 
-- archive workflow run: `33948905582` — SUCCESS;
-- archive artifact: `yeki-hast-final-android-aab-v1.0.0-vc3`;
-- artifact ID: `9964172388`;
-- artifact digest: `sha256:d619a72f7d571db7d566134fe766b615d33a15adc73cf5033da6908ab4c1680d`;
-- artifact expiry: `2026-12-04`;
-- archive contains the exact `.aab` plus its SHA-256 file;
-- workflow verified the AAB checksum equals the locked Store checksum `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3` before upload.
+### DUMP verifier correction
 
-This archive is a preservation copy of the already-built Store binary, not a new build. Upload the `.aab`, not the outer GitHub artifact ZIP, to Google Play.
+The first vc5 verification run incorrectly treated any appearance of `android.permission.DUMP` anywhere in the merged manifest as an app-requested permission. AndroidX ProfileInstaller uses `android:permission="android.permission.DUMP"` to protect its exported receiver; that is not a `<uses-permission>` request by the app.
 
-## Android Store screenshots — HOSTED EMULATOR BLOCKED, LOCAL KIT READY
+Forensic run `34156081233` dumped the exact vc5 manifest and confirmed `DUMP` appears only as a receiver protection permission. The corrected audit checks only `<uses-permission>` entries. No Android rebuild was required.
 
-This is not an app-code failure.
+## Final vc5 AAB archival backup
 
-Two exact-AAB hosted screenshot attempts were made and both failed before the app could run because GitHub-hosted virtualization could not boot the Android 16 emulator:
+The exact vc5 AAB was downloaded from the completed EAS build, checksum-verified, inspected with bundletool, signature-verified, and copied to a GitHub Actions artifact without rebuilding.
 
-1. Linux run `33947024183`: no usable KVM acceleration; emulator stayed offline and timed out.
-2. macOS ARM64 run `33947827376`: emulator exited with `HVF error: HV_UNSUPPORTED` / `failed to initialize HVF`, then ADB never saw a device.
+- archive/verification run: `34156200702` — SUCCESS;
+- artifact: `yeki-hast-final-android-aab-v1.0.0-vc5-v1.2`;
+- artifact ID: `10031041956`;
+- artifact digest: `sha256:eb6026c5d6a0827cb0881e8ff0048e041be4aaf0e88a1ba271c8bd3bcb831d2a`;
+- artifact expiry: `2026-12-06`;
+- archive contains the exact `.aab`, SHA-256 file, dumped manifest and requested-permission list.
 
-Do not spend more GitHub Actions budget retrying hosted Android emulators for this release.
+Upload the `.aab` inside the artifact to Google Play, not the outer artifact ZIP.
 
-A local/physical-device screenshot kit has therefore been prepared from the exact final versionCode 3 AAB:
+## Privacy / microphone / Internet Voice
 
-- kit workflow run: `33948412172` — SUCCESS;
-- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc3`;
-- artifact ID: `9964042649`;
-- artifact digest: `sha256:3053fa2d2f8d8555d8cb79799d20cd10d67d82af17897736999799bc3eada4e3`;
-- artifact expiry: 2026-12-04;
-- exact Store AAB checksum was verified before the installable screenshot APK was derived;
-- the screenshot APK is re-signed with a disposable screenshot-only key and MUST NOT be uploaded to Google Play.
+The v1.2 privacy page is live and states the current Internet Voice behavior:
 
-The kit contains:
+- microphone access is used for live Internet Voice when that feature is used;
+- media uses WebRTC and may traverse a TURN relay when direct peer connectivity is unavailable;
+- the application has no implemented conversation-audio recording/storage path;
+- do not claim that audio is never processed or never leaves the device.
 
-- installable release-equivalent screenshot APK;
-- Windows install/open helper;
-- Windows current-screen capture helper;
-- exact AAB/APK checksum files;
-- screenshot safety/readme instructions.
+Google Play filing must therefore use **Microphone: Yes**. Older Store documents saying Microphone: No are superseded.
 
-When the owner resumes, use a physical Android phone with Google's official ADB/platform-tools. No Store binary rebuild is required. Capture at least four real 1080×1920-or-higher portrait screens and never expose real email, OTP, session/admin data or secrets.
+For Data Safety, Google defines collection as transmitting user data off-device and requires ephemeral processing to be represented in the form response even when it is not displayed as retained collection. Current live voice is intended to be transient real-time media, not stored audio. Use `GOOGLE_PLAY_FINAL_PACKET.md` for the filing baseline and recheck the exact TURN/provider role before final submission.
 
-## Google Play filing packet — READY
+## Android screenshots — vc5 kit READY
 
-Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for:
+The old vc3 screenshot kit is superseded.
 
-- listing copy;
-- reviewer access path;
-- Data Safety evidence baseline;
-- SDK/permission/ads baseline;
-- policy/content questionnaire baseline;
-- exact Android binary identity;
-- external-only Play Console steps.
+A new physical-device kit was derived from the exact final vc5 Store AAB without rebuilding the Store binary:
 
-Repository-side Android preparation is complete except for physical-device screenshot capture/QC. The remaining release work after screenshots requires an actual Google Play developer account / console.
+- kit run: `34156520738` — SUCCESS;
+- artifact: `yeki-hast-android-screenshot-kit-v1.0.0-vc5`;
+- artifact ID: `10031149382`;
+- artifact digest: `sha256:8060d391e4f05fda0a63437fcbc7156e9e69d0f6bd62b841f7d4fc1d2493f54f`;
+- artifact expiry: `2026-12-06`;
+- source AAB checksum was verified against the locked vc5 SHA before APK derivation;
+- the kit contains a universal APK derived from vc5, Windows ADB install/open and screenshot helpers, checksums and safety instructions;
+- the APK is re-signed with a disposable screenshot-only key and **MUST NOT** be uploaded to Google Play.
 
-## Google Play developer account evidence
+Hosted Android emulator capture remains closed because the previously tested GitHub-hosted KVM/HVF paths failed before Android booted. Do not spend Actions budget retrying hosted emulators.
 
-Connected Gmail accounts were searched for clear Google Play Console / developer-account registration evidence. No reliable existing developer-account registration confirmation was found. Generic consumer Google Play emails are not evidence of a Play Console developer account.
+Final screenshot capture itself still requires a physical Android device. Use safe test data only; never expose real email, OTP, session/admin data or secrets.
 
-Therefore do not assume a developer account already exists. Account creation/verification and any registration fee remain external owner-controlled steps.
+## Google Play account gate
 
-## iOS / Apple — INTENTIONALLY PARKED
+The remaining Google Play account work is external/owner-controlled:
 
-The last production iOS attempt reached remote credentials and stopped because the Distribution Certificate was not validated for non-interactive builds. Apple setup is intentionally parked while Android is completed first.
+1. confirm the exact legal publishing entity;
+2. use the appropriate Organization account path for a genuine business publisher;
+3. obtain/confirm the matching D-U-N-S and payments-profile evidence;
+4. complete identity/contact verification;
+5. stop before any registration payment until explicit owner approval;
+6. create the Play app record for `app.yekihast.mobile`;
+7. upload the exact vc5 AAB and current Store assets/forms.
 
-Do not perform Apple purchases, membership enrollment, credential changes or iOS retries until the owner resumes the Apple phase.
+## iOS / Apple — parked
 
-## Remaining work, in order
+iOS remains intentionally parked. The known external blocker is one-time interactive Apple/EAS Distribution Certificate and provisioning-profile validation. Do not create replacement Apple credentials or resume iOS work without owner direction.
 
-### Android-first
+## Remaining Android-first work
 
-1. Capture/QC release-equivalent screenshots on a real/local Android device using the prepared exact-AAB screenshot kit.
-2. Confirm or create the Google Play developer account and complete required identity/organization verification.
+1. Capture/QC current vc5 screenshots on a real Android device using artifact `10031149382`.
+2. Complete Google Play developer-account organization/identity setup.
 3. Pay any Google registration fee only after explicit owner approval.
-4. Create the Play app record for `app.yekihast.mobile`.
-5. Upload the exact versionCode 3 AAB and locked Store assets.
-6. File listing/App access/Data Safety/content rating/target audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
-7. Run Play pre-launch/review checks and fix only evidence-backed findings.
-8. Submit to the selected track after the exact uploaded artifact passes the desired smoke gate.
-
-### Apple later
-
-1. Resume one-time interactive Apple/EAS production signing setup.
-2. Build signed iOS IPA.
-3. Complete App Store Connect filing and submission.
+4. Create the app record for `app.yekihast.mobile`.
+5. Upload the exact vc5 AAB and locked artwork.
+6. File listing/App access/Data Safety/content/target-audience/Ads declarations from `GOOGLE_PLAY_FINAL_PACKET.md`.
+7. Confirm the final production TURN/provider role before locking the live-audio Shared answer.
+8. Run Play pre-launch/review checks and fix only evidence-backed findings.
+9. Submit to the selected track after the exact uploaded artifact passes the desired smoke/review gate.
 
 ## Do not do
 
-- Do not retry GitHub-hosted Android emulator screenshot runs for this release.
-- Do not rerun Production DB migrations.
-- Do not redeploy API/Admin without a real source/config change requiring it.
-- Do not open Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
-- Do not replace Android signing credentials.
+- Do not use vc2, vc3 or vc4 as the final Store binary.
+- Do not rebuild Android without a real binary/runtime reason.
+- Do not claim Microphone: No for vc5.
+- Do not treat receiver `android:permission="android.permission.DUMP"` as an app-requested permission.
+- Do not retry hosted Android emulator screenshot workflows.
 - Do not upload the screenshot-only APK to Google Play.
-- Do not put Expo/Apple/Google/signing secrets in source, logs or chat.
+- Do not rerun Production DB migrations for Store work.
+- Do not replace Android signing credentials.
+- Do not open payment/KYC/payout/telephony/SMS gates for Store cosmetics.
+- Do not expose credentials, OTPs, signing material or private keys.
 - Do not touch Evidence Axis.

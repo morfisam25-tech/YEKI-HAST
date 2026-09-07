@@ -1,8 +1,8 @@
 # یکی هست — Store Submission Answers
 
-Last reconciled: 2026-09-05
+Last reconciled: 2026-09-07
 
-> This file is now a compatibility/index document. Do not use older values from its Git history. For Android, the authoritative filing source is `GOOGLE_PLAY_FINAL_PACKET.md`. For overall current status, use `STORE_RELEASE_CURRENT.md`.
+This file is a compatibility/index document. Do not use older values from its Git history. For Android, the authoritative filing source is `GOOGLE_PLAY_FINAL_PACKET.md`. For overall current status, use `STORE_RELEASE_CURRENT.md`.
 
 ## Current product identity
 
@@ -15,7 +15,7 @@ Last reconciled: 2026-09-05
 - Primary language: Persian (`fa`)
 - Suggested Store category: `Lifestyle`
 
-## Current public URLs — use these
+## Current public URLs
 
 - Website: `https://yekihast.app`
 - Privacy: `https://yekihast.app/privacy`
@@ -23,54 +23,46 @@ Last reconciled: 2026-09-05
 - Account deletion: `https://yekihast.app/account/delete`
 - Support: `sales@uniqueholding.com.tr`
 
-Do not fall back to the old `web-unique-6ff0.vercel.app` URLs in Store metadata.
+Do not use old Vercel Store URLs in metadata.
 
 ## Android — authoritative current state
 
-Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for all copy/paste Android filing answers and `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md` for developer-account setup.
+Use `docs/GOOGLE_PLAY_FINAL_PACKET.md` for all Android filing answers and `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md` for developer-account setup.
 
-Locked Android release facts:
+Locked final Android binary facts:
 
-- final signed Store AAB: `1.0.0`, versionCode `3`;
+- app version: `1.0.0`;
+- final versionCode: `5`;
 - package: `app.yekihast.mobile`;
 - target SDK: Android 16 / API 36;
-- final AAB SHA-256: `8cbf19c57352ad8aa2a8d08c01e48e7d9f76581f3d05c36e99264a4df8d43cd3`;
-- existing EAS-managed Android signing key retained;
-- Store-risk permissions removed before the final build;
-- icon/listing artwork and 1024×500 feature graphic are ready;
-- physical-device screenshot kit is ready from the exact final AAB.
+- EAS build ID: `51dc645a-b56f-4428-91b5-73337898f870`;
+- source commit: `c2e2918c9ae171bf03f9b603f5bc665d00f3db0f`;
+- final AAB SHA-256: `f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32`;
+- existing EAS-managed signing key retained;
+- archive verification run: `34156200702` — SUCCESS;
+- archive artifact ID: `10031041956`.
 
-The older versionCode `2` Android build is superseded. Do not upload it.
+vc2/vc3/vc4 are superseded. Do not upload them.
 
-Do not rebuild Android merely because Store copy, account setup, screenshots, or listing graphics change.
+## Android permission/Data Safety baseline
 
-## Android reviewer/Data Safety baseline
+Final vc5 exact requested permissions include `RECORD_AUDIO` for v1.2 Internet Voice. Camera is not requested.
 
-The current submitted Technical Beta is email-first and listener-focused.
+Store filing must therefore use:
 
-Current active user-facing data includes:
+- Microphone: **Yes**
+- Camera: No
+- Location: No
+- Contacts: No
+- SMS/call-log/phone: No
+- Advertising ID: No
+- Ads: No
 
-- email address for authentication/account management/security/support;
-- listener nickname;
-- declared gender;
-- languages/proficiency;
-- optional short introduction;
-- listener application/training/assessment workflow state and answers.
+Live microphone audio is real-time WebRTC media and may traverse TURN. The application has no implemented conversation-audio recording/storage path. Google Play Data Safety answers must follow `GOOGLE_PLAY_FINAL_PACKET.md`; do not reuse the old listener-only `Microphone: No` baseline.
 
-Current release does not actively expose/collect through the mobile app:
+The `android.permission.DUMP` string in the merged manifest belongs to AndroidX ProfileInstaller receiver protection and is not an app-requested `<uses-permission>`.
 
-- device location;
-- contacts/address book;
-- photos/videos;
-- microphone/voice recordings;
-- SMS/MMS or call logs;
-- advertising identifiers for ad targeting;
-- payment-card data;
-- active Caller conversation content.
-
-Caller voice, payment, KYC, payout, telephony and production phone/SMS remain disabled/fail-closed and must not be represented as active Store features.
-
-Account deletion is real and Store-usable:
+## Account deletion
 
 - clean account -> physical deletion;
 - retention-sensitive account -> review/retention state;
@@ -79,58 +71,35 @@ Account deletion is real and Store-usable:
 
 ## Android screenshots
 
-Do not retry GitHub-hosted Android emulator capture for this release. Both Linux KVM and macOS HVF paths failed at hosted-virtualization level before the app could run.
+The old vc3 screenshot kit is superseded as release-equivalence evidence. Final screenshots must come from vc5 or a release-equivalent vc5-derived APK on a physical Android device.
 
-Use the prepared physical-device screenshot kit from Actions run `33948412172`.
-
-Recommended real states:
-
-1. Home / brand proposition + listener CTA.
-2. Listener introduction.
-3. Email sign-in with no personal email or OTP visible.
-4. Listener profile/training after a safe test login, or the real Caller-closed informational screen if stronger.
-
-Never expose a real email, OTP, session/admin data or secret.
+Do not retry the prior GitHub-hosted Android emulator paths; Linux KVM and macOS HVF both failed before Android booted.
 
 ## Google Play developer-account gate
 
-Before signup, the owner must confirm the exact legal publishing entity. For a genuine business publisher, Google directs use of an Organization developer account and requires matching organization/D-U-N-S/payments-profile evidence.
+Before signup, the owner must confirm the exact legal publishing entity. For a genuine business publisher, use the Organization path with matching D-U-N-S/payments-profile/company evidence.
 
-No registration payment is authorized by this file. The current Google one-time developer registration fee is documented in `GOOGLE_PLAY_ACCOUNT_READINESS.md`; stop before payment until explicit owner approval.
+No registration payment is authorized by this file. Stop before payment until explicit owner approval.
 
-## Apple / iOS — parked, not deleted
+## Apple / iOS — parked
 
-The iOS source/export baseline remains intact, but Android-first release work is intentionally active while Apple is parked.
-
-Known iOS production blocker remains external Apple signing setup:
-
-- EAS found remote iOS credentials;
-- non-interactive production build stopped because the Distribution Certificate was not yet validated for non-interactive use;
-- one-time interactive Apple/EAS production certificate/provisioning validation is required before rerunning the signed iOS build.
-
-Do not create replacement Apple credentials, enroll/pay for Apple Developer membership, or resume iOS production work without explicit owner direction.
-
-The old Apple listing/privacy drafts in this file's Git history are not authoritative for submission day. Recheck Apple forms and the exact successful IPA when Apple work resumes.
+iOS source/export remains parked. Known external blocker: one-time interactive Apple/EAS Distribution Certificate and provisioning-profile validation. Do not create replacement Apple credentials or resume iOS work without owner direction.
 
 ## Current source-of-truth order
 
-1. `docs/STORE_RELEASE_CURRENT.md` — live overall Store status.
-2. `docs/GOOGLE_PLAY_FINAL_PACKET.md` — final Android filing packet.
-3. `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md` — Google Play account/organization gate.
-4. `docs/MOBILE_STORE_RELEASE.md` — platform handoff/index.
-5. This file — compatibility pointer only.
+1. `docs/STORE_RELEASE_CURRENT.md`
+2. `docs/GOOGLE_PLAY_FINAL_PACKET.md`
+3. `docs/GOOGLE_PLAY_ACCOUNT_READINESS.md`
+4. `docs/MOBILE_STORE_RELEASE.md`
+5. This file
 
 ## Do not do
 
-- Do not use stale Vercel Store URLs.
-- Do not use Android versionCode `2`.
-- Do not claim final artwork is still missing.
-- Do not claim Expo/EAS access is still unverified.
-- Do not rebuild Android without an actual binary/runtime reason.
+- Do not use vc2/vc3/vc4.
+- Do not declare Microphone: No for vc5.
+- Do not rebuild Android merely because Store copy/account/screenshots change.
 - Do not retry hosted Android emulator screenshot workflows.
-- Do not upload the screenshot-only APK to Google Play.
 - Do not rerun Production DB migrations.
-- Do not redeploy API/Admin without a real runtime/config reason.
-- Do not open Caller/payment/KYC/payout/telephony/SMS gates for Store cosmetics.
-- Do not put credentials, OTPs, private keys or tokens in source, logs or chat.
+- Do not replace Android signing credentials.
+- Do not expose secrets, OTPs or private signing material.
 - Do not touch Evidence Axis.

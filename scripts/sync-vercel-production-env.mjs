@@ -3,9 +3,9 @@ import { randomBytes } from 'node:crypto';
 const TEAM_ID = 'team_GmseY3ibD05FWemVhLElL3hI';
 const PROJECT_ID = 'prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
 const API_ORIGIN = 'https://api.vercel.com';
-const DEFAULT_PRIVACY_POLICY_URL = 'https://web-unique-6ff0.vercel.app/privacy';
-const DEFAULT_TERMS_OF_SERVICE_URL = 'https://web-unique-6ff0.vercel.app/terms';
-const DEFAULT_ACCOUNT_DELETION_URL = 'https://web-unique-6ff0.vercel.app/account/delete';
+const DEFAULT_PRIVACY_POLICY_URL = 'https://yekihast.app/privacy';
+const DEFAULT_TERMS_OF_SERVICE_URL = 'https://yekihast.app/terms';
+const DEFAULT_ACCOUNT_DELETION_URL = 'https://yekihast.app/account/delete';
 const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
 const DEFAULT_GMAIL_FROM_NAME = 'یکی هست';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -160,12 +160,9 @@ if (!['true', 'false'].includes(commercialHostingApproved)) {
   throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
 }
 
-// Public legal routes are checked-in first-party surfaces for this beta. Reject
-// stale optional secret overrides instead of allowing API bootstrap to drift from
-// the Web release that the frontend workflow actually verifies and publishes.
-requireAbsentOrExact('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL);
-requireAbsentOrExact('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL);
-requireAbsentOrExact('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL);
+// Public legal routes are source-locked first-party canonical surfaces. Legacy
+// PRODUCTION_* URL secret values are ignored so stale optional overrides cannot
+// move bootstrap away from the domain verified and published by the Web release.
 const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL;
 const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL;
@@ -175,8 +172,9 @@ validatePublicHttpsUrl(termsOfServiceUrl, 'TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'ACCOUNT_DELETION_URL');
 validateEmail(supportEmail, 'SUPPORT_EMAIL');
 
-const listUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?teamId=${encodeURIComponent(TEAM_ID)}`;
-const listed = await vercelJson(listUrl);
+const projectEnvUrl = new URL(`${API_ORIGIN}/v10/projects/${PROJECT_ID}/env`);
+projectEnvUrl.searchParams.set('teamId', TEAM_ID);
+const listed = await vercelJson(projectEnvUrl.toString());
 const envs = Array.isArray(listed?.envs) ? listed.envs : [];
 const existingProductionKeys = new Set(
   envs.filter(productionTarget).map((env) => env?.key).filter((key) => typeof key === 'string'),
@@ -257,8 +255,9 @@ if (!hasEncryptionKeyId) {
   setSensitive('DATA_ENCRYPTION_KEYS', JSON.stringify({ [keyId]: key }));
 }
 
-const updateUrl = `${API_ORIGIN}/v10/projects/${PROJECT_ID}/env?upsert=true&teamId=${encodeURIComponent(TEAM_ID)}`;
-const updated = await vercelJson(updateUrl, { method: 'POST', body: JSON.stringify(entries) });
+const updateUrl = new URL(projectEnvUrl);
+updateUrl.searchParams.set('upsert', 'true');
+const updated = await vercelJson(updateUrl.toString(), { method: 'POST', body: JSON.stringify(entries) });
 if (Array.isArray(updated?.failed) && updated.failed.length > 0) {
   throw new Error(`Vercel environment sync reported ${updated.failed.length} failed item(s)`);
 }

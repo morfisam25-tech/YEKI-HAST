@@ -47,13 +47,13 @@ test('API never reports completed until app.users deletion succeeds or account i
   assert.match(deletionRoute, /sqlError\?\.code === '23503'/);
 });
 
-test('production env sync source-locks first-party policy, deletion, and support surfaces', () => {
-  assert.match(envSync, /DEFAULT_PRIVACY_POLICY_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/privacy'/);
-  assert.match(envSync, /DEFAULT_TERMS_OF_SERVICE_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/terms'/);
-  assert.match(envSync, /DEFAULT_ACCOUNT_DELETION_URL = 'https:\/\/web-unique-6ff0\.vercel\.app\/account\/delete'/);
-  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_PRIVACY_POLICY_URL', DEFAULT_PRIVACY_POLICY_URL\)/);
-  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_TERMS_OF_SERVICE_URL', DEFAULT_TERMS_OF_SERVICE_URL\)/);
-  assert.match(envSync, /requireAbsentOrExact\('PRODUCTION_ACCOUNT_DELETION_URL', DEFAULT_ACCOUNT_DELETION_URL\)/);
+test('production env sync source-locks first-party canonical policy, deletion, and support surfaces', () => {
+  assert.match(envSync, /DEFAULT_PRIVACY_POLICY_URL = 'https:\/\/yekihast\.app\/privacy'/);
+  assert.match(envSync, /DEFAULT_TERMS_OF_SERVICE_URL = 'https:\/\/yekihast\.app\/terms'/);
+  assert.match(envSync, /DEFAULT_ACCOUNT_DELETION_URL = 'https:\/\/yekihast\.app\/account\/delete'/);
+  assert.doesNotMatch(envSync, /PRODUCTION_PRIVACY_POLICY_URL/);
+  assert.doesNotMatch(envSync, /PRODUCTION_TERMS_OF_SERVICE_URL/);
+  assert.doesNotMatch(envSync, /PRODUCTION_ACCOUNT_DELETION_URL/);
   assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL/);
   assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL/);
   assert.match(envSync, /const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL/);

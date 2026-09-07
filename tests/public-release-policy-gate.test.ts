@@ -18,13 +18,13 @@ const publicRuntimeKeys = [
   'SUPPORT_EMAIL',
 ];
 
-const legacyCompatiblePolicyInputs = [
+const legacyPolicyInputs = [
   'PRODUCTION_PRIVACY_POLICY_URL',
   'PRODUCTION_TERMS_OF_SERVICE_URL',
   'PRODUCTION_ACCOUNT_DELETION_URL',
 ];
 
-const canonicalWebOrigin = 'https://web-unique-6ff0.vercel.app';
+const canonicalWebOrigin = 'https://yekihast.app';
 const betaMailbox = 'sales@uniqueholding.com.tr';
 
 test('runtime public-release env stays explicit for local/other environments while controlled production is source-locked', () => {
@@ -70,8 +70,8 @@ test('privacy terms and account deletion are source-locked first-party canonical
   assert.ok(envSync.includes(`const DEFAULT_PRIVACY_POLICY_URL = '${canonicalWebOrigin}/privacy'`));
   assert.ok(envSync.includes(`const DEFAULT_TERMS_OF_SERVICE_URL = '${canonicalWebOrigin}/terms'`));
   assert.ok(envSync.includes(`const DEFAULT_ACCOUNT_DELETION_URL = '${canonicalWebOrigin}/account/delete'`));
-  for (const name of legacyCompatiblePolicyInputs) {
-    assert.match(envSync, new RegExp(`requireAbsentOrExact\\('${name}'`));
+  for (const name of legacyPolicyInputs) {
+    assert.doesNotMatch(envSync, new RegExp(name));
   }
   assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL/);
   assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL/);
@@ -103,4 +103,16 @@ test('production env sync never clears public values with blank writes', () => {
   assert.doesNotMatch(envSync, /setPlain\('TERMS_OF_SERVICE_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('ACCOUNT_DELETION_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('SUPPORT_EMAIL',\s*''\)/);
+});
+
+test('selected support mailbox is reachable from all checked-in public policy surfaces', () => {
+  assert.match(webLanding, new RegExp(betaMailbox.replace('.', '\\.')));
+  assert.match(privacyPage, new RegExp(betaMailbox.replace('.', '\\.')));
+  assert.match(termsPage, new RegExp(betaMailbox.replace('.', '\\.')));
+});
+
+test('mailbox usability is not treated as proven by source alone and production release carries a real mailbox E2E', async () => {
+  const deployWorkflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
+  assert.match(deployWorkflow, /Verify production Email OTP delivery session and logout E2E/);
+  assert.match(deployWorkflow, /smoke-production-email-auth\.mjs/);
 });

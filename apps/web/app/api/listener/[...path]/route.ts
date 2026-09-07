@@ -10,6 +10,7 @@ import {
 
 const UUID = '[0-9a-fA-F-]{36}';
 const ALLOWED_PATHS = [
+  /^bootstrap$/,
   /^listener\/application$/,
   /^listener\/training\/complete$/,
   /^listener\/assessment$/,

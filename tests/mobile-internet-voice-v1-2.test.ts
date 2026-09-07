@@ -2,17 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
+const app = await readFile(new URL('../apps/mobile/App.tsx', import.meta.url), 'utf8');
 const caller = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
 const listener = await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8');
 const voiceApi = await readFile(new URL('../apps/mobile/src/internet-voice-api.ts', import.meta.url), 'utf8');
 const appConfig = await readFile(new URL('../apps/mobile/app.json', import.meta.url), 'utf8');
 const mobilePackage = await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8');
 
-test('Android native build declares WebRTC dependency, plugin and microphone permission', () => {
+test('Android native build declares WebRTC dependency, plugin and audio-only microphone permission surface', () => {
   assert.match(mobilePackage, /"react-native-webrtc": "\^124\.0\.8"/);
   assert.match(mobilePackage, /"@config-plugins\/react-native-webrtc": "\^15\.0\.2"/);
   assert.match(appConfig, /@config-plugins\/react-native-webrtc/);
-  assert.match(appConfig, /android\.permission\.RECORD_AUDIO/);
+  assert.match(appConfig, /"permissions"[\s\S]*android\.permission\.RECORD_AUDIO/);
+  assert.match(appConfig, /"blockedPermissions"[\s\S]*android\.permission\.CAMERA/);
+});
+
+test('Android Store-facing shell describes Internet Voice accurately and exposes required public policy/support links', () => {
+  assert.match(app, /تماس اصلی از اینترنت برقرار می‌شود/);
+  assert.match(app, /برای Internet Voice شماره تلفن لازم نیست/);
+  assert.doesNotMatch(app, /شماره تماس جداگانه تأیید می‌شود/);
+  assert.match(app, /https:\/\/yekihast\.app\/privacy/);
+  assert.match(app, /https:\/\/yekihast\.app\/terms/);
+  assert.match(app, /https:\/\/yekihast\.app\/account\/delete/);
+  assert.match(app, /mailto:sales@uniqueholding\.com\.tr/);
 });
 
 test('Android Caller requests microphone before creating the Wallet HOLD and never dispatches PSTN', () => {

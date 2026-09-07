@@ -166,7 +166,7 @@ export default function TalkPage() {
     let active = true;
     let running = false;
     const heartbeat = async () => {
-      if (!active || running) return;
+      if (!active || running || pcRef.current?.connectionState !== 'connected') return;
       running = true;
       try {
         const result = await api<{

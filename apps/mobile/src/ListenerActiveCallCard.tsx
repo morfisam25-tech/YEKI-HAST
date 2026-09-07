@@ -340,6 +340,7 @@ export default function ListenerActiveCallCard({ token, onActiveCallConflictChan
     let disposed = false;
     const callId = activeCall.callId;
     async function heartbeat() {
+      if (peerRef.current?.connectionState !== 'connected') return;
       try {
         const result = await heartbeatInternetVoiceCall(token, callId);
         if (disposed) return;

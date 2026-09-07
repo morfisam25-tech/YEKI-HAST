@@ -332,7 +332,7 @@ export default function ListenerWorkPage() {
     if (!activeCall || activeCall.status !== 'connected' || !voiceReady || rtcCallIdRef.current !== activeCall.callId) return;
     let running = false;
     const heartbeat = async () => {
-      if (running) return;
+      if (running || pcRef.current?.connectionState !== 'connected') return;
       running = true;
       try {
         const result = await api<{ terminal: boolean; capReached: boolean; timing: VoiceTiming }>(`calls/${activeCall.callId}/voice/heartbeat`, {

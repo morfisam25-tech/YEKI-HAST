@@ -281,6 +281,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     let disposed = false;
     const callId = call.callId;
     async function heartbeat() {
+      if (peerRef.current?.connectionState !== 'connected') return;
       try {
         const result = await heartbeatInternetVoiceCall(token, callId);
         if (disposed) return;

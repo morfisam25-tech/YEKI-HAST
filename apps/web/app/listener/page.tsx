@@ -148,9 +148,14 @@ function statusLabel(status: string): string {
     assessment_passed: 'آزمون تأیید شده',
     kyc_pending: 'احراز هویت در انتظار بررسی',
     kyc_expired: 'احراز هویت نیاز به ثبت دوباره دارد',
+    agreement_pending: 'در انتظار قرارداد',
+    admin_review: 'در بررسی نهایی',
+    mock_call: 'در مرحله تماس آزمایشی',
     approved: 'تأییدشده برای کار',
     active: 'فعال',
+    suspended: 'معلق',
     rejected: 'ردشده',
+    archived: 'بایگانی‌شده',
   };
   return labels[status] ?? status;
 }
@@ -361,6 +366,8 @@ export default function ListenerOnboardingPage() {
 
   const appReadyForWork = application && ['approved', 'active'].includes(application.status);
   const needsKyc = application && ['assessment_passed', 'kyc_pending', 'kyc_expired'].includes(application.status);
+  const onboardingMutable = application && ['exploring', 'training', 'assessment'].includes(application.status);
+  const reviewOnly = application && !appReadyForWork && !needsKyc && !onboardingMutable;
   const assessment = application?.latestAssessment ?? null;
 
   return (
@@ -427,7 +434,7 @@ export default function ListenerOnboardingPage() {
         </section>
       )}
 
-      {!loading && application && !appReadyForWork && !needsKyc && (
+      {!loading && application && onboardingMutable && (
         <section className="call-setup wide-card onboarding-card" aria-labelledby="training-title">
           <div className="section-heading compact-heading">
             <div>
@@ -453,7 +460,7 @@ export default function ListenerOnboardingPage() {
             })}
           </div>
 
-          {application.trainingComplete && !assessment && (
+          {application.trainingComplete && (!assessment || assessment.result === 'failed') && (
             <div className="assessment-panel">
               <h3>آزمون سناریویی</h3>
               {questions.map((question) => (
@@ -559,6 +566,26 @@ export default function ListenerOnboardingPage() {
           )}
 
           <button type="button" className="text-button" onClick={() => void refresh()}>تازه‌سازی وضعیت</button>
+        </section>
+      )}
+
+      {!loading && application && reviewOnly && (
+        <section className="call-setup wide-card onboarding-card" aria-labelledby="review-title">
+          <div className="section-heading compact-heading">
+            <div>
+              <p className="kicker">وضعیت درخواست</p>
+              <h2 id="review-title">این مرحله از داخل Web قابل تغییر نیست.</h2>
+            </div>
+            <span className="presence-pill">{statusLabel(application.status)}</span>
+          </div>
+          <p className="helper">
+            {application.status === 'rejected'
+              ? 'درخواست در وضعیت ردشده است. آموزش یا آزمون دوباره فقط وقتی باید باز شود که سرور صریحاً درخواست را به مرحله قابل‌ویرایش برگرداند.'
+              : application.status === 'suspended'
+                ? 'حساب فعلاً معلق است. Web اجازه Online شدن یا بازنویسی مراحل قبلی را از این صفحه نمی‌دهد.'
+                : 'درخواست وارد مرحله بررسی، قرارداد یا فرایند نهایی شده است. تا وقتی وضعیت واقعی سرور تغییر نکند، مراحل قبلی دوباره قابل ثبت نیستند.'}
+          </p>
+          <button type="button" className="text-button" onClick={() => void refresh()}>تازه‌سازی وضعیت واقعی</button>
         </section>
       )}
 

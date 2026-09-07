@@ -10,10 +10,12 @@ This file tracks branch-only work for `feat/v1-2-internet-voice-foundation`. It 
 - Transport-neutral call state and server-side Internet Voice signaling are implemented.
 - Billing starts only after both participants report media connected.
 - 10/30/60 minute call caps, HOLD accounting, +15/+30 extension, 90-second no-answer and server-side lifecycle safeguards are implemented and guarded by tests.
-- Connected Internet Voice calls now persist separate Caller and Listener liveness heartbeats. If either side stops confirming a live media connection for 30 seconds, the DB sweeper terminates the call instead of letting a dead session bill until its cap.
+- Connected Internet Voice calls persist separate Caller and Listener liveness heartbeats. If either side stops confirming a live media connection for 30 seconds, the DB sweeper terminates the call instead of letting a dead session bill until its cap.
 - Liveness-timeout settlement uses the older of the two latest participant heartbeat timestamps as the effective billing end, so the crash/network-detection grace window itself is not charged.
 - Web Caller, Web Listener, Mobile Caller and Mobile Listener send billing liveness only while their actual `RTCPeerConnection` state is `connected`.
-- API readiness now fails closed unless both liveness columns and the effective-end settlement function are installed in the database.
+- The four WebRTC clients now publish authenticated `reconnecting` / `reconnected` signaling state on peer disconnect/recovery. A manual or Safety End may move billing earlier only when the authenticated counterparty has an unresolved `reconnecting` signal; the ending client cannot submit its own billing timestamp or impersonate the counterparty role.
+- Manual/Safety settlement therefore stops at the counterparty's server-stamped unresolved disconnect when one exists, while a recovered or normally connected call continues to settle against server time.
+- API readiness fails closed unless both liveness columns and the effective-end settlement function are installed in the database.
 - Web/PWA Caller has a real browser WebRTC flow with microphone permission, signaling, connected-time display, warnings, extension, end and safety exit.
 - Android Caller has native Internet Voice support and explicit age / Terms / Safety consent parity.
 - Listener profile disclosures distinguish platform-verified fields from self-declared fields on Web and Mobile.
@@ -34,15 +36,17 @@ This file tracks branch-only work for `feat/v1-2-internet-voice-foundation`. It 
 - Production TURN/TURNS, production v1.2 schema migration, payment rails, KYC provider activation and other provider-dependent gates remain closed until their real infrastructure is approved and verified.
 - No KYC result is synthesized from UI state or manual admin review. Verification remains a provider-dependent gate.
 - No WebRTC connection is reconstructed or reported as connected merely because the server still has an active call record after a page/app media context is lost.
-- A server call record alone is no longer sufficient to keep billing alive: both participant liveness timestamps must remain fresh.
+- A server call record alone is not sufficient to keep billing alive: both participant liveness timestamps must remain fresh.
+- Client-supplied timestamps are never accepted as settlement cutoffs; the manual-disconnect cutoff uses server-created signaling timestamps and only from the authenticated counterparty role.
 
 ## QA status
 
-- Full Foundation QA succeeded on branch SHA `7a8f2d8a93de7d04936787979d82da8177232644`: Foundation tests, invariants/security verification, workspace typecheck, Web/Admin production builds, Android prebuild/export, iOS export and API bundle all passed.
-- Subsequent focused regression guards passed for Listener assessment state hardening, Listener KYC/Mobile post-onboarding state hardening, server liveness settlement and all four client heartbeat gates.
-- A later full QA run correctly exposed one stale KYC test assertion after authentication was intentionally moved before provider-readiness disclosure; the assertion was updated to preserve the stronger order `auth -> provider gate -> body read -> encryption/write` without weakening fail-closed payload handling.
+- Full Foundation QA succeeded on branch SHA `ad0cbe89cc02e58f6430ddcf96d96733f3b9b2e8`: Foundation tests, invariants/security verification, workspace typecheck, Web/Admin production builds, Android prebuild/export, iOS export and API bundle all passed.
+- Focused regression guards then passed for manual disconnect settlement, Mobile Internet Voice behavior and the server-owned liveness sweeper on patch SHA `72f451cb4d25aa5a3d0847670fcd8a857a10116c`.
+- Earlier focused regression guards also passed for Listener assessment state hardening, Listener KYC/Mobile post-onboarding state hardening, server liveness settlement and all four client heartbeat gates.
+- A prior full QA run correctly exposed one stale KYC test assertion after authentication was intentionally moved before provider-readiness disclosure; the assertion was updated to preserve the stronger order `auth -> provider gate -> body read -> encryption/write` without weakening fail-closed payload handling.
 - Bot-authored patch commits may cause pull-request workflow runs to stop at `action_required` before jobs are created; those are not test failures.
-- A fresh full Foundation QA run is required on the current exact branch HEAD before this branch is branch-QA complete.
+- A fresh full Foundation QA run is required on the current exact branch HEAD after the manual-disconnect settlement change before this branch is branch-QA complete.
 
 ## Not authorized by this branch work
 

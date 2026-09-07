@@ -6,16 +6,18 @@ const source = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen
 
 test('caller UI keeps the created call before starting Internet Voice so a failure cannot orphan its reservation', () => {
   const persistIndex = source.indexOf('setCall(requested as CallerCallResponse)');
-  const voiceIndex = source.indexOf('startInternetVoiceCall(token, requested.callId)');
+  const captureIndex = source.indexOf('const startedCallId = requested.callId');
+  const voiceIndex = source.indexOf('startInternetVoiceCall(token, startedCallId)');
   assert.ok(persistIndex >= 0, 'requested call must be retained in UI state');
-  assert.ok(voiceIndex >= 0, 'same call id must start Internet Voice');
-  assert.ok(persistIndex < voiceIndex, 'callId must be retained before Internet Voice start begins');
+  assert.ok(captureIndex > persistIndex, 'same call id must be captured after retaining the requested call');
+  assert.ok(voiceIndex > captureIndex, 'captured call id must start Internet Voice');
 });
 
 test('Android primary path never submits a PSTN dispatch retry', () => {
   assert.doesNotMatch(source, /dispatchCall\(/);
   assert.doesNotMatch(source, /retryDispatch/);
-  assert.match(source, /startInternetVoiceCall\(token, requested\.callId\)/);
+  assert.match(source, /const startedCallId = requested\.callId/);
+  assert.match(source, /startInternetVoiceCall\(token, startedCallId\)/);
   assert.match(source, /getInternetVoiceConfig\(token, call\.callId\)/);
 });
 

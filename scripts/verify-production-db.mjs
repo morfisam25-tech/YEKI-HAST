@@ -24,7 +24,7 @@ try {
     ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
     ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
     ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
-    ['0006_internet_voice_server_sweeper.sql', 'efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254'],
+    ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
   ]);
   const migrationMap = new Map();
   for (const migration of migrations.rows) {
@@ -121,25 +121,64 @@ try {
   const sweeper = await pool.query(`
     SELECT
       EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron,
+      current_setting('cron.database_name', true)=current_database() AS pg_cron_database,
       to_regprocedure('app.expire_internet_voice_preconnect(uuid,text)') IS NOT NULL AS preconnect_fn,
-      to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean)') IS NOT NULL AS settlement_fn,
-      to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS sweep_fn
+      to_regprocedure('app.settle_internet_voice_call(uuid,text,text,boolean,timestamptz)') IS NOT NULL AS settlement_fn,
+      to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS sweep_fn,
+      to_regprocedure('app.ensure_internet_voice_sweeper_job()') IS NOT NULL AS ensure_job_fn,
+      to_regprocedure('app.stop_internet_voice_sweeper_if_idle()') IS NOT NULL AS stop_job_fn
   `);
   const sweeperRow = sweeper.rows[0] ?? {};
   if (sweeperRow.pg_cron !== true) throw new Error('pg_cron extension missing');
+  if (sweeperRow.pg_cron_database !== true) throw new Error('pg_cron database target mismatch');
   if (sweeperRow.preconnect_fn !== true) throw new Error('Internet Voice preconnect finalizer missing');
   if (sweeperRow.settlement_fn !== true) throw new Error('Internet Voice settlement function missing');
   if (sweeperRow.sweep_fn !== true) throw new Error('Internet Voice sweeper function missing');
+  if (sweeperRow.ensure_job_fn !== true) throw new Error('Internet Voice sweeper ensure function missing');
+  if (sweeperRow.stop_job_fn !== true) throw new Error('Internet Voice sweeper stop function missing');
 
-  const cronJob = await pool.query(`
-    SELECT 1
-    FROM cron.job
-    WHERE jobname='yeki_hast_internet_voice_sweep'
-      AND schedule='* * * * *'
-      AND active=true
-    LIMIT 1
+  // The sweeper is intentionally on-demand. With no active Internet Voice session there
+  // may be no cron row at all. When an active session exists, exactly one valid 10-second
+  // job must exist. Any stale/misconfigured row is a release blocker either way.
+  const scheduler = await pool.query(`
+    SELECT
+      (
+        SELECT count(*)::int
+        FROM app.call_sessions
+        WHERE transport='internet_voice'
+          AND status IN ('calling_listener','connected')
+      ) AS active_voice_calls,
+      (
+        SELECT count(*)::int
+        FROM cron.job
+        WHERE jobname='yeki_hast_internet_voice_sweep'
+          AND schedule='10 seconds'
+          AND active=true
+          AND database=current_database()
+          AND username=current_user
+          AND command='SELECT * FROM app.sweep_internet_voice_sessions(100);'
+      ) AS valid_jobs,
+      (
+        SELECT count(*)::int
+        FROM cron.job
+        WHERE jobname='yeki_hast_internet_voice_sweep'
+          AND NOT (
+            schedule='10 seconds'
+            AND active=true
+            AND database=current_database()
+            AND username=current_user
+            AND command='SELECT * FROM app.sweep_internet_voice_sessions(100);'
+          )
+      ) AS invalid_jobs
   `);
-  if (!cronJob.rowCount) throw new Error('Internet Voice sweeper cron job missing');
+  const schedulerRow = scheduler.rows[0] ?? {};
+  const activeVoiceCalls = Number(schedulerRow.active_voice_calls ?? -1);
+  const validJobs = Number(schedulerRow.valid_jobs ?? -1);
+  const invalidJobs = Number(schedulerRow.invalid_jobs ?? -1);
+  if (!Number.isSafeInteger(activeVoiceCalls) || activeVoiceCalls < 0) throw new Error('Internet Voice active-call count invalid');
+  if (!Number.isSafeInteger(validJobs) || validJobs < 0 || validJobs > 1) throw new Error('Internet Voice sweeper job count invalid');
+  if (!Number.isSafeInteger(invalidJobs) || invalidJobs !== 0) throw new Error('Internet Voice sweeper cron job invalid');
+  if (activeVoiceCalls > 0 && validJobs !== 1) throw new Error('Internet Voice sweeper cron job missing for active session');
 
   const emailSchema = await pool.query(`
     SELECT

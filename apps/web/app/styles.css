@@ -18,10 +18,12 @@ body {
 }
 
 button,
-input { font: inherit; }
+input,
+textarea { font: inherit; }
 
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
   outline: 3px solid #7f9278;
   outline-offset: 2px;
@@ -132,22 +134,33 @@ h2 {
 
 .helper { margin: 8px 0 0; }
 
-label {
+label,
+.field-label {
   margin-bottom: -8px;
   font-size: 14px;
   font-weight: 700;
 }
 
-input {
+input,
+textarea {
   width: 100%;
-  min-height: 52px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fbfaf7;
   color: var(--ink);
   padding: 12px 14px;
-  direction: ltr;
   text-align: right;
+}
+
+input {
+  min-height: 52px;
+  direction: ltr;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.8;
+  direction: rtl;
 }
 
 .code-input {
@@ -306,7 +319,8 @@ button:disabled {
 }
 
 .listener-card.selected,
-.duration-options button.selected {
+.duration-options button.selected,
+.language-button.selected {
   border: 2px solid #5d7058;
   background: #f2f6ef;
   color: var(--ink);
@@ -354,12 +368,14 @@ button:disabled {
   width: 100%;
 }
 
-.listener-work-page {
+.listener-work-page,
+.listener-onboarding-page {
   display: grid;
   gap: 26px;
 }
 
-.listener-work-hero {
+.listener-work-hero,
+.listener-onboarding-hero {
   display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
   gap: 42px;
@@ -370,6 +386,16 @@ button:disabled {
 
 .listener-work-hero h1 {
   font-size: clamp(42px, 7vw, 64px);
+}
+
+.listener-onboarding-hero h1 {
+  font-size: clamp(36px, 6vw, 56px);
+}
+
+.listener-onboarding-hero > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.95;
 }
 
 .work-status-copy {
@@ -492,6 +518,131 @@ button:disabled {
   width: 100%;
 }
 
+.onboarding-card {
+  max-width: 860px;
+  margin-inline: auto;
+}
+
+.listener-onboarding-page input:not([dir='ltr']) {
+  direction: rtl;
+}
+
+.language-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.language-button {
+  min-height: 48px;
+  background: #f1efe9;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.training-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.training-card-done {
+  background: #f0f4ed;
+  border-color: #b7c3af;
+}
+
+.training-card h3,
+.assessment-panel h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.training-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.assessment-panel,
+.kyc-form {
+  display: grid;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.question-card {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f6f2;
+}
+
+.question-card legend {
+  padding: 0 6px;
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+.answer-choice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 0;
+  padding: 11px;
+  border-radius: 6px;
+  background: #ffffff;
+  font-weight: 400;
+  line-height: 1.75;
+}
+
+.answer-choice input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  padding: 0;
+}
+
+.status-notice {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid #cbd6c5;
+  border-radius: 8px;
+  background: #eef3ea;
+}
+
+.status-notice span {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.warning-notice {
+  border-color: #e1d2ab;
+  background: #fbf2df;
+}
+
+.ready-card {
+  background: #f7faf5;
+  border-color: #b7c3af;
+}
+
 @media (max-width: 800px) {
   main { padding-top: 12px; }
   .site-header span { display: none; }
@@ -511,11 +662,14 @@ button:disabled {
   .legal-page { padding-top: 40px; }
   .listener-grid { grid-template-columns: 1fr 1fr; }
   .listener-work-hero,
+  .listener-onboarding-hero,
   .work-grid {
     grid-template-columns: 1fr;
   }
-  .listener-work-hero { gap: 18px; }
+  .listener-work-hero,
+  .listener-onboarding-hero { gap: 18px; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
+  .language-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -525,7 +679,9 @@ button:disabled {
   .live-call .duration-options { grid-template-columns: 1fr 1fr; }
   .duration-options.two-column,
   .summary-grid,
-  .recent-row {
+  .recent-row,
+  .training-grid,
+  .language-grid {
     grid-template-columns: 1fr;
   }
   .recent-row > div:last-child { text-align: right; }

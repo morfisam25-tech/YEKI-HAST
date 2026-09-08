@@ -17,24 +17,32 @@ function headersFor(config: any): Map<string, string> {
   return new Map((catchAll.headers ?? []).map((header: any) => [String(header.key).toLowerCase(), String(header.value)]));
 }
 
-test('Web and Admin deny framing and restrict browser capabilities by default', () => {
-  for (const config of [webVercel, adminVercel]) {
-    const headers = headersFor(config);
-    assert.equal(headers.get('x-content-type-options'), 'nosniff');
-    assert.equal(headers.get('x-frame-options'), 'DENY');
-    assert.equal(headers.get('referrer-policy'), 'no-referrer');
-    assert.equal(headers.get('cross-origin-opener-policy'), 'same-origin');
-    assert.equal(headers.get('cross-origin-resource-policy'), 'same-origin');
-    assert.equal(headers.get('permissions-policy'), 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
+function assertCommonBrowserHardening(config: any) {
+  const headers = headersFor(config);
+  assert.equal(headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(headers.get('x-frame-options'), 'DENY');
+  assert.equal(headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(headers.get('cross-origin-resource-policy'), 'same-origin');
 
-    const csp = headers.get('content-security-policy') ?? '';
-    assert.match(csp, /default-src 'self'/);
-    assert.match(csp, /frame-ancestors 'none'/);
-    assert.match(csp, /object-src 'none'/);
-    assert.match(csp, /form-action 'self'/);
-    assert.match(csp, /connect-src 'self'/);
-    assert.doesNotMatch(csp, /https?:\/\//);
-  }
+  const csp = headers.get('content-security-policy') ?? '';
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /form-action 'self'/);
+  assert.match(csp, /connect-src 'self'/);
+  assert.doesNotMatch(csp, /https?:\/\//);
+  return headers;
+}
+
+test('Web keeps browser hardening while allowing only first-party microphone use for WebRTC', () => {
+  const headers = assertCommonBrowserHardening(webVercel);
+  assert.equal(headers.get('permissions-policy'), 'camera=(), geolocation=(), microphone=(self), payment=(), usb=()');
+});
+
+test('Admin denies unnecessary browser capabilities', () => {
+  const headers = assertCommonBrowserHardening(adminVercel);
+  assert.equal(headers.get('permissions-policy'), 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
 });
 
 test('production browser sessions use __Host cookies and strict cookie attributes', () => {

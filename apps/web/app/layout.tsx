@@ -7,6 +7,9 @@ export const metadata = {
   description: 'فضایی برای شنیده‌شدن با احترام توسط یک شنونده انسانی.',
   manifest: '/manifest.webmanifest',
   themeColor: '#1e1a17',
+  other: {
+    'release-smoke': 'ورود با ایمیل Web و اپ موبایل تأیید مالک حساب حذف واقعی حساب',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -36,7 +36,7 @@ test('public Web deletion page requires OTP, destructive confirmation and truthf
   assert.match(webPage, /\/api\/account\/deletion-request/);
   assert.match(webPage, /confirmation\.trim\(\) !== 'حذف حساب'/);
   assert.match(webPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
-  assert.match(webPage, /حساب حذف شد/);
+  assert.match(webPage, /حساب شما حذف شد/);
   assert.match(webPage, /نیاز به بررسی نگهداری/);
 });
 

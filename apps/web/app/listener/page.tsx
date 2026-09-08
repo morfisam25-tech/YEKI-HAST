@@ -482,7 +482,7 @@ export default function ListenerOnboardingPage() {
     <main className="listener-onboarding-page">
       <header className="site-header">
         <a className="brand" href="/">یکی هست</a>
-        <span>مسیر شنونده · Web/PWA</span>
+        <span>مسیر شنونده · وب</span>
       </header>
 
       <section className="listener-onboarding-hero">
@@ -704,7 +704,7 @@ export default function ListenerOnboardingPage() {
           <div className="section-heading compact-heading">
             <div>
               <p className="kicker">وضعیت درخواست</p>
-              <h2 id="review-title">این مرحله از داخل Web قابل تغییر نیست.</h2>
+              <h2 id="review-title">این مرحله از داخل وب قابل تغییر نیست.</h2>
             </div>
             <span className="presence-pill">{statusLabel(application.status)}</span>
           </div>
@@ -723,7 +723,7 @@ export default function ListenerOnboardingPage() {
         <section className="call-setup wide-card onboarding-card ready-card" aria-labelledby="ready-title">
           <p className="kicker">آماده کار</p>
           <h2 id="ready-title">حساب شنونده برای حالت کاری آماده است.</h2>
-          <p className="helper">Online شدن هنوز به معنی Push پس‌زمینه نیست. در Web، تا زمان آماده‌شدن اعلان واقعی باید تب حالت کاری باز و فعال بماند.</p>
+          <p className="helper">آنلاین‌شدن هنوز به معنی دریافت اعلان در پس‌زمینه نیست. در وب، تا زمان آماده‌شدن اعلان واقعی باید تب حالت کاری باز و فعال بماند.</p>
           <a className="primary-link" href="/listener/work">بازکردن حالت کاری شنونده</a>
         </section>
       )}

@@ -23,9 +23,9 @@ test('mailbox usability is not treated as proven by source alone and production 
   assert.doesNotMatch(emailSmoke, /imap\.gmail\.com/);
 });
 
-test('public home states the closed voice and payment gate truthfully', () => {
-  assert.match(home, /تماس صوتی و پرداخت هنوز برای استفاده عمومی/);
-  assert.match(home, /سرویس‌های بیرونی لازم فعال می‌شوند/);
+test('public home states the closed caller gate truthfully without exposing internal launch mechanics', () => {
+  assert.match(home, /گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده/);
+  assert.match(home, /مسیر شنونده‌شدن فعال است/);
   assert.doesNotMatch(home, /تماس صوتی را مستقیم از اینترنت/);
   assert.doesNotMatch(home, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
   assert.doesNotMatch(home, /۱۰، ۳۰ و ۶۰ دقیقه/);

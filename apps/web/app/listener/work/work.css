@@ -26,6 +26,18 @@
   box-sizing: border-box;
 }
 
+.listener-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .listener-work-header,
 .listener-work-hero,
 .listener-feedback,
@@ -226,7 +238,7 @@
 .listener-text-action:focus-visible,
 .listener-public-links a:focus-visible,
 .listener-work-brand:focus-visible {
-  outline: 3px solid rgba(52, 89, 74, 0.22);
+  outline: 3px solid #173f33;
   outline-offset: 3px;
 }
 

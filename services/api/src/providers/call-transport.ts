@@ -1,11 +1,19 @@
 import { validateTelephonyEnv } from './telephony.ts';
 
 export type CallTransportKind = 'internet_voice' | 'masked_pstn';
+export type InternetVoiceCredentialMode = 'none' | 'static' | 'cloudflare_short_lived';
 
 export type IceServerConfig = {
   urls: string | string[];
   username?: string;
   credential?: string;
+};
+
+export type InternetVoiceClientConfig = {
+  signalingMode: 'http_polling';
+  iceServers: IceServerConfig[];
+  relayConfigured: boolean;
+  iranDomesticPath: boolean;
 };
 
 export type CallTransportReadiness = {
@@ -15,6 +23,7 @@ export type CallTransportReadiness = {
     configured: boolean;
     relayConfigured: boolean;
     signalingMode: 'http_polling';
+    credentialMode: InternetVoiceCredentialMode;
     iceServers: IceServerConfig[];
     iranDomesticPathConfigured: boolean;
     iranIceServers: IceServerConfig[];
@@ -24,6 +33,17 @@ export type CallTransportReadiness = {
     configured: boolean;
   };
 };
+
+type CloudflareTurnConfig = {
+  keyId: string;
+  apiToken: string;
+  ttlSeconds: number;
+};
+
+const CLOUDFLARE_TURN_BASE_URL = 'https://rtc.live.cloudflare.com/v1/turn/keys';
+const CLOUDFLARE_TURN_DEFAULT_TTL_SECONDS = 14_400;
+const CLOUDFLARE_TURN_MAX_TTL_SECONDS = 172_800;
+const CLOUDFLARE_TURN_REQUEST_TIMEOUT_MS = 5_000;
 
 function readTransport(value: string | undefined, fallback: CallTransportKind): CallTransportKind {
   const normalized = value?.trim().toLowerCase();
@@ -92,6 +112,60 @@ function hasTurnRelay(servers: IceServerConfig[]): boolean {
   });
 }
 
+function readCloudflareTurnConfig(): CloudflareTurnConfig | null {
+  const keyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim() ?? '';
+  const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim() ?? '';
+  if (!keyId && !apiToken) return null;
+  if (!keyId || !apiToken) throw new Error('invalid_cloudflare_turn_config');
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(keyId)) throw new Error('invalid_cloudflare_turn_config');
+
+  const rawTtl = process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim();
+  const ttlSeconds = rawTtl ? Number(rawTtl) : CLOUDFLARE_TURN_DEFAULT_TTL_SECONDS;
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds < 60 || ttlSeconds > CLOUDFLARE_TURN_MAX_TTL_SECONDS) {
+    throw new Error('invalid_cloudflare_turn_ttl');
+  }
+  return { keyId, apiToken, ttlSeconds };
+}
+
+function getInternetVoiceCredentialMode(staticIceServers: IceServerConfig[]): InternetVoiceCredentialMode {
+  if (readCloudflareTurnConfig()) return 'cloudflare_short_lived';
+  return staticIceServers.length > 0 ? 'static' : 'none';
+}
+
+async function generateCloudflareIceServers(config: CloudflareTurnConfig): Promise<IceServerConfig[]> {
+  const endpoint = `${CLOUDFLARE_TURN_BASE_URL}/${encodeURIComponent(config.keyId)}/credentials/generate-ice-servers`;
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${config.apiToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ ttl: config.ttlSeconds }),
+      signal: AbortSignal.timeout(CLOUDFLARE_TURN_REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error('cloudflare_turn_credentials_unavailable');
+  }
+  if (response.status !== 201) throw new Error('cloudflare_turn_credentials_unavailable');
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('cloudflare_turn_credentials_unavailable');
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('cloudflare_turn_credentials_unavailable');
+  }
+  const iceServers = parseIceServers(JSON.stringify((payload as Record<string, unknown>).iceServers));
+  if (!iceServers.length || !hasTurnRelay(iceServers)) {
+    throw new Error('cloudflare_turn_credentials_unavailable');
+  }
+  return iceServers;
+}
+
 function isMaskedPstnConfigured(): boolean {
   try {
     validateTelephonyEnv();
@@ -106,6 +180,8 @@ export function getCallTransportReadiness(): CallTransportReadiness {
   // PSTN is an explicit operational fallback, never an implicit launch dependency.
   const fallback = readFallbackTransport(process.env.CALL_FALLBACK_TRANSPORT ?? 'none');
   const iceServers = parseIceServers(process.env.INTERNET_VOICE_ICE_SERVERS_JSON);
+  const credentialMode = getInternetVoiceCredentialMode(iceServers);
+  const cloudflareConfigured = credentialMode === 'cloudflare_short_lived';
   const iranIceServers = parseIceServers(process.env.INTERNET_VOICE_IRAN_ICE_SERVERS_JSON);
   const iranControlPlaneBaseUrl = isPublicHttpsUrl(process.env.INTERNET_VOICE_IRAN_CONTROL_PLANE_BASE_URL);
 
@@ -113,9 +189,10 @@ export function getCallTransportReadiness(): CallTransportReadiness {
     primary,
     fallback: fallback === primary ? null : fallback,
     internetVoice: {
-      configured: iceServers.length > 0,
-      relayConfigured: hasTurnRelay(iceServers),
+      configured: cloudflareConfigured || iceServers.length > 0,
+      relayConfigured: cloudflareConfigured || hasTurnRelay(iceServers),
       signalingMode: 'http_polling',
+      credentialMode,
       iceServers,
       iranDomesticPathConfigured: iranIceServers.length > 0 && hasTurnRelay(iranIceServers) && Boolean(iranControlPlaneBaseUrl),
       iranIceServers,
@@ -143,19 +220,26 @@ export function validatePrimaryCallTransportEnv(): void {
   }
 }
 
-export function getInternetVoiceClientConfig(input?: { iranDomestic?: boolean }): {
-  signalingMode: 'http_polling';
-  iceServers: IceServerConfig[];
-  relayConfigured: boolean;
-  iranDomesticPath: boolean;
-} {
+export async function getInternetVoiceClientConfig(input?: { iranDomestic?: boolean }): Promise<InternetVoiceClientConfig> {
   const readiness = getCallTransportReadiness();
   const useIranDomestic = Boolean(input?.iranDomestic && readiness.internetVoice.iranDomesticPathConfigured);
-  const iceServers = useIranDomestic ? readiness.internetVoice.iranIceServers : readiness.internetVoice.iceServers;
+  if (useIranDomestic) {
+    return {
+      signalingMode: 'http_polling',
+      iceServers: readiness.internetVoice.iranIceServers,
+      relayConfigured: hasTurnRelay(readiness.internetVoice.iranIceServers),
+      iranDomesticPath: true,
+    };
+  }
+
+  const cloudflare = readCloudflareTurnConfig();
+  const iceServers = cloudflare
+    ? await generateCloudflareIceServers(cloudflare)
+    : readiness.internetVoice.iceServers;
   return {
     signalingMode: 'http_polling',
     iceServers,
     relayConfigured: hasTurnRelay(iceServers),
-    iranDomesticPath: useIranDomestic,
+    iranDomesticPath: false,
   };
 }

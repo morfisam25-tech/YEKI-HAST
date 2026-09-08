@@ -52,11 +52,22 @@ async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTra
   await client.query('DELETE FROM app.internet_voice_signals WHERE expires_at<=now()');
 }
 
+async function getVoiceClientConfigOr503() {
+  try {
+    return await getInternetVoiceClientConfig();
+  } catch {
+    throw new HttpError(503, 'internet_voice_turn_credentials_unavailable');
+  }
+}
+
 export async function startInternetVoiceCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
   const { userId } = await requireAuth(req);
   const readiness = getCallTransportReadiness();
   if (readiness.primary !== 'internet_voice') throw new HttpError(409, 'internet_voice_not_primary');
+  // Resolve short-lived TURN credentials before mutating call state. If the external TURN
+  // control plane is unavailable, the call stays in routing rather than becoming half-started.
+  const voiceClient = await getVoiceClientConfigOr503();
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{
@@ -118,7 +129,7 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     status: result.status,
     transport: 'internet_voice',
     noAnswerSeconds: NO_ANSWER_SECONDS,
-    client: getInternetVoiceClientConfig(),
+    client: voiceClient,
     idempotent: result.idempotent,
   });
 }
@@ -147,13 +158,14 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
     return { role, status: row.status };
   });
 
+  const voiceClient = await getVoiceClientConfigOr503();
   sendJson(res, 200, {
     callId: rawCallId,
     transport: 'internet_voice',
     role: result.role,
     status: result.status,
     noAnswerSeconds: NO_ANSWER_SECONDS,
-    client: getInternetVoiceClientConfig(),
+    client: voiceClient,
     readiness: {
       relayConfigured: readiness.internetVoice.relayConfigured,
       iranDomesticPathConfigured: readiness.internetVoice.iranDomesticPathConfigured,

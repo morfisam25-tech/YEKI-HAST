@@ -43,6 +43,11 @@ function baseEnv(): NodeJS.ProcessEnv {
     TERMS_OF_SERVICE_URL: 'https://example.test/terms',
     ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
     SUPPORT_EMAIL: 'support@example.test',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CLOUDFLARE_TURN_KEY_ID: 'turnkey12345678',
+    CLOUDFLARE_TURN_API_TOKEN: 'server-only-test-token',
+    CLOUDFLARE_TURN_TTL_SECONDS: '14400',
+    INTERNET_VOICE_ICE_SERVERS_JSON: '',
   };
 }
 
@@ -54,7 +59,7 @@ function runVerifier(env: NodeJS.ProcessEnv) {
   });
 }
 
-test('caller-open production security config passes only with commercial hosting and complete public release surface', () => {
+test('caller-open production security config passes only with commercial hosting, TURN and complete public release surface', () => {
   const result = runVerifier(baseEnv());
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /production security config verified/);
@@ -74,6 +79,37 @@ test('caller-open production security config fails closed when commercial hostin
   const result = runVerifier(env);
   assert.notEqual(result.status, 0);
   assert.match(`${result.stderr}\n${result.stdout}`, /COMMERCIAL_HOSTING_APPROVED is required/);
+});
+
+test('caller-open production security config fails closed without a TURN relay or Cloudflare TURN credentials', () => {
+  const env = baseEnv();
+  delete env.CLOUDFLARE_TURN_KEY_ID;
+  delete env.CLOUDFLARE_TURN_API_TOKEN;
+  delete env.CLOUDFLARE_TURN_TTL_SECONDS;
+  delete env.INTERNET_VOICE_ICE_SERVERS_JSON;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /requires a TURN\/TURNS relay or Cloudflare TURN credentials/);
+});
+
+test('caller-open production security config rejects a partial Cloudflare TURN secret pair', () => {
+  const env = baseEnv();
+  delete env.CLOUDFLARE_TURN_API_TOKEN;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /Cloudflare TURN key ID and API token must be configured together/);
+});
+
+test('caller-open production security config accepts a static TURN relay as an alternative provider mode', () => {
+  const env = baseEnv();
+  delete env.CLOUDFLARE_TURN_KEY_ID;
+  delete env.CLOUDFLARE_TURN_API_TOKEN;
+  delete env.CLOUDFLARE_TURN_TTL_SECONDS;
+  env.INTERNET_VOICE_ICE_SERVERS_JSON = JSON.stringify([
+    { urls: 'turns:turn.example.test:5349', username: 'temporary-user', credential: 'temporary-credential' },
+  ]);
+  const result = runVerifier(env);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test('caller-open production security config fails closed when account deletion surface is absent', () => {

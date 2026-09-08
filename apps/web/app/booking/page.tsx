@@ -78,11 +78,12 @@ function message(code: string): string {
     authentication_required: 'برای رزرو، ابتدا از صفحه اصلی وارد حساب شو.',
     caller_closed_beta_disabled: 'این بخش هنوز برای استفاده عمومی فعال نشده است.',
     caller_age_gate_required: 'قبل از رزرو باید شرایط سنی سرویس را تأیید کنی.',
+    caller_consent_required: 'برای رزرو باید قواعد استفاده و مرزهای ایمنی را هم بپذیری.',
     availability_not_bookable: 'این بازه دیگر قابل رزرو نیست. زمان دیگری را انتخاب کن.',
     booking_time_conflict: 'این زمان با یک رزرو دیگر تداخل دارد.',
     listener_language_unavailable: 'این شنونده در زبان انتخاب‌شده گفت‌وگو نمی‌کند.',
     booking_must_be_future: 'زمان رزرو باید در آینده باشد.',
-    insufficient_balance: 'برای شروع تماس در زمان رزرو، اعتبار کافی لازم است.',
+    insufficient_balance: 'برای شروع گفت‌وگو در زمان رزرو، اعتبار کافی لازم است.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'این کار انجام نشد. دوباره تلاش کن.';
@@ -119,11 +120,14 @@ export default function BookingPage() {
   const [languageCode, setLanguageCode] = useState('fa');
   const [maxSeconds, setMaxSeconds] = useState<600 | 1800 | 3600>(1800);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
   const [timeZone, setTimeZone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted;
   const selectedWindow = useMemo(
     () => availability.find((item) => item.id === availabilityId) ?? null,
     [availability, availabilityId],
@@ -199,7 +203,7 @@ export default function BookingPage() {
   }
 
   async function createReservation() {
-    if (!selected || !selectedWindow || !scheduledLocal || !ageConfirmed || busy) return;
+    if (!selected || !selectedWindow || !scheduledLocal || !policiesReady || busy) return;
     if (!clientTimeFits()) {
       setError('زمان انتخاب‌شده داخل بازه آزاد این شنونده نیست یا با رزرو دیگری تداخل دارد.');
       return;
@@ -210,7 +214,7 @@ export default function BookingPage() {
     try {
       await api('caller/age-gate', {
         method: 'POST',
-        body: JSON.stringify({ confirmed: true }),
+        body: JSON.stringify({ confirmed: true, termsAccepted: true, safetyAccepted: true }),
       });
       await api('bookings', {
         method: 'POST',
@@ -222,7 +226,7 @@ export default function BookingPage() {
           maxSeconds,
         }),
       });
-      setNotice('رزرو ثبت شد. ثبت رزرو به‌تنهایی مبلغی از اعتبار کم نمی‌کند؛ هزینه تماس فقط از زمان اتصال واقعی محاسبه می‌شود.');
+      setNotice('رزرو ثبت شد. خود رزرو هزینه‌ای ندارد؛ هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
       await refresh();
       await chooseListener(selected);
     } catch (cause) {
@@ -261,8 +265,8 @@ export default function BookingPage() {
             <span>همه زمان‌ها بر اساس ساعت همین دستگاه نمایش داده می‌شوند.</span>
             <strong>{timeZone || 'منطقه زمانی دستگاه'}</strong>
           </div>
-          <nav className={styles.nav}>
-            <a className={styles.link} href="/talk">تماس فوری</a>
+          <nav className={styles.nav} aria-label="مسیرهای گفت‌وگو">
+            <a className={styles.link} href="/talk">گفت‌وگوی فوری</a>
             <a className={styles.link} href="/">صفحه اصلی</a>
           </nav>
         </header>
@@ -363,7 +367,7 @@ export default function BookingPage() {
                 </div>
 
                 <label className={styles.field}>
-                  <span>شروع تماس · به وقت {timeZone || 'دستگاه شما'}</span>
+                  <span>شروع گفت‌وگو · به وقت {timeZone || 'دستگاه شما'}</span>
                   <input
                     className={styles.control}
                     type="datetime-local"
@@ -373,7 +377,7 @@ export default function BookingPage() {
                 </label>
 
                 <div className={styles.field}>
-                  <span>مدت تماس</span>
+                  <span>مدت گفت‌وگو</span>
                   <div className={styles.row}>
                     {([600, 1800, 3600] as const).map((seconds) => (
                       <button
@@ -389,7 +393,7 @@ export default function BookingPage() {
                 </div>
 
                 <label className={styles.field}>
-                  <span>زبان تماس</span>
+                  <span>زبان گفت‌وگو</span>
                   <select className={styles.control} value={languageCode} onChange={(event) => setLanguageCode(event.target.value)}>
                     {selected.languages.map((language) => (
                       <option key={language.code} value={language.code}>{language.nameFa || language.nameEn || language.code}</option>
@@ -405,22 +409,34 @@ export default function BookingPage() {
 
                 <div className={styles.trustNote}>
                   <strong>ثبت رزرو به‌تنهایی مبلغی از اعتبار کم نمی‌کند.</strong>
-                  <span>هزینه تماس فقط از زمان اتصال واقعی محاسبه می‌شود.</span>
+                  <span>هزینه فقط از زمان اتصال واقعی محاسبه می‌شود. اگر شنونده پاسخ ندهد، مبلغی از اعتبار کم نمی‌شود.</span>
                 </div>
 
-                <label className={styles.checkRow}>
-                  <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />
-                  <span>تأیید می‌کنم شرایط سنی استفاده از سرویس را دارم.</span>
-                </label>
+                <div className={styles.bookingConsent}>
+                  <p>این رزرو برای یک گفت‌وگوی محترمانه با شنونده است. سرویس جای اورژانس یا خدمات تخصصی پزشکی، روان‌شناسی و حقوقی نیست و اطلاعات تماس شخصی نباید ردوبدل شود.</p>
+                  <label className={styles.checkRow}>
+                    <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />
+                    <span>تأیید می‌کنم شرایط سنی استفاده از سرویس را دارم.</span>
+                  </label>
+                  <label className={styles.checkRow}>
+                    <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
+                    <span><a href="/terms">قواعد استفاده</a> را خوانده‌ام و می‌پذیرم.</span>
+                  </label>
+                  <label className={styles.checkRow}>
+                    <input type="checkbox" checked={safetyAccepted} onChange={(event) => setSafetyAccepted(event.target.checked)} />
+                    <span>مرزهای ایمنی، احترام و عدم تبادل اطلاعات تماس شخصی را می‌پذیرم.</span>
+                  </label>
+                </div>
 
                 <button
                   type="button"
-                  disabled={busy || !ageConfirmed || !clientTimeFits()}
+                  disabled={busy || !policiesReady || !clientTimeFits()}
                   className={styles.primary}
                   onClick={() => void createReservation()}
                 >
                   {busy ? 'در حال ثبت…' : 'ثبت این زمان'}
                 </button>
+                {!policiesReady && <p className={styles.helper}>برای ثبت رزرو، سه تأیید بالا لازم است.</p>}
                 {!clientTimeFits() && scheduledLocal && <p className={styles.helper}>زمان انتخاب‌شده باید کامل داخل یکی از بازه‌های آزاد باشد و با رزرو دیگری تداخل نداشته باشد.</p>}
               </>
             )}
@@ -431,6 +447,7 @@ export default function BookingPage() {
           <div>
             <p className={styles.eyebrow}>برنامه من</p>
             <h2 className={styles.heading}>رزروهای من</h2>
+            <p className={styles.helper}>تا وقتی رزرو شروع نشده، می‌توانی آن را از همین بخش لغو کنی.</p>
           </div>
           {bookings.length === 0 ? (
             <p className={styles.empty}>هنوز رزروی ثبت نشده است.</p>
@@ -446,12 +463,12 @@ export default function BookingPage() {
               <span className={styles.meta}>{fa(booking.maxBillableSeconds / 60)} دقیقه · {languageName(booking.languageCode, knownLanguages)}</span>
               {booking.status === 'booked' && (
                 <div className={styles.row}>
-                  <a className={styles.primaryLink} href={`/booking/call?bookingId=${encodeURIComponent(booking.id)}`}>ورود به تماس</a>
+                  <a className={styles.primaryLink} href={`/booking/call?bookingId=${encodeURIComponent(booking.id)}`}>ورود به گفت‌وگو</a>
                   <button type="button" disabled={busy} className={styles.danger} onClick={() => void cancelReservation(booking.id)}>لغو رزرو</button>
                 </div>
               )}
               {booking.status === 'initiated' && booking.callId && (
-                <a className={styles.primaryLink} href={`/booking/call?callId=${encodeURIComponent(booking.callId)}`}>ادامه تماس</a>
+                <a className={styles.primaryLink} href={`/booking/call?callId=${encodeURIComponent(booking.callId)}`}>ادامه گفت‌وگو</a>
               )}
             </article>
           ))}

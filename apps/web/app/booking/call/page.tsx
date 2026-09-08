@@ -443,7 +443,7 @@ export default function BookingCallPage() {
               <p className={styles.eyebrow}>آماده‌ای؟</p>
               <h2 className={styles.heading}>میکروفن را آماده کن</h2>
               <p className={styles.empty}>با زدن دکمه، مرورگر اجازه میکروفن می‌خواهد. اگر اجازه ندهی، گفت‌وگو شروع نمی‌شود.</p>
-              <CallCostQuote bookingId={bookingId} className={styles.trustNote} />
+              <CallCostQuote bookingId={bookingId} callId={existingCallId} className={styles.trustNote} />
               <button type="button" className={styles.primary} disabled={busy} onClick={() => void start()}>
                 آماده‌ام، شروع کن
               </button>

@@ -392,10 +392,10 @@ export default function ListenerWorkPage() {
         lastHeartbeatAt: result.status === 'offline' ? null : new Date().toISOString(),
       });
       setNotice(result.status === 'online'
-        ? 'Online شدی. تا وقتی این تب باز و فعال است درخواست تماس را می‌بینی.'
+        ? 'آنلاین شدی. تا وقتی این تب باز و فعال است درخواست تماس را می‌بینی.'
         : result.status === 'paused'
           ? 'دریافت تماس جدید موقتاً متوقف شد.'
-          : 'Offline شدی و تماس جدید برایت ارسال نمی‌شود.');
+          : 'آفلاین شدی و تماس جدید برایت ارسال نمی‌شود.');
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'presence_failed'));
     } finally {
@@ -455,7 +455,7 @@ export default function ListenerWorkPage() {
       setVoiceReady(true);
       setNotice(result.status === 'connected' || result.becameConnected
         ? 'تماس وصل شد. محاسبه زمان از اتصال واقعی دو طرف شروع می‌شود.'
-        : 'صدای این سمت آماده است؛ در انتظار اتصال کامل Caller…');
+        : 'صدای این سمت آماده است؛ در انتظار اتصال کامل مخاطب…');
       await refreshActive().catch(() => undefined);
     } catch {
       mediaConnectedSentRef.current = false;
@@ -572,7 +572,7 @@ export default function ListenerWorkPage() {
       cleanupRtc();
       if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای پاسخ تماس باید دسترسی میکروفن را فعال کنی.');
       else if (browserErrorName === 'NotFoundError') setError('میکروفن قابل استفاده پیدا نشد.');
-      else if (cause instanceof Error && cause.message === 'voice_offer_not_ready') setError('پیشنهاد صوتی Caller هنوز نرسیده است. وضعیت تماس را تازه کن و دوباره پاسخ بده.');
+      else if (cause instanceof Error && cause.message === 'voice_offer_not_ready') setError('پیشنهاد صوتی مخاطب هنوز نرسیده است. وضعیت تماس را تازه کن و دوباره پاسخ بده.');
       else if (cause instanceof Error && cause.message === 'invalid_voice_role') setError('نقش این نشست برای پاسخ Listener معتبر نیست.');
       else setError(messageFor(cause instanceof Error ? cause.message : 'voice_failed'));
     } finally {

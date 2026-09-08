@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReportPanel from '../../components/caller/ReportPanel';
 import styles from './talk.module.css';
 
 type Language = { code: string; nameFa: string; nameEn?: string | null; proficiency: string };
@@ -64,7 +65,7 @@ function formatRemaining(seconds: number): string {
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
-    authentication_required: 'برای تماس ابتدا از صفحه اصلی وارد حساب شو.',
+    authentication_required: 'برای شروع، ابتدا از صفحه اصلی وارد حساب شو.',
     caller_closed_beta: 'این بخش هنوز برای استفاده عمومی فعال نشده است.',
     caller_closed_beta_disabled: 'این بخش هنوز برای استفاده عمومی فعال نشده است.',
     caller_age_policy_not_configured: 'شرایط سنی این بخش هنوز آماده نشده است.',
@@ -75,7 +76,7 @@ function messageFor(code: string): string {
     insufficient_balance_for_extension: 'اعتبار برای این تمدید کافی نیست.',
     call_transport_not_configured: 'مسیر امن صدا در این محیط هنوز آماده نیست.',
     voice_relay_not_ready: 'مسیر امن صدا در این محیط هنوز آماده نیست.',
-    caller_call_already_active: 'یک تماس فعال از قبل وجود دارد.',
+    caller_call_already_active: 'یک گفت‌وگوی فعال از قبل وجود دارد.',
   };
   return messages[code] ?? 'این کار انجام نشد. دوباره تلاش کن.';
 }
@@ -101,6 +102,7 @@ export default function TalkPage() {
   const [safetyAccepted, setSafetyAccepted] = useState(false);
   const [phase, setPhase] = useState<CallPhase>('idle');
   const [callId, setCallId] = useState<string | null>(null);
+  const [endedBySafety, setEndedBySafety] = useState(false);
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
   const [maxBillableSeconds, setMaxBillableSeconds] = useState<number>(capSeconds);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
@@ -126,8 +128,8 @@ export default function TalkPage() {
     if (phase === 'preparing') return 'در حال آماده‌کردن میکروفن…';
     if (phase === 'ringing') return 'در حال زنگ‌زدن به شنونده…';
     if (phase === 'connecting') return 'شنونده پاسخ داده؛ صدا در حال وصل‌شدن است…';
-    if (phase === 'connected') return 'تماس وصل است.';
-    if (phase === 'ended') return 'تماس پایان یافته است.';
+    if (phase === 'connected') return 'صدا وصل است.';
+    if (phase === 'ended') return 'گفت‌وگو پایان یافته است.';
     return 'آماده شروع';
   }, [connectionUnstable, phase]);
 
@@ -203,15 +205,16 @@ export default function TalkPage() {
         if (result.timing.remainingSeconds !== null) setRemainingSeconds(result.timing.remainingSeconds);
         setWarning(result.timing.warning);
         if (result.terminal) {
+          setEndedBySafety(false);
           setPhase('ended');
           setRemainingSeconds(0);
           setWarning(null);
-          setNotice(result.capReached ? 'زمان انتخاب‌شده تمام شد و تماس پایان یافت.' : 'تماس پایان یافت.');
+          setNotice(result.capReached ? 'زمان انتخاب‌شده تمام شد و گفت‌وگو پایان یافت.' : 'گفت‌وگو پایان یافت.');
           cleanupRtc();
           void refreshMarketplace();
         }
       } catch {
-        // The server remains authoritative for timing; retry on the next heartbeat.
+        // Server timing remains authoritative; retry on the next supported heartbeat.
       } finally {
         running = false;
       }
@@ -262,7 +265,7 @@ export default function TalkPage() {
           if (noAnswerRef.current) clearTimeout(noAnswerRef.current);
           setConnectionUnstable(false);
           setPhase('connected');
-          setNotice('تماس وصل شد. هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
+          setNotice('صدا وصل شد. هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
           await syncCallTiming(id);
         }
       } catch {
@@ -287,7 +290,7 @@ export default function TalkPage() {
         }).catch(() => undefined);
       }
       if (pc.connectionState === 'disconnected') setNotice('اتصال ناپایدار شده؛ در حال تلاش برای برگشت صدا…');
-      if (pc.connectionState === 'failed') setError('اتصال صدا قطع شد. می‌توانی تماس را پایان بدهی و دوباره تلاش کنی.');
+      if (pc.connectionState === 'failed') setError('اتصال صدا قطع شد. می‌توانی گفت‌وگو را پایان بدهی و دوباره تلاش کنی.');
     };
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') void markMediaConnected();
@@ -329,9 +332,10 @@ export default function TalkPage() {
           if (noAnswerRef.current) clearTimeout(noAnswerRef.current);
           setConnectionUnstable(false);
           setPhase('connected');
-          setNotice('تماس وصل شد. هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
+          setNotice('صدا وصل شد. هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
           await syncCallTiming(id);
         } else if (result.status === 'missed') {
+          setEndedBySafety(false);
           setPhase('ended');
           setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
           cleanupRtc();
@@ -347,6 +351,7 @@ export default function TalkPage() {
     noAnswerRef.current = setTimeout(() => {
       void api<{ status: string }>(`calls/${id}/voice/no-answer`, { method: 'POST', body: '{}' })
         .then(() => {
+          setEndedBySafety(false);
           setPhase('ended');
           setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
           cleanupRtc();
@@ -358,6 +363,8 @@ export default function TalkPage() {
 
   function chooseListener(listener: Listener) {
     setSelected(listener);
+    setEndedBySafety(false);
+    setCallId(null);
     const preferred = listener.languages.find((item) => item.code === languageFilter)
       ?? listener.languages.find((item) => item.code === 'fa')
       ?? listener.languages[0];
@@ -368,6 +375,7 @@ export default function TalkPage() {
   async function startCall() {
     if (!selected || busy || !policiesReady) return;
     setBusy(true);
+    setEndedBySafety(false);
     setPhase('preparing');
     setError('');
     setNotice('در حال آماده‌کردن میکروفن…');
@@ -389,7 +397,7 @@ export default function TalkPage() {
         body: JSON.stringify({
           clientRequestId: `web-${crypto.randomUUID()}`,
           listenerId: selected.id,
-          listenerGender: 'any',
+          listenerGender: selected.gender,
           languageCode: callLanguageCode,
           maxSeconds: capSeconds,
         }),
@@ -415,7 +423,7 @@ export default function TalkPage() {
       setPhase('idle');
       const code = cause instanceof Error ? cause.message : 'call_failed';
       const browserErrorName = typeof DOMException !== 'undefined' && cause instanceof DOMException ? cause.name : '';
-      if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای تماس باید دسترسی میکروفن را فعال کنی.');
+      if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای شروع باید دسترسی میکروفن را فعال کنی.');
       else if (browserErrorName === 'NotFoundError') setError('میکروفن قابل استفاده پیدا نشد.');
       else setError(messageFor(code));
     } finally {
@@ -433,7 +441,7 @@ export default function TalkPage() {
         body: JSON.stringify({ extensionMinutes: minutes, clientRequestId: `web-${crypto.randomUUID()}` }),
       });
       setMaxBillableSeconds(result.maxBillableSeconds);
-      setNotice(`${faNumber(minutes)} دقیقه به زمان تماس اضافه شد.`);
+      setNotice(`${faNumber(minutes)} دقیقه به زمان گفت‌وگو اضافه شد.`);
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'extend_failed'));
     } finally {
@@ -453,16 +461,17 @@ export default function TalkPage() {
         method: 'POST',
         body: JSON.stringify(body),
       });
+      setEndedBySafety(path === 'safety-exit');
       setNotice(path === 'safety-exit'
-        ? 'تماس فوراً پایان یافت و این شنونده برای تو مسدود شد.'
+        ? 'گفت‌وگو فوراً پایان یافت و این شنونده برای تو مسدود شد.'
         : result.billableSeconds === undefined
-          ? 'تماس پایان یافت.'
-          : `تماس پایان یافت. مدت قابل محاسبه: ${faNumber(result.billableSeconds)} ثانیه.`);
+          ? 'گفت‌وگو پایان یافت.'
+          : `گفت‌وگو پایان یافت. مدت محاسبه‌شده: ${faNumber(result.billableSeconds)} ثانیه.`);
       setPhase('ended');
       cleanupRtc();
       await refreshMarketplace();
     } catch {
-      setError('پایان تماس تأیید نشد. دوباره تلاش کن.');
+      setError('پایان گفت‌وگو تأیید نشد. دوباره تلاش کن.');
     } finally {
       setBusy(false);
     }
@@ -489,6 +498,19 @@ export default function TalkPage() {
 
         {(phase === 'idle' || phase === 'ended') ? (
           <>
+            {phase === 'ended' && endedBySafety && callId && (
+              <section className={styles.section} aria-labelledby="after-safety-title">
+                <div>
+                  <p className={styles.eyebrow}>بعد از خروج</p>
+                  <h2 id="after-safety-title" className={styles.heading}>اگر لازم است، رفتار را هم گزارش کن</h2>
+                  <p className={styles.helper}>شنونده همین حالا برای تو مسدود شده است. گزارش‌کردن اختیاری است.</p>
+                </div>
+                <div className={styles.reportArea}>
+                  <ReportPanel callId={callId} endpoint="safety/report" ended />
+                </div>
+              </section>
+            )}
+
             <section className={styles.section} aria-labelledby="listeners-title">
               <div className={styles.sectionHeading}>
                 <div>
@@ -556,14 +578,14 @@ export default function TalkPage() {
               <section className={styles.section} aria-labelledby="call-title">
                 <div className={styles.sectionHeading}>
                   <div>
-                    <p className={styles.eyebrow}>تماس با {selected.nickname}</p>
-                    <h2 id="call-title" className={styles.heading}>قبل از تماس</h2>
+                    <p className={styles.eyebrow}>گفت‌وگو با {selected.nickname}</p>
+                    <h2 id="call-title" className={styles.heading}>قبل از شروع</h2>
                   </div>
                 </div>
 
                 <div className={styles.setupGrid}>
                   <div className={styles.choiceBlock}>
-                    <span className={styles.label}>مدت تماس</span>
+                    <span className={styles.label}>مدت گفت‌وگو</span>
                     <div className={styles.choiceRow}>
                       {([600, 1800, 3600] as const).map((seconds) => (
                         <button
@@ -580,7 +602,7 @@ export default function TalkPage() {
                   </div>
 
                   <label className={styles.field}>
-                    <span>زبان تماس</span>
+                    <span>زبان گفت‌وگو</span>
                     <select value={callLanguageCode} onChange={(event) => setCallLanguageCode(event.target.value)}>
                       {selected.languages.map((language) => (
                         <option key={language.code} value={language.code}>{language.nameFa || language.nameEn || language.code}</option>
@@ -611,9 +633,9 @@ export default function TalkPage() {
                 </div>
 
                 <button type="button" className={styles.primary} disabled={!policiesReady || busy} onClick={() => void startCall()}>
-                  {busy ? 'در حال آماده‌کردن…' : `تماس با ${selected.nickname}`}
+                  {busy ? 'در حال آماده‌کردن…' : `شروع گفت‌وگو با ${selected.nickname}`}
                 </button>
-                {!policiesReady && <p className={styles.helper}>برای شروع تماس، سه تأیید بالا لازم است.</p>}
+                {!policiesReady && <p className={styles.helper}>برای شروع، سه تأیید بالا لازم است.</p>}
               </section>
             )}
           </>
@@ -621,7 +643,14 @@ export default function TalkPage() {
           <section className={styles.liveCard} aria-labelledby="live-call-title">
             <p className={styles.eyebrow}>گفت‌وگو با</p>
             <h2 id="live-call-title" className={styles.liveName}>{selected?.nickname ?? 'شنونده'}</h2>
-            <div className={`${styles.liveState} ${connectionUnstable ? styles.liveStateWarning : ''}`}>{phaseText}</div>
+            <div
+              className={`${styles.liveState} ${connectionUnstable ? styles.liveStateWarning : ''}`}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {phaseText}
+            </div>
 
             {phase === 'connected' && remainingSeconds !== null && (
               <div className={`${styles.timeCard} ${warning ? styles.timeWarning : ''}`}>
@@ -633,19 +662,24 @@ export default function TalkPage() {
             )}
 
             {phase === 'connected' && (
-              <div className={styles.choiceRow} aria-label="تمدید تماس">
+              <div className={styles.choiceRow} aria-label="تمدید گفت‌وگو">
                 <button type="button" className={styles.secondary} disabled={busy} onClick={() => void extend(15)}>۱۵ دقیقه بیشتر</button>
                 <button type="button" className={styles.secondary} disabled={busy} onClick={() => void extend(30)}>۳۰ دقیقه بیشتر</button>
               </div>
             )}
 
             {callId && (
-              <div className={styles.callActions}>
-                <button type="button" className={styles.endButton} disabled={busy} onClick={() => void finish('end')}>پایان تماس</button>
-                <button type="button" className={styles.safetyButton} disabled={busy} onClick={() => void finish('safety-exit')}>خروج فوری و مسدودکردن</button>
-              </div>
+              <>
+                <div className={styles.callActions}>
+                  <button type="button" className={styles.endButton} disabled={busy} onClick={() => void finish('end')}>پایان گفت‌وگو</button>
+                  <button type="button" className={styles.safetyButton} disabled={busy} onClick={() => void finish('safety-exit')}>خروج فوری و مسدودکردن</button>
+                </div>
+                <p className={styles.safetyHint}>«پایان گفت‌وگو» فقط مکالمه را می‌بندد. «خروج فوری و مسدودکردن» همان لحظه آن را می‌بندد و این شنونده را برای تو مسدود می‌کند.</p>
+                <div className={styles.reportArea}>
+                  <ReportPanel callId={callId} endpoint="safety/report" />
+                </div>
+              </>
             )}
-            <p className={styles.safetyHint}>اگر در تماس احساس ناامنی کردی، خروج فوری تماس را قطع می‌کند و این شنونده را برای تو مسدود می‌کند.</p>
             <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای شنونده" />
           </section>
         )}

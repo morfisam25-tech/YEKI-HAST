@@ -52,7 +52,7 @@ test('Web Listener answers Internet Voice with browser WebRTC and server signali
 
 test('Web Listener does not fake a recovered media session after page loss', () => {
   assert.match(listenerPage, /سرور تماس را فعال می‌داند اما این تب اتصال صوتی زنده ندارد/);
-  assert.match(listenerPage, /این صفحه اتصال جعلی نمی‌سازد/);
+  assert.match(listenerPage, /این صفحه موفقیت جعلی نشان نمی‌دهد/);
   assert.doesNotMatch(listenerPage, /fake_connected|mock_voice|dev_voice_success/);
 });
 

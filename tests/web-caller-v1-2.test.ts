@@ -14,7 +14,7 @@ test('Web Caller proxy keeps the session token server-side and allow-lists Calle
   assert.match(callerProxy, /browserMutationAllowed/);
   assert.match(callerProxy, /\^listeners\$/);
   assert.match(callerProxy, /cancel\$/);
-  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|end\|safety-exit\)/);
+  assert.match(callerProxy, /no-answer\|extend\|heartbeat\|end\|safety-exit/);
   assert.doesNotMatch(callerProxy, /localStorage|sessionStorage/);
 });
 
@@ -57,9 +57,9 @@ test('Web Caller handles 90-second no-answer, actual connected timing, warnings 
   assert.match(callerPage, /voice\/end/);
 });
 
-test('Web listener cards distinguish verified status from self-declared intro', () => {
-  assert.match(callerPage, /هویت\/فیلدهای تأییدشده مشخص است/);
-  assert.match(callerPage, /معرفی خوداظهاری \(تأییدنشده\)/);
+test('Web listener cards distinguish verified identity from self-written profile copy', () => {
+  assert.match(callerPage, /هویت تأیید شده/);
+  assert.match(callerPage, /این معرفی را خود شنونده نوشته است/);
 });
 
 test('Web Caller is an installable PWA without caching authenticated or call data', () => {

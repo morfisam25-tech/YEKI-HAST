@@ -91,8 +91,54 @@ function faNumber(value: number): string {
 }
 
 function formatMoney(amountMinor: string, currencyCode: string): string {
-  if (currencyCode === 'IRR') return `${faNumber(Number(BigInt(amountMinor) / BigInt(10)))} تومان`;
-  return `${amountMinor} ${currencyCode}`;
+  const normalizedCurrency = currencyCode.trim().toUpperCase();
+  const fallbackCurrency = normalizedCurrency || 'ارز نامشخص';
+  let minor: bigint;
+
+  try {
+    minor = BigInt(amountMinor);
+  } catch {
+    return `${amountMinor} ${fallbackCurrency} · واحد خرد ثبت‌شده`;
+  }
+
+  if (normalizedCurrency === 'IRR') {
+    const toman = minor / BigInt(10);
+    return `${new Intl.NumberFormat('fa-IR').format(toman)} تومان`;
+  }
+
+  try {
+    const currencyFormatter = new Intl.NumberFormat('fa-IR', {
+      style: 'currency',
+      currency: normalizedCurrency,
+      currencyDisplay: 'code',
+    });
+    const fractionDigits = currencyFormatter.resolvedOptions().maximumFractionDigits;
+    const scale = BigInt(10) ** BigInt(fractionDigits);
+    const negative = minor < BigInt(0);
+    const absoluteMinor = negative ? -minor : minor;
+    const major = absoluteMinor / scale;
+    const fraction = absoluteMinor % scale;
+    const majorFormatted = new Intl.NumberFormat('fa-IR', {
+      useGrouping: true,
+      maximumFractionDigits: 0,
+    }).format(major);
+    const fractionFormatted = fractionDigits === 0
+      ? ''
+      : `٫${fraction.toString().padStart(fractionDigits, '0').replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)])}`;
+    const exactNumber = `${majorFormatted}${fractionFormatted}`;
+    let insertedNumber = false;
+
+    return currencyFormatter.formatToParts(negative ? -1 : 1).map((part) => {
+      if (part.type === 'integer' || part.type === 'group' || part.type === 'decimal' || part.type === 'fraction') {
+        if (insertedNumber) return '';
+        insertedNumber = true;
+        return exactNumber;
+      }
+      return part.value;
+    }).join('');
+  } catch {
+    return `${amountMinor} ${fallbackCurrency} · واحد خرد ثبت‌شده`;
+  }
 }
 
 function formatClock(seconds: number | null): string {
@@ -137,8 +183,8 @@ function recentStatusLabel(status: RecentCall['status']): string {
 
 function earningStatusLabel(status: EarningsSummary['status']): string {
   const labels: Record<EarningsSummary['status'], string> = {
-    pending: 'در انتظار',
-    available: 'آماده',
+    pending: 'ثبت‌شده',
+    available: 'ثبت‌شده',
     paid: 'پرداخت‌شده',
   };
   return labels[status];
@@ -155,7 +201,7 @@ function messageFor(code: string): string {
     call_not_internet_voice: 'این گفت‌وگو از این صفحه قابل پاسخ‌دادن نیست.',
     call_not_live: 'این گفت‌وگو دیگر فعال نیست.',
     call_not_found: 'این گفت‌وگو دیگر در دسترس نیست.',
-    voice_relay_not_ready: 'اتصال صوتی امن هنوز آماده نیست. کمی بعد دوباره تلاش کن.',
+    voice_relay_not_ready: 'اتصال صوتی هنوز آماده نیست. کمی بعد دوباره تلاش کن.',
     call_termination_in_progress: 'پایان این گفت‌وگو از جای دیگری شروع شده است.',
     backend_unavailable: 'ارتباط با سرویس برقرار نشد. دوباره تلاش کن.',
   };
@@ -177,6 +223,7 @@ export default function ListenerWorkPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [attentionAnnouncement, setAttentionAnnouncement] = useState('');
 
   const presenceRef = useRef<Presence | null>(null);
   const activeCallIdRef = useRef<string | null>(null);
@@ -188,6 +235,7 @@ export default function ListenerWorkPage() {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const mediaConnectedSentRef = useRef(false);
   const rtcCallIdRef = useRef<string | null>(null);
+  const announcedAttentionRef = useRef<string | null>(null);
 
   const applyPresence = useCallback((value: Presence) => {
     presenceRef.current = value;
@@ -293,6 +341,19 @@ export default function ListenerWorkPage() {
   }, [refreshActive]);
 
   useEffect(() => {
+    if (!activeCall || (activeCall.status !== 'caller_answered' && activeCall.status !== 'calling_listener')) {
+      announcedAttentionRef.current = null;
+      setAttentionAnnouncement('');
+      return;
+    }
+
+    const announcementKey = `${activeCall.callId}:${activeCall.status}`;
+    if (announcedAttentionRef.current === announcementKey) return;
+    announcedAttentionRef.current = announcementKey;
+    setAttentionAnnouncement(activeStatusLabel(activeCall.status));
+  }, [activeCall?.callId, activeCall?.status]);
+
+  useEffect(() => {
     const current = presence?.status;
     if (current !== 'online' && current !== 'paused') return;
     const heartbeat = async () => {
@@ -361,7 +422,7 @@ export default function ListenerWorkPage() {
         setRemainingSeconds(result.timing.remainingSeconds);
         setWarning(result.timing.warning);
         if (result.terminal) {
-          setNotice(result.capReached ? 'زمان این گفت‌وگو به سقف مجاز رسید و تماس پایان یافت.' : 'گفت‌وگو پایان یافت.');
+          setNotice(result.capReached ? 'زمان این گفت‌وگو به سقف مجاز رسید و گفت‌وگو پایان یافت.' : 'گفت‌وگو پایان یافت.');
           cleanupRtc();
           await refreshActive().catch(() => undefined);
         }
@@ -626,6 +687,10 @@ export default function ListenerWorkPage() {
         <span>فضای شنونده</span>
       </header>
 
+      <div className="listener-sr-only" aria-live="assertive" aria-atomic="true">
+        {attentionAnnouncement}
+      </div>
+
       <section className="listener-work-hero" aria-labelledby="listener-work-title">
         <div className="listener-work-hero-status">
           <p className="listener-kicker">وضعیت تو</p>
@@ -808,7 +873,7 @@ export default function ListenerWorkPage() {
             </>
           ) : (
             <p className="listener-helper listener-empty-copy">
-              وقتی آماده باشی، درخواست تازه همین‌جا ظاهر می‌شود. پیش از پاسخ، اطلاعات شخصی یا پرداخت طرف مقابل نمایش داده نمی‌شود.
+              وقتی آماده باشی، درخواست تازه همین‌جا ظاهر می‌شود.
             </p>
           )}
 

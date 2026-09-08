@@ -14,7 +14,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: Tahoma, Arial, sans-serif;
+  font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Arial, sans-serif;
 }
 
 button,
@@ -643,6 +643,75 @@ button:disabled {
   border-color: #b7c3af;
 }
 
+
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.scenario-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffefa;
+}
+
+.scenario-card h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.scenario-card > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.scenario-block {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #f6f4ee;
+}
+
+.scenario-block p {
+  margin: 0;
+  line-height: 1.85;
+}
+
+.scenario-block strong {
+  color: #5d7058;
+  font-size: 13px;
+}
+
+button:not(:disabled),
+.primary-link {
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+button:not(:disabled):hover,
+.primary-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(32, 33, 31, 0.10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled),
+  .primary-link {
+    transition: none;
+  }
+
+  button:not(:disabled):hover,
+  .primary-link:hover {
+    transform: none;
+  }
+}
+
 @media (max-width: 800px) {
   main { padding-top: 12px; }
   .site-header span { display: none; }
@@ -669,6 +738,7 @@ button:disabled {
   .listener-work-hero,
   .listener-onboarding-hero { gap: 18px; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
+  .scenario-grid { grid-template-columns: 1fr; }
   .language-grid { grid-template-columns: 1fr 1fr; }
 }
 

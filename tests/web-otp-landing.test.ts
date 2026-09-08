@@ -8,18 +8,19 @@ const requestProxy = await readFile(new URL('../apps/web/app/api/auth/request/ro
 const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/route.ts', import.meta.url), 'utf8');
 const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
-test('web landing states v1.2 Internet Voice scope and primary email OTP purpose in Persian', () => {
-  assert.match(page, /در نسخه v1\.2/);
-  assert.match(page, /تماس صوتی را مستقیم از اینترنت/);
-  assert.match(page, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
+test('web landing states the current email-first scope and closed voice gate in Persian', () => {
+  assert.match(page, /در نسخه فعلی/);
+  assert.match(page, /تماس صوتی و پرداخت هنوز برای استفاده عمومی/);
   assert.match(page, /ورود با ایمیل/);
   assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
-  assert.match(page, /شماره تلفن[\s\S]*برای آن لازم نیست|شماره تماس[\s\S]*برای آن لازم نیست/);
   assert.match(page, /href="\/talk"/);
-  assert.match(page, /می‌خواهم با یک شنونده حرف بزنم/);
+  assert.match(page, /دیدن مسیر گفت‌وگو/);
   assert.match(page, /href="\/listener"/);
-  assert.match(page, /می‌خواهم شنونده باشم/);
-  assert.doesNotMatch(page, /تماس صوتی هنوز فعال نیست/);
+  assert.match(page, /درخواست شنونده‌شدن/);
+  assert.doesNotMatch(page, /تماس صوتی را مستقیم از اینترنت/);
+  assert.doesNotMatch(page, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
+  assert.doesNotMatch(page, /۱۰، ۳۰ و ۶۰ دقیقه/);
+  assert.doesNotMatch(page, /HOLD اعتبار/);
   assert.doesNotMatch(page, /ورود با شماره موبایل|پیامک‌شده/);
 });
 

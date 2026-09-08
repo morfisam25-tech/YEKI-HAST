@@ -6,12 +6,15 @@ import {
   listenerTrainingComplete,
 } from '../services/api/src/domain/listener-onboarding.ts';
 
-test('listener training modules match the four locked blueprint axes', () => {
+test('listener training modules cover the seven required blueprint areas', () => {
   assert.deepEqual(LISTENER_TRAINING_MODULES, [
-    'active_listening',
     'role_boundary',
-    'safety',
+    'active_listening',
+    'what_not_to_say',
     'platform_rules',
+    'safety',
+    'closing_conversation',
+    'scenarios',
   ]);
 });
 

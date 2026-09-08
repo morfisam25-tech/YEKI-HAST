@@ -23,17 +23,22 @@ test('Web Listener profile application avoids collecting KYC identity in the pub
   assert.doesNotMatch(applicationBlock, /nationalId|bankIban|legalName|dateOfBirth/);
 });
 
-test('Web Listener training preserves the four safety and role modules', () => {
-  for (const moduleKey of ['active_listening', 'role_boundary', 'safety', 'platform_rules']) {
+test('Web Listener training covers the seven required modules and scenarios', () => {
+  for (const moduleKey of ['role_boundary', 'active_listening', 'what_not_to_say', 'platform_rules', 'safety', 'closing_conversation', 'scenarios']) {
     assert.match(onboarding, new RegExp(moduleKey));
   }
-  assert.match(onboarding, /قرار عاشقانه، سکس‌چت، درخواست شماره یا آیدی شخصی/);
-  assert.match(onboarding, /درمانگر، پزشک یا مشاور حقوقی نیستی/);
+  assert.match(onboarding, /سناریوهای تمرینی/);
+  assert.match(onboarding, /تنهایی/);
+  assert.match(onboarding, /فشار رابطه/);
+  assert.match(onboarding, /فشار کاری/);
+  assert.match(onboarding, /پاسخ ضعیف/);
+  assert.match(onboarding, /پاسخ بهتر/);
   assert.match(onboarding, /listener\/training\/complete/);
+  assert.doesNotMatch(onboarding, /سکس‌چت/);
 });
 
 test('Web Listener assessment uses the locked scenario version and server-reviewed result', () => {
-  assert.match(onboarding, /scenarioVersion: 'listener-beta-v1'/);
+  assert.match(onboarding, /scenarioVersion: 'listener-beta-v2'/);
   assert.match(onboarding, /listener\/assessment/);
   assert.match(onboarding, /assessment\?\.result === 'pending'/);
   assert.match(onboarding, /assessment\?\.result === 'failed'/);
@@ -48,7 +53,7 @@ test('Web Listener KYC keeps private identity separate and never treats submit a
   assert.match(onboarding, /nationalId: normalizedNationalId/);
   assert.match(onboarding, /dateOfBirthJalali: normalizedBirth/);
   assert.match(onboarding, /bankIban: normalizedIban/);
-  assert.match(onboarding, /برای Caller یا پروفایل عمومی نمایش داده نمی‌شود/);
+  assert.match(onboarding, /برای مخاطب یا پروفایل عمومی نمایش داده نمی‌شود/);
   assert.match(onboarding, /ثبت فرم به معنی تأیید نیست/);
   assert.match(onboarding, /ثبت برای استعلام واقعی/);
 });
@@ -56,7 +61,7 @@ test('Web Listener KYC keeps private identity separate and never treats submit a
 test('Web Listener work mode opens only for server approved or active application status', () => {
   assert.match(onboarding, /\['approved', 'active'\]\.includes\(application\.status\)/);
   assert.match(onboarding, /href="\/listener\/work"/);
-  assert.match(onboarding, /Online شدن هنوز به معنی Push پس‌زمینه نیست/);
+  assert.match(onboarding, /آنلاین‌شدن هنوز به معنی دریافت اعلان در پس‌زمینه نیست/);
 });
 
 test('Web Listener onboarding contains no local fake approval, KYC or provider success path', () => {

@@ -648,7 +648,7 @@ export default function ListenerOnboardingPage() {
             </div>
             <span className="presence-pill">{statusLabel(application.status)}</span>
           </div>
-          <p className="helper">این اطلاعات فقط برای احراز، قرارداد و پرداخت نزد سرویس می‌ماند و برای Caller یا پروفایل عمومی نمایش داده نمی‌شود. ثبت فرم به معنی تأیید نیست.</p>
+          <p className="helper">این اطلاعات فقط برای احراز، قرارداد و پرداخت نزد سرویس می‌ماند و برای مخاطب یا پروفایل عمومی نمایش داده نمی‌شود. ثبت فرم به معنی تأیید نیست.</p>
 
           {!kycStatus && (
             <button type="button" disabled={busy} onClick={() => void loadKyc()}>{busy ? 'در حال بررسی…' : 'بررسی آمادگی احراز هویت'}</button>

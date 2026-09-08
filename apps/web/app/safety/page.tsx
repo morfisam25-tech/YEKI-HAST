@@ -177,6 +177,18 @@ export default function SafetyPage() {
           </div>
         </section>
 
+        <section className={styles.section} aria-labelledby="support-contact">
+          <div className={styles.sectionIntro}>
+            <p className={styles.step}>پشتیبانی ایمنی</p>
+            <h2 id="support-contact">اگر مسیر داخل محصول در دسترس نبود، گزارش شما بن‌بست ندارد.</h2>
+          </div>
+          <div className={styles.practicalBox}>
+            <p>
+              برای موضوع ایمنی، حساب یا گزارش رفتار می‌توانید به <a href="mailto:sales@uniqueholding.com.tr">sales@uniqueholding.com.tr</a> ایمیل بزنید. این نشانی پشتیبانی عمومی فعلی است و زمان پاسخ یا SLA مشخصی وعده داده نمی‌شود.
+            </p>
+          </div>
+        </section>
+
         <footer className={styles.footer}>
           <div>
             <strong>برای جزئیات حقوقی و داده‌ای</strong>

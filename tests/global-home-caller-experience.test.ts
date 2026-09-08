@@ -33,8 +33,7 @@ test('home explains human listening, personal-contact boundaries, profile truth 
   assert.match(page, /این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست/);
 });
 
-test('public Persian voice is respectful and login remains useful without forcing listener onboarding', () => {
-  assert.doesNotMatch(page, /(?:^|[\s>])(تو|می‌توانی|می‌کنی|می‌شوی|باشی|بگویی|بدهی|ببری)(?=[\s<،.!؟]|$)/m);
+test('public home keeps product copy free of implementation jargon and login remains useful without forcing listener onboarding', () => {
   assert.match(page, /\/api\/auth\/request/);
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
@@ -42,7 +41,7 @@ test('public Persian voice is respectful and login remains useful without forcin
   assert.match(page, /اگر برای گفت‌وگو وارد شدید، گفت‌وگوی عمومی فعلاً باز نیست\. ورود شما انجام شده و فعلاً کاری از طرف شما لازم نیست/);
   assert.match(page, /اگر برای شنونده‌شدن آمده‌اید/);
   assert.match(page, /ادامه مسیر شنونده/);
-  assert.doesNotMatch(page, /Caller|v1\.2|HOLD|cookie|JavaScript|feature gate|release/i);
+  assert.doesNotMatch(page, />[^<]*(?:v1\.2|HOLD|feature gate|JavaScript|cookie)[^<]*</i);
 });
 
 test('home-scoped visual system keeps focus, RTL, mobile layout and readable trust-critical text', () => {

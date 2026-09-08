@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CallCostQuote from '../../../components/caller/CallCostQuote';
 import ReportPanel from '../../../components/caller/ReportPanel';
 import styles from '../booking.module.css';
 
@@ -292,7 +293,7 @@ export default function BookingCallPage() {
         } else if (result.status === 'missed') {
           setEndedBySafety(false);
           setPhase('ended');
-          setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
+          setNotice('این شنونده الان پاسخگو نیست. مبلغی از اعتبارت کم نشده. می‌تونی یک شنونده دیگه انتخاب کنی یا اعتبارت رو نگه داری.');
           cleanup();
         }
       } catch {
@@ -309,7 +310,7 @@ export default function BookingCallPage() {
         .then(() => {
           setEndedBySafety(false);
           setPhase('ended');
-          setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
+          setNotice('این شنونده الان پاسخگو نیست. مبلغی از اعتبارت کم نشده. می‌تونی یک شنونده دیگه انتخاب کنی یا اعتبارت رو نگه داری.');
           cleanup();
         })
         .catch(() => undefined);
@@ -320,6 +321,9 @@ export default function BookingCallPage() {
     if (busy || phase !== 'ready' || (!bookingId && !existingCallId)) return;
     setBusy(true);
     setEndedBySafety(false);
+    setConnectedAt(null);
+    setRemainingSeconds(null);
+    setWarning(null);
     setError('');
     setNotice('در حال آماده‌کردن میکروفن…');
     setPhase('preparing');
@@ -439,10 +443,7 @@ export default function BookingCallPage() {
               <p className={styles.eyebrow}>آماده‌ای؟</p>
               <h2 className={styles.heading}>میکروفن را آماده کن</h2>
               <p className={styles.empty}>با زدن دکمه، مرورگر اجازه میکروفن می‌خواهد. اگر اجازه ندهی، گفت‌وگو شروع نمی‌شود.</p>
-              <div className={styles.trustNote}>
-                <strong>اگر شنونده پاسخ ندهد، مبلغی از اعتبار کم نمی‌شود.</strong>
-                <span>محاسبه هزینه از اتصال واقعی صدا شروع می‌شود.</span>
-              </div>
+              <CallCostQuote bookingId={bookingId} className={styles.trustNote} />
               <button type="button" className={styles.primary} disabled={busy} onClick={() => void start()}>
                 آماده‌ام، شروع کن
               </button>
@@ -454,6 +455,12 @@ export default function BookingCallPage() {
               {endedBySafety && callId && (
                 <div className={styles.reportArea}>
                   <p className={styles.helper}>شنونده برای تو مسدود شده است. اگر لازم است، گزارش رفتار را هم جداگانه ثبت کن.</p>
+                  <ReportPanel callId={callId} endpoint="safety/report" ended />
+                </div>
+              )}
+              {!endedBySafety && connectedAt && callId && (
+                <div className={styles.reportArea}>
+                  <p className={styles.helper}>اگر در این گفت‌وگو مشکلی پیش آمد، گزارش را برای همین تماس ثبت کن.</p>
                   <ReportPanel callId={callId} endpoint="safety/report" ended />
                 </div>
               )}

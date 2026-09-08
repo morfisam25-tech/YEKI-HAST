@@ -53,6 +53,19 @@ test('Listener language proficiency is explicit per selected language', () => {
   assert.doesNotMatch(onboarding, /proficiency:\s*'fluent'/);
 });
 
+test('Listener gender choices expose their selected state programmatically', () => {
+  assert.match(onboarding, /aria-pressed=\{gender === 'female'\}/);
+  assert.match(onboarding, /aria-pressed=\{gender === 'male'\}/);
+  assert.match(onboarding, /setGender\('female'\)/);
+  assert.match(onboarding, /setGender\('male'\)/);
+});
+
+test('Listener production Persian consistently uses گفت‌وگو', () => {
+  assert.match(onboarding, /درس ۶ — پایان‌دادن درست به گفت‌وگو/);
+  assert.match(onboarding, /دریافت گفت‌وگو، پرداخت یا تسویه نیست/);
+  assert.doesNotMatch(onboarding, /گفتگو/);
+});
+
 test('Listener training explicitly teaches privacy, personal boundaries and cultural humility', () => {
   assert.match(onboarding, /برای دوستان بازگو نکنید/);
   assert.match(onboarding, /اسکرین‌شات نگیرید/);

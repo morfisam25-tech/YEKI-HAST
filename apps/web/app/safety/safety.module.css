@@ -275,7 +275,7 @@
 }
 
 .page a:focus-visible {
-  outline: 3px solid rgba(139, 91, 59, 0.34);
+  outline: 3px solid #8a2e00;
   outline-offset: 4px;
   border-radius: 4px;
 }

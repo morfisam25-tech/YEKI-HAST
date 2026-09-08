@@ -34,6 +34,16 @@ test('terms set explicit participant safety and privacy boundaries', () => {
   assert.match(terms, /تماس صوتی عمومی در وضعیت فعلی باز نیست/);
 });
 
+test('emergency guidance stays global and does not promise intervention', () => {
+  assert.match(terms, /خطر فوری برای جان یا ایمنی/);
+  assert.match(terms, /فرد مورد اعتماد/);
+  assert.match(terms, /خدمات اضطراری یا حرفه‌ای مناسب/);
+  assert.match(terms, /ممکن و امن است/);
+  assert.match(terms, /امکان پایش وضعیت، اعزام کمک یا تضمین ایمنی را ندارد/);
+  assert.doesNotMatch(terms, /باید از خدمات اضطراری یا مراجع رسمی محل زندگی خود استفاده کنید/);
+  assert.doesNotMatch(terms, /(?:^|\D)(?:110|115|112|911)(?:\D|$)/);
+});
+
 test('deletion UI preserves completed versus review-required backend semantics', () => {
   assert.match(deletion, /setStep\(payload\.deletionCompleted \? 'completed' : 'requested'\)/);
   assert.match(deletion, /نشست‌های فعال حساب لغو شده‌اند/);

@@ -8,15 +8,13 @@ const requestProxy = await readFile(new URL('../apps/web/app/api/auth/request/ro
 const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/route.ts', import.meta.url), 'utf8');
 const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
-test('web landing states the current email-first scope and closed voice gate in Persian', () => {
-  assert.match(page, /در نسخه فعلی/);
-  assert.match(page, /تماس صوتی و پرداخت هنوز برای استفاده عمومی/);
+test('web landing states the current email-first scope and closed caller gate in Persian', () => {
+  assert.match(page, /گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده/);
   assert.match(page, /ورود با ایمیل/);
-  assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
-  assert.match(page, /href="\/talk"/);
-  assert.match(page, /دیدن مسیر گفت‌وگو/);
+  assert.match(page, /یک کد ۶ رقمی برای ورود به همین ایمیل می‌فرستیم/);
   assert.match(page, /href="\/listener"/);
-  assert.match(page, /درخواست شنونده‌شدن/);
+  assert.match(page, /شنونده‌شدن/);
+  assert.doesNotMatch(page, /href="\/talk"/);
   assert.doesNotMatch(page, /تماس صوتی را مستقیم از اینترنت/);
   assert.doesNotMatch(page, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
   assert.doesNotMatch(page, /۱۰، ۳۰ و ۶۰ دقیقه/);

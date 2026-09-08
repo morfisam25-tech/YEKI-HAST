@@ -276,7 +276,7 @@ const trainingModules: TrainingGroup[] = [
     intro: 'پایان خوب، رابطه را مبهم نمی‌گذارد. شنونده هم باید ظرفیت خودش را جدی بگیرد تا فقط زمانی در دسترس باشد که واقعاً می‌تواند توجه کند.',
     lessons: [
       {
-        title: 'درس ۶ — پایان‌دادن درست به گفتگو',
+        title: 'درس ۶ — پایان‌دادن درست به گفت‌وگو',
         paragraphs: [
           'نزدیک پایان، اگر مناسب بود در یک یا دو جمله چیزی را که شنیده‌اید جمع‌بندی کنید. بعد پایان را واضح بگویید. لازم نیست قول نتیجه بدهید یا برای آرام‌کردن لحظه آخر رابطه‌ای خارج از چارچوب بسازید.',
           'از جمله‌هایی مثل «هر وقت خواستی من هستم» دوری کنید؛ این جمله دسترسی‌ای را وعده می‌دهد که پلتفرم و شما تضمین نکرده‌اید. پایان گرم می‌تواند ساده باشد: «ممنون که این‌ها رو گفتید. وقت گفت‌وگومون رو به پایانه؛ امیدوارم این فرصت برای حرف‌زدن براتون مفید بوده باشه. مراقب خودتون باشید.»',
@@ -855,8 +855,22 @@ export default function ListenerOnboardingPage() {
             <div className={styles.field}>
               <span className={styles.fieldLabel}>جنسیت</span>
               <div className={styles.choiceRow}>
-                <button type="button" className={`${styles.choiceButton} ${gender === 'female' ? styles.selected : ''}`} onClick={() => setGender('female')}>زن</button>
-                <button type="button" className={`${styles.choiceButton} ${gender === 'male' ? styles.selected : ''}`} onClick={() => setGender('male')}>مرد</button>
+                <button
+                  type="button"
+                  aria-pressed={gender === 'female'}
+                  className={`${styles.choiceButton} ${gender === 'female' ? styles.selected : ''}`}
+                  onClick={() => setGender('female')}
+                >
+                  زن
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={gender === 'male'}
+                  className={`${styles.choiceButton} ${gender === 'male' ? styles.selected : ''}`}
+                  onClick={() => setGender('male')}
+                >
+                  مرد
+                </button>
               </div>
               <p className={styles.fieldHint}>در نسخه فعلی این مرحله، فقط همین دو گزینه قابل ثبت است.</p>
             </div>
@@ -1216,7 +1230,7 @@ export default function ListenerOnboardingPage() {
             <span className={styles.statusPill}>{statusLabel(application.status)}</span>
           </div>
           <p className={styles.helper}>
-            گفت‌وگوی عمومی هنوز برای استفاده همگانی باز نشده است. آماده‌بودن حساب شما به معنی فعال‌بودن فوری دریافت گفتگو، پرداخت یا تسویه نیست؛ هر قابلیت زمانی در دسترس است که همان بخش واقعاً فعال و در محصول نمایش داده شده باشد.
+            گفت‌وگوی عمومی هنوز برای استفاده همگانی باز نشده است. آماده‌بودن حساب شما به معنی فعال‌بودن فوری دریافت گفت‌وگو، پرداخت یا تسویه نیست؛ هر قابلیت زمانی در دسترس است که همان بخش واقعاً فعال و در محصول نمایش داده شده باشد.
           </p>
         </section>
       )}

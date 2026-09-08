@@ -18,7 +18,7 @@ test('privacy presents plain answers before technical detail', () => {
   }
 
   assert.match(privacy, /مسیر عمومی تماس صوتی بسته است/);
-  assert.match(privacy, /مسیر برای ضبط یا ذخیره محتوای صوتی مکالمه ندارد/);
+  assert.match(privacy, /مسیری برای ضبط یا ذخیره محتوای صوتی مکالمه ندارد/);
   assert.match(privacy, /نمی‌توان تضمین کرد یک شرکت‌کننده، سیستم‌عامل یا دستگاه دیگری هیچ‌وقت امکان ضبط نداشته باشد/);
   assert.match(privacy, /زمان انقضای پنج‌دقیقه‌ای/);
 });

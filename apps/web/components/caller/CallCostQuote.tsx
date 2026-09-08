@@ -104,7 +104,7 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', defer
         }
 
         const rate = BigInt(bootstrap.pricing.callerRatePerMinuteMinor);
-        const hold = (rate * BigInt(seconds) + 59n) / 60n;
+        const hold = (rate * BigInt(seconds) + BigInt(59)) / BigInt(60);
         const wallet = walletResponse.wallets.find((item) => item.currencyCode === bootstrap.pricing.currencyCode);
         const available = BigInt(wallet?.availableMinor ?? '0');
 

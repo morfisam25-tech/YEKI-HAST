@@ -207,9 +207,9 @@ export default function Page() {
       </section>
 
       <nav className="public-links" aria-label="اطلاعات عمومی سرویس">
-        <a href="/privacy">حریم خصوصی</a>
-        <a href="/terms">قوانین استفاده</a>
-        <a href="/account/delete">حذف حساب</a>
+        <a href="https://yekihast.app/privacy">حریم خصوصی</a>
+        <a href="https://yekihast.app/terms">قوانین استفاده</a>
+        <a href="https://yekihast.app/account/delete">حذف حساب</a>
         <a href="mailto:sales@uniqueholding.com.tr">پشتیبانی</a>
       </nav>
     </main>

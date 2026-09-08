@@ -106,10 +106,19 @@ function activeStatusLabel(status: ActiveCall['status']): string {
   const labels: Record<ActiveCall['status'], string> = {
     requested: 'درخواست تماس ثبت شده',
     routing: 'در حال آماده‌سازی تماس',
-    calling_caller: 'در حال تماس با Caller',
-    caller_answered: 'Caller پاسخ داده',
+    calling_caller: 'در حال تماس با مخاطب',
+    caller_answered: 'مخاطب پاسخ داده',
     calling_listener: 'تماس اینترنتی منتظر پاسخ توست',
     connected: 'تماس اینترنتی وصل است',
+  };
+  return labels[status];
+}
+
+function presenceLabel(status: PresenceStatus): string {
+  const labels: Record<PresenceStatus, string> = {
+    online: 'آنلاین',
+    paused: 'مکث',
+    offline: 'آفلاین',
   };
   return labels[status];
 }
@@ -130,13 +139,13 @@ function messageFor(code: string): string {
     authentication_required: 'برای ورود به حالت کاری ابتدا از صفحه اصلی وارد حساب شو.',
     listener_not_approved: 'حساب شنونده هنوز برای کار فعال نشده است.',
     listener_verification_required: 'احراز هویت شنونده هنوز کامل نشده است.',
-    listener_not_online: 'وضعیت Online منقضی شده؛ دوباره Online شو.',
-    no_callers_accepted: 'برای Online شدن حداقل یک گروه Caller را فعال کن.',
+    listener_not_online: 'وضعیت آنلاین منقضی شده؛ دوباره آنلاین شو.',
+    no_callers_accepted: 'برای آنلاین شدن حداقل یک گروه مخاطب را فعال کن.',
     listener_active_call_conflict: 'بیش از یک تماس فعال برای این حساب ثبت شده؛ کنترل‌های کار تا بررسی وضعیت قفل‌اند.',
-    call_not_internet_voice: 'این تماس از مسیر Internet Voice نیست.',
+    call_not_internet_voice: 'این تماس از مسیر صوتی اینترنتی نیست.',
     call_not_live: 'این تماس دیگر فعال نیست.',
     call_not_found: 'این تماس دیگر در دسترس نیست.',
-    voice_relay_not_ready: 'مسیر Relay امن برای تماس واقعی آماده نیست.',
+    voice_relay_not_ready: 'مسیر واسط امن برای تماس واقعی آماده نیست.',
     call_termination_in_progress: 'پایان تماس از مسیر دیگری شروع شده است.',
     backend_unavailable: 'ارتباط با سرویس اصلی برقرار نشد.',
   };
@@ -605,18 +614,18 @@ export default function ListenerWorkPage() {
     <main className="listener-work-page">
       <header className="site-header">
         <a className="brand" href="/">یکی هست</a>
-        <span>حالت کاری شنونده · Web/PWA</span>
+        <span>حالت کاری شنونده · وب</span>
       </header>
 
       <section className="listener-work-hero">
         <div>
           <p className="kicker">وضعیت کار</p>
-          <h1>{activeCallConflict ? 'قفل ایمنی' : isOnline ? 'Online' : isPaused ? 'Pause' : 'Offline'}</h1>
+          <h1>{activeCallConflict ? 'قفل ایمنی' : isOnline ? 'آنلاین' : isPaused ? 'مکث' : 'آفلاین'}</h1>
         </div>
         <div className="work-status-copy">
           <p>
             این نسخه هنوز Push پس‌زمینه را آماده اعلام نمی‌کند. برای دریافت تماس باید این تب باز و فعال بماند؛
-            با رفتن صفحه به پس‌زمینه، وضعیت به‌صورت fail-closed روی Offline می‌رود تا Caller به شنونده‌ای که اعلان نمی‌گیرد وصل نشود.
+            با رفتن صفحه به پس‌زمینه، وضعیت به‌صورت ایمن روی آفلاین می‌رود تا مخاطب به شنونده‌ای که اعلان نمی‌گیرد وصل نشود.
           </p>
           {incomeAvailable && <strong>درآمد قابل تسویه ثبت‌شده: {formatMoney(incomeAvailable.amountMinor, incomeAvailable.currencyCode)}</strong>}
         </div>
@@ -625,17 +634,17 @@ export default function ListenerWorkPage() {
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="helper" aria-live="polite">{notice}</p>}
       {activeCallConflict && (
-        <p className="error">سرور بیش از یک تماس فعال برای این حساب گزارش کرده است. Online، Pause و تغییر گروه Caller قفل‌اند؛ Offline همچنان مجاز است.</p>
+        <p className="error">سرور بیش از یک تماس فعال برای این حساب گزارش کرده است. آنلاین‌شدن، مکث و تغییر گروه مخاطب قفل‌اند؛ آفلاین‌شدن همچنان مجاز است.</p>
       )}
 
       <section className="work-grid">
         <div className="call-setup">
           <div>
             <p className="kicker">دریافت تماس</p>
-            <h2>حضور و Callerهای قابل قبول</h2>
+            <h2>چه کسانی می‌توانند با تو تماس بگیرند؟</h2>
           </div>
           <div className="presence-pill" data-status={presence?.status ?? 'loading'}>
-            {presence ? `${presence.status === 'online' ? '●' : presence.status === 'paused' ? '◐' : '○'} ${presence.status}` : 'در حال بررسی…'}
+            {presence ? `${presence.status === 'online' ? '●' : presence.status === 'paused' ? '◐' : '○'} ${presenceLabel(presence.status)}` : 'در حال بررسی…'}
           </div>
           <div className="duration-options two-column">
             <button
@@ -644,7 +653,7 @@ export default function ListenerWorkPage() {
               disabled={workControlsLocked}
               onClick={() => void toggleCallerPreference('female')}
             >
-              Caller زن {acceptsFemale ? '✓' : ''}
+              مخاطب زن {acceptsFemale ? '✓' : ''}
             </button>
             <button
               type="button"
@@ -652,17 +661,17 @@ export default function ListenerWorkPage() {
               disabled={workControlsLocked}
               onClick={() => void toggleCallerPreference('male')}
             >
-              Caller مرد {acceptsMale ? '✓' : ''}
+              مخاطب مرد {acceptsMale ? '✓' : ''}
             </button>
           </div>
           {!isOnline && !isPaused && (
             <button type="button" disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)} onClick={() => void changePresence('online')}>
-              {busy ? 'در حال ثبت…' : 'Online — آماده‌ام'}
+              {busy ? 'در حال ثبت…' : 'آنلاین — آماده‌ام'}
             </button>
           )}
           {isOnline && (
             <button type="button" className="secondary-action" disabled={workControlsLocked} onClick={() => void changePresence('paused')}>
-              Pause — تماس جدید نیاید
+              مکث — تماس جدید نیاید
             </button>
           )}
           {isPaused && (
@@ -672,10 +681,10 @@ export default function ListenerWorkPage() {
           )}
           {(isOnline || isPaused) && (
             <button type="button" className="secondary-action" disabled={busy} onClick={() => void changePresence('offline')}>
-              Offline و پایان شیفت
+              آفلاین و پایان شیفت
             </button>
           )}
-          <p className="helper">Heartbeat حضور فقط وقتی تب فعال باشد هر ۳۰ ثانیه ارسال می‌شود. Background Listener تا زمان آماده‌شدن اعلان واقعی باز نمی‌شود.</p>
+          <p className="helper">ضربان حضور فقط وقتی این تب فعال باشد، هر ۳۰ ثانیه ارسال می‌شود. دریافت تماس در پس‌زمینه تا زمان آماده‌شدن اعلان واقعی فعال نمی‌شود.</p>
         </div>
 
         <div className="call-setup">
@@ -686,7 +695,7 @@ export default function ListenerWorkPage() {
           {activeCall ? (
             <>
               <p className="helper">
-                مسیر: {activeCall.transport === 'internet_voice' ? 'Internet Voice' : activeCall.transport ?? 'ثبت نشده'}
+                مسیر: {activeCall.transport === 'internet_voice' ? 'تماس صوتی اینترنتی' : activeCall.transport ?? 'ثبت نشده'}
                 {' · '}سقف: {activeCall.maxBillableSeconds ? `${faNumber(Math.floor(activeCall.maxBillableSeconds / 60))} دقیقه` : '—'}
               </p>
               {activeCall.status === 'calling_listener' && activeCall.transport === 'internet_voice' && !voiceReady && (
@@ -698,20 +707,20 @@ export default function ListenerWorkPage() {
                 <p className={warning ? 'error' : 'helper'}>زمان باقی‌مانده: {formatClock(remainingSeconds)}{warning ? ` · هشدار ${warning}` : ''}</p>
               )}
               {activeCall.status === 'connected' && !voiceReady && (
-                <p className="error">سرور تماس را فعال می‌داند اما این تب اتصال WebRTC زنده ندارد. این صفحه اتصال جعلی نمی‌سازد؛ برای جلوگیری از وضعیت مبهم، تماس را پایان بده و دوباره شروع کن.</p>
+                <p className="error">سرور تماس را فعال می‌داند اما این تب اتصال صوتی زنده ندارد. این صفحه موفقیت جعلی نشان نمی‌دهد؛ برای جلوگیری از وضعیت مبهم، تماس را پایان بده و دوباره شروع کن.</p>
               )}
               {activeCall.transport === 'internet_voice' && (
                 <div className="duration-options two-column">
                   <button type="button" className="secondary-action" disabled={voiceBusy} onClick={() => void finishCall('end')}>پایان تماس</button>
-                  <button type="button" className="danger-action" disabled={voiceBusy} onClick={() => void finishCall('safety-exit')}>خروج امن + بلاک</button>
+                  <button type="button" className="danger-action" disabled={voiceBusy} onClick={() => void finishCall('safety-exit')}>خروج امن و مسدودکردن</button>
                 </div>
               )}
             </>
           ) : (
-            <p className="helper">وقتی Online باشی و Caller تماس را شروع کند، درخواست اینجا دیده می‌شود. هویت، کشور و اطلاعات پرداخت Caller قبل از پذیرش نمایش داده نمی‌شود.</p>
+            <p className="helper">وقتی آنلاین باشی و مخاطب تماس را شروع کند، درخواست اینجا دیده می‌شود. هویت، کشور و اطلاعات پرداخت مخاطب قبل از پذیرش نمایش داده نمی‌شود.</p>
           )}
           <button type="button" className="text-button" onClick={() => void refreshAll()}>به‌روزرسانی وضعیت</button>
-          <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای Caller" />
+          <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای مخاطب" />
         </div>
       </section>
 

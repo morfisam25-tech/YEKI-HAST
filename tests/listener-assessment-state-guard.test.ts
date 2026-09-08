@@ -13,14 +13,15 @@ test('listener assessment API allows only one pending review per application', (
 
 test('Web Listener permits a new assessment after a real failed review', () => {
   assert.match(webOnboarding, /!assessment \|\| assessment\.result === 'failed'/);
-  assert.match(webOnboarding, /ارسال آزمون برای بررسی/);
+  assert.match(webOnboarding, /ارسال ارزیابی/);
+  assert.match(webOnboarding, /نیاز به مرور بیشتر/);
 });
 
 test('Web Listener keeps non-onboarding application states fail-closed', () => {
   assert.match(webOnboarding, /\['exploring', 'training', 'assessment'\]\.includes\(application\.status\)/);
   assert.match(webOnboarding, /reviewOnly/);
-  assert.match(webOnboarding, /agreement_pending: 'در انتظار قرارداد'/);
+  assert.match(webOnboarding, /agreement_pending: 'در انتظار مرحله توافق'/);
   assert.match(webOnboarding, /admin_review: 'در بررسی نهایی'/);
-  assert.match(webOnboarding, /suspended: 'معلق'/);
-  assert.match(webOnboarding, /این مرحله از داخل Web قابل تغییر نیست/);
+  assert.match(webOnboarding, /suspended: 'موقتاً غیرفعال'/);
+  assert.match(webOnboarding, /درخواست شما در مرحله بررسی است/);
 });

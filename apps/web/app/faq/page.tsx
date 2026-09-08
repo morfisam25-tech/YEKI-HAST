@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import styles from './faq.module.css';
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 type FaqItem = {
   question: string;
   shortAnswer: string;
-  detail: React.ReactNode;
+  detail: ReactNode;
 };
 
 const faqItems: FaqItem[] = [
@@ -57,7 +58,7 @@ const faqItems: FaqItem[] = [
   {
     question: 'مکالمه ضبط می‌شود؟',
     shortAnswer: 'در وضعیت عمومی فعلی اصلاً وارد گفت‌وگوی صوتی نمی‌شوید.',
-    detail: <p>مسیر عمومی صوت بسته است. در backend فعلی نیز مسیری برای ضبط یا ذخیره محتوای صوتی مکالمه وجود ندارد؛ این توضیح وضعیت پیاده‌سازی فعلی است و تضمین دائمی برای نسخه‌های آینده نیست. جزئیات بیشتر در <Link href="/privacy">حریم خصوصی</Link> آمده است.</p>,
+    detail: <p>مسیر عمومی صوت بسته است. در پیاده‌سازی فعلی مسیری برای ضبط یا ذخیره محتوای صوتی مکالمه وجود ندارد؛ این توضیح وضعیت پیاده‌سازی فعلی است و تضمین دائمی برای نسخه‌های آینده نیست. جزئیات بیشتر در <Link href="/privacy">حریم خصوصی</Link> آمده است.</p>,
   },
   {
     question: 'آیا می‌توانم هر وقت خواستم گفت‌وگو را تمام کنم؟',

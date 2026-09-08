@@ -43,7 +43,7 @@ function message(code: string, browserName = ''): string {
     caller_age_gate_required: 'تأیید شرط سنی نسخه جاری لازم است. به صفحه رزرو برگرد و دوباره تأیید کن.',
     insufficient_balance: 'اعتبار برای شروع این تماس کافی نیست.',
     call_transport_not_configured: 'مسیر تماس اینترنتی در این محیط آماده نیست.',
-    internet_voice_not_primary: 'مسیر اصلی تماس این محیط Internet Voice نیست.',
+    internet_voice_not_primary: 'مسیر اصلی تماس صوتی این محیط فعال نیست.',
     call_not_active: 'این تماس دیگر فعال نیست.',
     call_not_found: 'تماس پیدا نشد.',
     no_answer_window_active: 'مهلت پاسخ شنونده هنوز تمام نشده است.',
@@ -58,7 +58,7 @@ export default function BookingCallPage() {
   const [phase, setPhase] = useState<Phase>('ready');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('برای شروع، میکروفن را آماده کن. تا قبل از این مرحله برای رزرو آینده HOLD ساخته نشده است.');
+  const [notice, setNotice] = useState('برای شروع، میکروفن را آماده کن. تا قبل از این مرحله برای رزرو آینده مبلغی موقتاً کنار گذاشته نشده است.');
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
   const [maxBillableSeconds, setMaxBillableSeconds] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
@@ -283,7 +283,7 @@ export default function BookingCallPage() {
       setCallId('');
       setPhase('ready');
       setError(code === 'voice_relay_not_ready'
-        ? 'مسیر Relay امن برای تماس هنوز آماده نیست.'
+        ? 'مسیر واسط امن برای تماس هنوز آماده نیست.'
         : message(code, browserName));
     } finally {
       setBusy(false);
@@ -337,7 +337,7 @@ export default function BookingCallPage() {
       <div className={styles.shell}>
         <header className={styles.header}>
           <h1 className={styles.title}>تماس رزروشده</h1>
-          <p className={styles.lead}>میکروفن اول آماده می‌شود. برای رزروی که هنوز شروع نشده، HOLD بعد از این مرحله و فقط هنگام ساخت CallSession ایجاد می‌شود.</p>
+          <p className={styles.lead}>میکروفن ابتدا آماده می‌شود. برای رزروی که هنوز شروع نشده، رزرو موقت اعتبار فقط هنگام ساخت تماس ایجاد می‌شود.</p>
           <nav className={styles.nav}>
             <a className={styles.link} href="/booking">رزروهای من</a>
             <a className={styles.link} href="/talk">تماس فوری</a>

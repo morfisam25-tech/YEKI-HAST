@@ -113,7 +113,7 @@
 }
 
 .item summary:focus-visible {
-  outline: 3px solid rgba(40, 89, 76, 0.28);
+  outline: 3px solid #005fcc;
   outline-offset: 4px;
   border-radius: 8px;
 }
@@ -197,7 +197,7 @@
 }
 
 .page a:focus-visible {
-  outline: 3px solid rgba(40, 89, 76, 0.28);
+  outline: 3px solid #005fcc;
   outline-offset: 4px;
   border-radius: 4px;
 }

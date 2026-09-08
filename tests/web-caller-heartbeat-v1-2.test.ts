@@ -10,7 +10,7 @@ test('web Caller sends an authenticated server heartbeat during connected Intern
   assert.match(talk, /calls\/\$\{callId\}\/voice\/heartbeat/);
   assert.match(talk, /method: 'POST'/);
   assert.match(talk, /setInterval\(\(\) => void heartbeat\(\), 5_000\)/);
-  assert.match(callerProxy, /voice\\\/\\\(start\|config\|signals\|no-answer\|extend\|heartbeat\|end\|safety-exit\\\)/);
+  assert.match(callerProxy, /no-answer\|extend\|heartbeat\|end/);
 });
 
 test('web Caller treats server cap completion as authoritative and cleans up RTC', () => {

@@ -112,7 +112,7 @@ function formatMoney(amountMinor: string, currencyCode: string): string {
       currency: normalizedCurrency,
       currencyDisplay: 'code',
     });
-    const fractionDigits = currencyFormatter.resolvedOptions().maximumFractionDigits;
+    const fractionDigits = currencyFormatter.resolvedOptions().maximumFractionDigits ?? 0;
     const scale = BigInt(10) ** BigInt(fractionDigits);
     const negative = minor < BigInt(0);
     const absoluteMinor = negative ? -minor : minor;

@@ -1,0 +1,369 @@
+name: Deploy Production Web V2
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY-PRODUCTION-WEB-V2 to confirm manual Web release'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: yeki-hast-production-frontends
+  cancel-in-progress: false
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_TEAM_SLUG: unique-6ff0
+      WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg
+      WEB_PROJECT_NAME: web
+      ADMIN_PROJECT_ID: prj_l18v3f003ORfiN6hKxYwJbvVPzzC
+      ADMIN_PROJECT_NAME: admin
+      WEB_VERCEL_CANONICAL: https://web-unique-6ff0.vercel.app
+      WEB_PRIMARY_DOMAIN: https://yekihast.app
+      WEB_PRIMARY_WWW: www.yekihast.app
+      WEB_SECONDARY_DOMAIN: yeki-hast.com
+      WEB_SECONDARY_WWW: www.yeki-hast.com
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
+
+    steps:
+      - name: Require authorized main Web release
+        shell: bash
+        env:
+          MANUAL_CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo '::error::Production Web deploys are allowed only from main'; exit 1; }
+          test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST" || { echo '::error::Unexpected repository'; exit 1; }
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch" || { echo '::error::Manual workflow dispatch is required'; exit 1; }
+          test "${MANUAL_CONFIRM:-}" = "DEPLOY-PRODUCTION-WEB-V2" || { echo '::error::Exact production confirmation phrase is required'; exit 1; }
+          test -n "${VERCEL_TOKEN:-}" || { echo '::error::VERCEL_TOKEN repository secret is required'; exit 1; }
+
+      - name: Checkout exact source and history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup exact Node used by release tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Require successful Foundation QA coverage for this source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/require-green-foundation-qa.mjs
+
+      - name: Install locked workspace and require Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f package-lock.json
+          npm ci --ignore-scripts --no-audit --no-fund
+          test -x "$VERCEL_BIN"
+          "$VERCEL_BIN" --version
+
+      - name: Configure Standard protection for exact production deployment URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          const endpoint = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`);
+          endpoint.searchParams.set('teamId', teamId);
+          const response = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ ssoProtection: { deploymentType: 'prod_deployment_urls_and_all_previews' } }),
+          });
+          if (!response.ok) throw new Error(`Web protection update failed (${response.status}): ${(await response.text()).slice(0, 300)}`);
+          console.log('Web exact deployment protection PASS');
+          NODE
+
+      - name: Capture current primary custom-domain deployment for restore
+        id: previous_web
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { appendFileSync } = await import('node:fs');
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          const host = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+          endpoint.searchParams.set('teamId', teamId);
+          const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+          if (!response.ok) throw new Error(`unable to resolve primary custom-domain deployment (${response.status})`);
+          const deployment = await response.json();
+          const deploymentId = deployment?.uid || deployment?.id;
+          const deploymentHost = deployment?.url;
+          if (deployment.projectId !== projectId || deployment.readyState !== 'READY') throw new Error('primary custom domain is not on a READY expected Web deployment');
+          if (typeof deploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) throw new Error('previous Web deployment id is invalid');
+          if (typeof deploymentHost !== 'string' || !deploymentHost.endsWith('.vercel.app')) throw new Error('previous Web deployment URL is invalid');
+          appendFileSync(process.env.GITHUB_OUTPUT, `deployment_id=${deploymentId}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `deployment_url=https://${deploymentHost}\n`);
+          console.log('primary custom-domain deployment captured for restore');
+          NODE
+
+      - name: Bind exact UNIQUE Web project for build
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel apps/web/.vercel
+          mkdir -p apps/web/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > apps/web/.vercel/project.json
+
+      - name: Pull Web production settings
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/project.json
+          test -f .vercel/.env.production.local
+
+      - name: Build Web production artifact
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/output/config.json
+
+      - name: Switch to proven repo-level monorepo deploy link
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/web/.vercel/output/config.json
+          rm -f apps/web/.vercel/project.json
+          rm -rf .vercel
+          mkdir -p .vercel
+          node <<'NODE'
+          const fs = require('node:fs');
+          fs.writeFileSync('.vercel/repo.json', `${JSON.stringify({
+            remoteName: 'origin',
+            projects: [
+              { id: process.env.WEB_PROJECT_ID, name: process.env.WEB_PROJECT_NAME, directory: 'apps/web', orgId: process.env.VERCEL_TEAM_ID },
+              { id: process.env.ADMIN_PROJECT_ID, name: process.env.ADMIN_PROJECT_NAME, directory: 'apps/admin', orgId: process.env.VERCEL_TEAM_ID },
+            ],
+          }, null, 2)}\n`);
+          NODE
+          test -f .vercel/repo.json
+
+      - name: Deploy protected staged production without custom-domain assignment
+        id: deploy_web
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_url="$("$VERCEL_BIN" deploy --prebuilt --prod --skip-domain --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")"
+          case "$deployment_url" in https://*.vercel.app) ;; *) echo '::error::Vercel did not return a valid Web deployment URL'; exit 1 ;; esac
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo 'protected staged Web deployment created'
+
+      - name: Require exact staged deployment READY and protected
+        id: verify_exact
+        shell: bash
+        env:
+          WEB_EXACT_DEPLOYMENT_URL: ${{ steps.deploy_web.outputs.url }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { appendFileSync } = await import('node:fs');
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          const rawUrl = process.env.WEB_EXACT_DEPLOYMENT_URL?.trim();
+          const host = new URL(rawUrl).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+          endpoint.searchParams.set('teamId', teamId);
+          let deployment;
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+            if (response.ok) {
+              deployment = await response.json();
+              if (deployment.projectId === projectId && deployment.readyState === 'READY') break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          if (!deployment || deployment.projectId !== projectId || deployment.readyState !== 'READY') throw new Error('exact Web deployment is not READY on expected project');
+          const deploymentId = deployment.uid || deployment.id;
+          if (typeof deploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(deploymentId)) throw new Error('exact Web deployment id is invalid');
+          appendFileSync(process.env.GITHUB_OUTPUT, `deployment_id=${deploymentId}\n`);
+          const unauthenticated = await fetch(rawUrl, { cache: 'no-store', redirect: 'manual' });
+          const location = unauthenticated.headers.get('location') || '';
+          const protectedResponse = unauthenticated.status === 401
+            || unauthenticated.status === 403
+            || (unauthenticated.status >= 300 && unauthenticated.status < 400 && /vercel\.com|\/_vercel\//i.test(location));
+          if (!protectedResponse) throw new Error(`exact staged Web deployment is not protected (${unauthenticated.status})`);
+          console.log(`exact staged Web identity/READY/protection PASS (${unauthenticated.status})`);
+          NODE
+
+      - name: Authenticated smoke exact staged deployment
+        working-directory: apps/web
+        env:
+          WEB_EXACT_DEPLOYMENT_URL: ${{ steps.deploy_web.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_path() {
+            local path="$1" needle="$2" tmp
+            tmp="$(mktemp)"
+            "$VERCEL_BIN" curl "$path" --deployment "$WEB_EXACT_DEPLOYMENT_URL" >"$tmp"
+            grep -Fq "$needle" "$tmp"
+            rm -f "$tmp"
+          }
+          check_path / 'ورود با ایمیل'
+          check_path / 'mailto:sales@uniqueholding.com.tr'
+          check_path /privacy 'در وب و اپ موبایل'
+          check_path /terms 'قوانین استفاده'
+          check_path /account/delete 'تأیید مالک حساب'
+          check_path /account/delete 'حذف واقعی حساب'
+          echo 'exact protected Web pre-cutover smoke PASS'
+
+      - name: Require custom production domain stayed on prior deployment during stage
+        shell: bash
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous_web.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const previous = process.env.PREVIOUS_DEPLOYMENT_ID?.trim();
+          const host = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+          endpoint.searchParams.set('teamId', teamId);
+          const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+          if (!response.ok) throw new Error(`unable to verify primary domain after staged deploy (${response.status})`);
+          const deployment = await response.json();
+          const current = deployment?.uid || deployment?.id;
+          if (current !== previous) throw new Error('primary custom domain changed before verification despite --skip-domain');
+          console.log('primary custom production domain remained on previous deployment during staging');
+          NODE
+
+      - name: Promote verified staged deployment
+        id: promote_web
+        working-directory: apps/web
+        env:
+          WEB_EXACT_DEPLOYMENT_URL: ${{ steps.deploy_web.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" promote "$WEB_EXACT_DEPLOYMENT_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'verified Web staged deployment promoted'
+
+      - name: Verify promoted deployment and domain policy
+        shell: bash
+        env:
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.verify_exact.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const projectId = process.env.WEB_PROJECT_ID?.trim();
+          const expected = process.env.EXPECTED_DEPLOYMENT_ID?.trim();
+          const headers = { authorization: `Bearer ${token}` };
+          if (!expected) throw new Error('promoted Web deployment id is missing');
+
+          async function resolveDeployment(host) {
+            const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+            endpoint.searchParams.set('teamId', teamId);
+            const response = await fetch(endpoint, { headers });
+            if (!response.ok) return null;
+            return response.json();
+          }
+
+          let primaryOk = false;
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            const deployment = await resolveDeployment(new URL(process.env.WEB_PRIMARY_DOMAIN).host);
+            const current = deployment?.uid || deployment?.id;
+            if (deployment?.projectId === projectId && deployment?.readyState === 'READY' && current === expected) { primaryOk = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          if (!primaryOk) throw new Error('primary production domain did not resolve to promoted verified deployment');
+
+          const domainsEndpoint = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}/domains`);
+          domainsEndpoint.searchParams.set('teamId', teamId);
+          const domainsResponse = await fetch(domainsEndpoint, { headers });
+          if (!domainsResponse.ok) throw new Error(`unable to list Web domains (${domainsResponse.status})`);
+          const domains = (await domainsResponse.json())?.domains || [];
+          const primary = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const expectedRedirects = [process.env.WEB_PRIMARY_WWW, process.env.WEB_SECONDARY_DOMAIN, process.env.WEB_SECONDARY_WWW];
+          const primaryRow = domains.find((row) => row?.name === primary);
+          if (!primaryRow || primaryRow.redirect) throw new Error('primary domain policy mismatch');
+          for (const name of expectedRedirects) {
+            const row = domains.find((value) => value?.name === name);
+            if (!row || row.redirect !== primary || Number(row.redirectStatusCode) !== 308) throw new Error(`${name} redirect policy mismatch`);
+          }
+          console.log('promoted Web deployment and 308 domain policy PASS');
+          NODE
+
+      - name: Verify public Vercel canonical required surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = process.env.WEB_VERCEL_CANONICAL;
+          async function waitFor(path, needles, label) {
+            let last = 'no response';
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(`${base}${path}`, { cache: 'no-store' });
+                const text = await response.text();
+                if (response.ok && needles.every((needle) => text.includes(needle))) { console.log(`${label} PASS`); return; }
+                last = `${response.status} ${text.slice(0, 120)}`;
+              } catch (error) { last = error instanceof Error ? error.message : String(error); }
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            throw new Error(`${label} failed: ${last}`);
+          }
+          await waitFor('/', ['یکی هست', 'ورود با ایمیل'], 'Web landing');
+          await waitFor('/privacy', ['حریم خصوصی', 'Web و اپ موبایل'], 'Web privacy');
+          await waitFor('/terms', ['قوانین استفاده'], 'Web terms');
+          await waitFor('/account/delete', ['حذف حساب', 'تأیید مالک حساب', 'حذف واقعی حساب'], 'Web account deletion');
+          console.log('public Vercel canonical Web verification PASS');
+          NODE
+
+      - name: Restore prior verified deployment if post-promotion verification fails
+        if: ${{ failure() && steps.promote_web.outcome == 'success' }}
+        working-directory: apps/web
+        env:
+          PREVIOUS_DEPLOYMENT_URL: ${{ steps.previous_web.outputs.deployment_url }}
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous_web.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PREVIOUS_DEPLOYMENT_URL"
+          "$VERCEL_BIN" promote "$PREVIOUS_DEPLOYMENT_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          const teamId = process.env.VERCEL_TEAM_ID?.trim();
+          const expected = process.env.PREVIOUS_DEPLOYMENT_ID?.trim();
+          const host = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${encodeURIComponent(host)}`);
+          endpoint.searchParams.set('teamId', teamId);
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } });
+            if (response.ok) {
+              const deployment = await response.json();
+              if ((deployment.uid || deployment.id) === expected) { console.log('previous verified Web deployment restored'); process.exit(0); }
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          throw new Error('previous Web deployment restore could not be verified');
+          NODE

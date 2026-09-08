@@ -5,37 +5,53 @@ import test from 'node:test';
 const page = await readFile(new URL('../apps/web/app/page.tsx', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../apps/web/app/home.module.css', import.meta.url), 'utf8');
 
-test('home makes the human-listening promise caller-first without opening closed conversation paths', () => {
-  assert.match(page, /یک آدم واقعی گوش می‌دهد\. لازم نیست دنبال راه‌حل باشی/);
+const closedNotice = 'گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده';
+const heroStart = page.indexOf('<section className={styles.hero}');
+const heroEnd = page.indexOf('</section>', heroStart);
+const hero = page.slice(heroStart, heroEnd);
+
+test('home stays caller-first, tells the closed-service truth once and does not make login a hero destination', () => {
+  assert.match(page, /یک آدم واقعی گوش می‌دهد\. لازم نیست دنبال راه‌حل باشید/);
   assert.match(page, /هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد/);
-  assert.match(page, /شنیده‌شدن توسط یک نفر دیگر/);
-  assert.match(page, /گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده/);
+  assert.equal(page.split(closedNotice).length - 1, 1);
+  assert.match(hero, /href="#experience"/);
+  assert.match(hero, /href="#trust"/);
+  assert.doesNotMatch(hero, /href="#login"/);
+  assert.doesNotMatch(page, /این توضیح وعده بازبودن سرویس نیست|وضعیت دسترسی فعلی همان است/);
   assert.doesNotMatch(page, /href="\/talk"/);
   assert.doesNotMatch(page, /شروع گفت‌وگو/);
 });
 
-test('home explains caller control, listener boundaries and preparation with restrained claims', () => {
-  assert.match(page, /تو انتخاب می‌کنی چه چیزی را بگویی/);
-  assert.match(page, /تبادل راه ارتباط شخصی یا بردن رابطه به بیرون از سرویس/);
-  assert.match(page, /معرفی‌ای که خود فرد می‌نویسد و اطلاعاتی که واقعاً بررسی شده‌اند، یک چیز محسوب نمی‌شوند/);
-  assert.match(page, /قبل از ارزیابی، نقش و مرزهای شنونده آموزش داده می‌شود/);
-  assert.match(page, /هرجا بررسی هویت در فرایند مربوط اعمال شود/);
+test('home explains human listening, personal-contact boundaries, profile truth and proven future safety controls', () => {
+  assert.match(page, /فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی/);
+  assert.match(page, /درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس/);
+  assert.match(page, /متن معرفی را خود شنونده می‌نویسد/);
+  assert.match(page, /اگر موردی جداگانه بررسی شده باشد/);
+  assert.match(page, /پایان عادی تماس/);
+  assert.match(page, /خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل/);
+  assert.match(page, /شنونده پیش از ارزیابی با نقش و مرزهای آن آشنا می‌شود/);
   assert.match(page, /این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست/);
 });
 
-test('verified login state does not force normal users into listener onboarding', () => {
+test('public Persian voice is respectful and login remains useful without forcing listener onboarding', () => {
+  assert.doesNotMatch(page, /می‌توانی|می‌کنی|می‌شوی|باشی|بگویی|بدهی|ببری/);
   assert.match(page, /\/api\/auth\/request/);
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
-  assert.match(page, /برای ماندن در حساب لازم نیست وارد مسیر شنونده شوید/);
-  assert.match(page, /اگر خودتان برای شنونده‌شدن آمده‌اید/);
+  assert.match(page, /اگر فقط می‌خواهید با سرویس آشنا شوید، نیازی به ورود نیست/);
+  assert.match(page, /اگر برای گفت‌وگو وارد شدید، گفت‌وگوی عمومی فعلاً باز نیست/);
+  assert.match(page, /اگر برای شنونده‌شدن آمده‌اید/);
   assert.match(page, /ادامه مسیر شنونده/);
+  assert.doesNotMatch(page, /Caller|v1\.2|HOLD|cookie|JavaScript|feature gate|release/i);
 });
 
-test('home-scoped visual system explicitly protects focus, RTL reading and narrow mobile layouts', () => {
+test('home-scoped visual system keeps focus, RTL, mobile layout and readable trust-critical text', () => {
   assert.match(styles, /\.home :focus-visible/);
   assert.match(styles, /direction: rtl/);
   assert.match(styles, /@media \(max-width: 360px\)/);
   assert.match(styles, /min-height: 5[024]px/);
   assert.match(styles, /grid-template-columns/);
+  assert.match(styles, /\.privacyNote[\s\S]*font-size: 13px/);
+  assert.match(styles, /\.footer[\s\S]*font-size: 13px/);
+  assert.doesNotMatch(page, /sectionNumber/);
 });

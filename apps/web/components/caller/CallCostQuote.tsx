@@ -31,6 +31,7 @@ type BookingResponse = {
 type Props = {
   maxSeconds?: number | null;
   bookingId?: string;
+  deferred?: boolean;
   className?: string;
 };
 
@@ -72,7 +73,7 @@ function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string
   }
 }
 
-export default function CallCostQuote({ maxSeconds = null, bookingId = '', className }: Props) {
+export default function CallCostQuote({ maxSeconds = null, bookingId = '', deferred = false, className }: Props) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -134,12 +135,18 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', class
       {!loading && quote && (
         <>
           <strong>نرخ فعلی: {quote.rateText} برای هر دقیقه اتصال واقعی.</strong>
-          <span>
-            برای سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه، تا {quote.holdText} از اعتبار رزرو می‌شود؛ فقط زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
-          </span>
+          {deferred ? (
+            <span>
+              با نرخ فعلی، سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه به حداکثر {quote.holdText} اعتبار نیاز دارد. ثبت رزرو الآن مبلغی نگه نمی‌دارد؛ نرخ و موجودی هنگام شروع تماس دوباره روی سرور بررسی می‌شود.
+            </span>
+          ) : (
+            <span>
+              برای سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه، تا {quote.holdText} از اعتبار هنگام شروع تماس رزرو می‌شود؛ فقط زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
+            </span>
+          )}
           <span>اعتبار قابل استفاده الآن: {quote.availableText}.</span>
           {!quote.enough && <span>اعتبار فعلی برای این سقف زمانی کافی نیست؛ سقف کوتاه‌تر انتخاب کن یا بعد از فعال‌شدن مسیر پرداخت، اعتبارت را افزایش بده.</span>}
-          {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ نرخ و موجودی هنگام شروع تماس دوباره روی سرور بررسی می‌شود.</span>}
+          {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ همین نرخ و موجودی با شروع تماس دوباره تأیید می‌شود.</span>}
         </>
       )}
       {!loading && unavailable && (

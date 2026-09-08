@@ -624,7 +624,7 @@ export default function ListenerWorkPage() {
         </div>
         <div className="work-status-copy">
           <p>
-            این نسخه هنوز Push پس‌زمینه را آماده اعلام نمی‌کند. برای دریافت تماس باید این تب باز و فعال بماند؛
+            این نسخه هنوز اعلان پس‌زمینه را آماده اعلام نمی‌کند. برای دریافت تماس باید این تب باز و فعال بماند؛
             با رفتن صفحه به پس‌زمینه، وضعیت به‌صورت ایمن روی آفلاین می‌رود تا مخاطب به شنونده‌ای که اعلان نمی‌گیرد وصل نشود.
           </p>
           {incomeAvailable && <strong>درآمد قابل تسویه ثبت‌شده: {formatMoney(incomeAvailable.amountMinor, incomeAvailable.currencyCode)}</strong>}

@@ -1,0 +1,49 @@
+name: Ops Dispatch Production Web
+
+on:
+  push:
+    branches:
+      - ops-dispatch-production-web-2350f89
+    paths:
+      - .github/workflows/ops-dispatch-production-web.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exact production source
+        env:
+          EXPECTED_MAIN_SHA: 2350f89b315f8c2f4824d820795ffc884961c22e
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current="$(curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/heads/main" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).object.sha))")"
+          test "$current" = "$EXPECTED_MAIN_SHA" || { echo "::error::main moved to $current; refusing release"; exit 1; }
+
+      - name: Dispatch official production Web workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production-web-v2.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"confirm":"DEPLOY-PRODUCTION-WEB-V2"}}')"
+          if [ "$status" != "204" ]; then
+            cat /tmp/dispatch.out
+            echo "::error::official production Web dispatch failed with HTTP $status"
+            exit 1
+          fi
+          echo 'official production Web workflow dispatched for exact verified main'

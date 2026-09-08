@@ -32,10 +32,13 @@ export type SessionResponse = {
 };
 
 export type ListenerTrainingModuleKey =
-  | 'active_listening'
   | 'role_boundary'
+  | 'active_listening'
+  | 'what_not_to_say'
+  | 'platform_rules'
   | 'safety'
-  | 'platform_rules';
+  | 'closing_conversation'
+  | 'scenarios';
 
 export type ListenerApplicationResponse = {
   id: string;
@@ -359,7 +362,7 @@ export function submitListenerAssessment(
 ): Promise<{ ok: true; attemptId: string; status: 'pending' }> {
   return request('/v1/listener/assessment', {
     method: 'POST',
-    body: JSON.stringify({ scenarioVersion: 'listener-beta-v1', answers }),
+    body: JSON.stringify({ scenarioVersion: 'listener-beta-v2', answers }),
   }, token);
 }
 

@@ -1,8 +1,13 @@
 export const LISTENER_TRAINING_MODULES = [
-  'active_listening',
+  // Keep the original keys where possible so existing applications can continue
+  // their journey while the new modules are added by the completion endpoint.
   'role_boundary',
-  'safety',
+  'active_listening',
+  'what_not_to_say',
   'platform_rules',
+  'safety',
+  'closing_conversation',
+  'scenarios',
 ] as const;
 
 export type ListenerTrainingModule = (typeof LISTENER_TRAINING_MODULES)[number];

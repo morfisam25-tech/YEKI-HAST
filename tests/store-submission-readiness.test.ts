@@ -40,22 +40,22 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy covers current listener path and truthfully marks Caller and Internet Voice closed in production', () => {
-  assert.match(privacyPage, /Web و اپ موبایل/);
+test('privacy policy covers current listener path and truthfully marks contact and Internet Voice closed in production', () => {
+  assert.match(privacyPage, /وب و اپ موبایل/);
   assert.match(privacyPage, /نام مستعار/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
-  assert.match(privacyPage, /مسیر عمومی Caller/);
+  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده/);
   assert.match(privacyPage, /تماس صوتی اینترنتی/);
   assert.match(privacyPage, /فعال نیستند/);
   assert.match(privacyPage, /RECORD_AUDIO/);
-  assert.match(privacyPage, /مسیر عمومی Caller و تماس صوتی در وضعیت فعلی production بسته است/);
+  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده و تماس صوتی در وضعیت فعلی production بسته است/);
   assert.match(privacyPage, /صدای مکالمه از این قابلیت جمع‌آوری یا منتقل نمی‌شود/);
   assert.match(privacyPage, /WebRTC/);
-  assert.match(privacyPage, /TURN relay/);
+  assert.match(privacyPage, /واسط TURN/);
   assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
-  assert.match(privacyPage, /پیش از باز شدن Caller یا Internet Voice در production/);
+  assert.match(privacyPage, /پیش از باز شدن تماس‌گیرنده یا تماس صوتی اینترنتی در production/);
   assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
   assert.match(privacyPage, /نگهداری ضروری/);
 });

@@ -22,5 +22,5 @@ test('Web Listener keeps non-onboarding application states fail-closed', () => {
   assert.match(webOnboarding, /agreement_pending: 'در انتظار قرارداد'/);
   assert.match(webOnboarding, /admin_review: 'در بررسی نهایی'/);
   assert.match(webOnboarding, /suspended: 'معلق'/);
-  assert.match(webOnboarding, /این مرحله از داخل Web قابل تغییر نیست/);
+  assert.match(webOnboarding, /این مرحله از داخل وب قابل تغییر نیست/);
 });

@@ -69,7 +69,7 @@ function toLocalInput(value: string): string {
 function message(code: string): string {
   const messages: Record<string, string> = {
     authentication_required: 'برای رزرو، ابتدا از صفحه اصلی وارد حساب شو.',
-    caller_closed_beta_disabled: 'Caller در محیط فعلی هنوز باز نشده است.',
+    caller_closed_beta_disabled: 'مسیر گفت‌وگو در محیط فعلی هنوز باز نشده است.',
     caller_age_gate_required: 'قبل از رزرو باید شرط سنی نسخه جاری را تأیید کنی.',
     availability_not_bookable: 'این بازه دیگر قابل رزرو نیست. زمان دیگری انتخاب کن.',
     booking_time_conflict: 'این زمان با یک رزرو دیگر تداخل دارد.',
@@ -178,7 +178,7 @@ export default function BookingPage() {
           maxSeconds,
         }),
       });
-      setNotice('رزرو ثبت شد. مبلغی الان کسر یا رزرو نمی‌شود؛ HOLD فقط هنگام شروع تماس ساخته می‌شود.');
+      setNotice('رزرو ثبت شد. مبلغی در این مرحله کسر یا کنار گذاشته نمی‌شود؛ رزرو موقت اعتبار فقط هنگام شروع تماس ساخته می‌شود.');
       await refresh();
       await chooseListener(selected);
     } catch (cause) {

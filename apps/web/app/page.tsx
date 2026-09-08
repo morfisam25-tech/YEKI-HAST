@@ -32,7 +32,7 @@ export default function Page() {
     event.preventDefault();
     const normalized = normalizeEmail(email);
     if (!normalized) {
-      setError('یک ایمیل معتبر وارد کنید.');
+      setError('ایمیل را کامل و درست وارد کنید.');
       return;
     }
 
@@ -44,7 +44,7 @@ export default function Page() {
       setVerifiedEmail(normalized);
       setStep('code');
     } catch {
-      setError('ارسال کد انجام نشد. کمی بعد دوباره تلاش کنید.');
+      setError('کد ورود ارسال نشد. چند لحظه دیگر دوباره تلاش کنید.');
     } finally {
       setBusy(false);
     }
@@ -53,7 +53,7 @@ export default function Page() {
   async function verifyCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!/^\d{6}$/.test(code)) {
-      setError('کد ۶ رقمی ایمیل‌شده را وارد کنید.');
+      setError('کد ۶ رقمی ارسال‌شده به ایمیل را وارد کنید.');
       return;
     }
 
@@ -64,7 +64,7 @@ export default function Page() {
       if (!response.ok) throw new Error('email_otp_verify_failed');
       setStep('verified');
     } catch {
-      setError('کد واردشده معتبر نیست یا زمان آن گذشته است.');
+      setError('این کد معتبر نیست یا زمان استفاده از آن گذشته است. یک کد تازه بگیرید.');
     } finally {
       setBusy(false);
     }
@@ -88,24 +88,28 @@ export default function Page() {
     <main>
       <header className="site-header">
         <strong className="brand">یکی هست</strong>
-        <span>گفت‌وگو با یک آدم واقعی</span>
+        <span>یک انسان، برای شنیدن</span>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
         <div className="intro-copy">
-          <p className="kicker">برای وقتی که می‌خواهی حرف بزنی</p>
+          <p className="kicker">گاهی فقط می‌خواهی کسی واقعاً گوش بدهد</p>
           <h1 id="page-title">یکی هست</h1>
           <p className="lead">
-            در نسخه v1.2، Caller بعد از ورود می‌تواند شنونده آنلاین انتخاب کند و تماس صوتی را مستقیم از اینترنت
-            شروع کند. تماس تلفنی ماسک‌شده فقط مسیر جایگزین است و برای استفاده اصلی لازم نیست.
+            «یکی هست» فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است؛ کسی که با توجه گوش می‌دهد، قضاوت نمی‌کند و قرار نیست برای زندگی شما نسخه بپیچد.
           </p>
 
           <div className="after-login">
-            <h2>بعد از ورود چه می‌بینی؟</h2>
+            <h2>شنونده چه کار می‌کند؟</h2>
             <p>
-              فهرست شنونده‌های آنلاین، اعتبار Wallet و سه سقف ۱۰، ۳۰ و ۶۰ دقیقه. انتخاب زمان فقط سقف تماس و
-              HOLD اعتبار است؛ هزینه از زمانی شروع می‌شود که صدای هر دو طرف واقعاً متصل شده باشد. هنگام تماس
-              نیز می‌توان ۱۵ یا ۳۰ دقیقه به سقف اضافه کرد.
+              شنونده به شما فرصت حرف‌زدن می‌دهد، سؤال‌های روشن و محترمانه می‌پرسد و کمک می‌کند حرفتان را با ریتم خودتان ادامه دهید. این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست.
+            </p>
+          </div>
+
+          <div className="after-login">
+            <h2>وضعیت فعلی سرویس</h2>
+            <p>
+              مسیر ثبت‌نام، آموزش و ارزیابی شنونده‌ها فعال است. گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده و تا زمان فعال‌شدن، از این صفحه وعده دسترسی به آن داده نمی‌شود.
             </p>
           </div>
         </div>
@@ -114,9 +118,9 @@ export default function Page() {
           {step === 'email' && (
             <form onSubmit={requestCode} className="login-form">
               <div>
-                <p className="form-eyebrow">ورود امن</p>
-                <h2>ورود با ایمیل</h2>
-                <p className="helper">یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود.</p>
+                <p className="form-eyebrow">ورود به حساب</p>
+                <h2>ایمیل شما</h2>
+                <p className="helper">یک کد ۶ رقمی برای ورود به همین ایمیل می‌فرستیم.</p>
               </div>
 
               <label htmlFor="email">ایمیل</label>
@@ -141,8 +145,7 @@ export default function Page() {
               </button>
 
               <p className="privacy">
-                ایمیل برای ورود و امنیت حساب استفاده می‌شود. تماس اصلی از اینترنت انجام می‌شود و شماره تلفن
-                برای آن لازم نیست. اگر مسیر تلفنی جایگزین بعداً فعال شود، شماره تماس جداگانه ثبت و تأیید می‌شود.
+                ایمیل برای ورود و امنیت حساب استفاده می‌شود. جزئیات مربوط به نگهداری و استفاده از داده‌ها در صفحه حریم خصوصی آمده است.
               </p>
             </form>
           )}
@@ -151,11 +154,11 @@ export default function Page() {
             <form onSubmit={verifyCode} className="login-form">
               <div>
                 <p className="form-eyebrow">تأیید ایمیل</p>
-                <h2>کد یک‌بارمصرف</h2>
-                <p className="helper">کد ۶ رقمی ایمیل‌شده را وارد کنید.</p>
+                <h2>کد ورود</h2>
+                <p className="helper">کد ۶ رقمی ارسال‌شده به {verifiedEmail} را وارد کنید.</p>
               </div>
 
-              <label htmlFor="code">کد ورود</label>
+              <label htmlFor="code">کد ۶ رقمی</label>
               <input
                 id="code"
                 name="code"
@@ -176,7 +179,7 @@ export default function Page() {
                 {busy ? 'در حال بررسی…' : 'تأیید و ورود'}
               </button>
               <button type="button" className="text-button" onClick={editEmail} disabled={busy}>
-                تغییر ایمیل
+                اصلاح ایمیل
               </button>
             </form>
           )}
@@ -184,11 +187,10 @@ export default function Page() {
           {step === 'verified' && (
             <div className="verified-state">
               <p className="form-eyebrow">ورود انجام شد</p>
-              <h2>ایمیل شما تأیید شد.</h2>
-              <p className="helper">نشست ورود به‌صورت امن در cookie غیرقابل‌دسترسی برای JavaScript نگهداری می‌شود.</p>
-              <a className="primary-link" href="/talk">می‌خواهم با یک شنونده حرف بزنم</a>
-              <a className="primary-link" href="/listener">می‌خواهم شنونده باشم</a>
-              <button type="button" className="text-button" onClick={() => void logout()}>خروج از این نشست</button>
+              <h2>حساب شما آماده ادامه است.</h2>
+              <p className="helper">اگر برای شنونده‌شدن آمده‌اید، از همین‌جا وارد مسیر آموزش و ارزیابی شوید.</p>
+              <a className="primary-link" href="/listener">ادامه مسیر شنونده</a>
+              <button type="button" className="text-button" onClick={() => void logout()}>خروج از حساب</button>
             </div>
           )}
         </div>
@@ -196,20 +198,30 @@ export default function Page() {
 
       <section className="listener-note" aria-labelledby="listener-title">
         <div>
-          <p className="kicker">مسیر شنونده</p>
-          <h2 id="listener-title">شنونده‌ها پیش از فعالیت بررسی می‌شوند.</h2>
+          <p className="kicker">برای شنونده‌ها</p>
+          <h2 id="listener-title">شنیدن خوب، مهارت و مرز می‌خواهد.</h2>
         </div>
         <p>
-          درخواست، آموزش، ارزیابی و تأییدهای شنونده بخشی از محصول‌اند. در پروفایل عمومی باید اطلاعات تأییدشده
-          از معرفی، سابقه تحصیل یا کارِ خوداظهاری جدا دیده شود تا Caller بداند کدام بخش را «یکی هست» بررسی کرده است.
+          متقاضی شنونده‌شدن قبل از آماده‌شدن، با نقش شنونده، گوش‌دادن فعال، مرزهای رفتاری و موقعیت‌های حساس آشنا می‌شود و بعد ارزیابی می‌شود. اطلاعاتی که خود فرد درباره خودش می‌نویسد با اطلاعاتی که واقعاً بررسی شده یکسان در نظر گرفته نمی‌شود.
+        </p>
+      </section>
+
+      <section className="listener-note" aria-labelledby="trust-title">
+        <div>
+          <p className="kicker">اعتماد و حریم</p>
+          <h2 id="trust-title">احترام، بخشی از خود گفتگوست.</h2>
+        </div>
+        <p>
+          گفت‌وگو باید در چارچوب هدف «یکی هست»، یعنی شنیدن و همراهی انسانی، باقی بماند. آزار، تهدید، درخواست‌های نامناسب، سوءاستفاده از اطلاعات شخصی یا تلاش برای بردن رابطه به خارج از سرویس پذیرفته نیست. جزئیات بیشتر در قوانین استفاده و حریم خصوصی آمده است.
         </p>
       </section>
 
       <nav className="public-links" aria-label="اطلاعات عمومی سرویس">
+        <a href="/listener">شنونده‌شدن</a>
         <a href="/privacy">حریم خصوصی</a>
         <a href="/terms">قوانین استفاده</a>
         <a href="/account/delete">حذف حساب</a>
-        <a href="mailto:sales@uniqueholding.com.tr">پشتیبانی</a>
+        <a href="mailto:sales@uniqueholding.com.tr">sales@uniqueholding.com.tr</a>
       </nav>
     </main>
   );

@@ -16,7 +16,7 @@ test('pre-call quote comes from live bootstrap pricing and current wallet rather
   assert.match(quote, /getJson<Bootstrap>\('bootstrap'\)/);
   assert.match(quote, /getJson<WalletResponse>\('wallet'\)/);
   assert.match(quote, /callerRatePerMinuteMinor/);
-  assert.match(quote, /\(rate \* BigInt\(seconds\) \+ 59n\) \/ 60n/);
+  assert.match(quote, /\(rate \* BigInt\(seconds\) \+ BigInt\(59\)\) \/ BigInt\(60\)/);
   assert.match(quote, /فقط زمان اتصال واقعی کم می‌شود/);
   assert.doesNotMatch(quote, /4000|۴۰۰۰|2800|۲۸۰۰|1200|۱۲۰۰/);
 });

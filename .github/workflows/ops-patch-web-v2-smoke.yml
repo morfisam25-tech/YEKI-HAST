@@ -1,0 +1,48 @@
+name: Ops Patch Web V2 Smoke
+
+on:
+  push:
+    branches:
+      - ops-patch-web-v2-smoke-2350f89
+    paths:
+      - .github/workflows/ops-patch-web-v2-smoke.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Require exact source and patch only stale privacy needle
+        env:
+          EXPECTED_MAIN_SHA: 2350f89b315f8c2f4824d820795ffc884961c22e
+          FIX_BRANCH: fix/web-v2-current-privacy-smoke
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA" || { echo '::error::main moved; refusing patch'; exit 1; }
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/deploy-production-web-v2.yml')
+          s = p.read_text()
+          old = "check_path /privacy 'Web و اپ موبایل'"
+          new = "check_path /privacy 'در وب و اپ موبایل'"
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one stale privacy smoke needle, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git diff --check
+          git diff --exit-code -- . ':!.github/workflows/deploy-production-web-v2.yml' || { echo '::error::unexpected file changed'; exit 1; }
+          git diff -- .github/workflows/deploy-production-web-v2.yml
+          git config user.name 'morfisam25-tech'
+          git config user.email 'morfisam25@gmail.com'
+          git switch -c "$FIX_BRANCH"
+          git add .github/workflows/deploy-production-web-v2.yml
+          git commit -m 'fix: align Web deploy privacy smoke with current copy'
+          git push origin "$FIX_BRANCH"

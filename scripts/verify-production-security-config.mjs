@@ -102,6 +102,42 @@ function bootstrapExpiry(name) {
   return raw;
 }
 
+function staticIceServersContainTurn(raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch { throw new Error('INTERNET_VOICE_ICE_SERVERS_JSON must be valid JSON'); }
+  if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 16) {
+    throw new Error('INTERNET_VOICE_ICE_SERVERS_JSON must be a non-empty RTCIceServer array');
+  }
+  return parsed.some((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const urls = Array.isArray(entry.urls) ? entry.urls : [entry.urls];
+    return urls.some((url) => typeof url === 'string' && /^turns?:/i.test(url.trim()));
+  });
+}
+
+function validateInternetVoiceLaunchTransport() {
+  const primary = process.env.CALL_PRIMARY_TRANSPORT?.trim().toLowerCase() || 'internet_voice';
+  if (!['internet_voice', 'masked_pstn'].includes(primary)) throw new Error('CALL_PRIMARY_TRANSPORT is invalid');
+  if (primary !== 'internet_voice') return;
+
+  const cloudflareKeyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim() || '';
+  const cloudflareApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim() || '';
+  if (Boolean(cloudflareKeyId) !== Boolean(cloudflareApiToken)) {
+    throw new Error('Cloudflare TURN key ID and API token must be configured together');
+  }
+  if (cloudflareKeyId && cloudflareApiToken) {
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(cloudflareKeyId)) throw new Error('CLOUDFLARE_TURN_KEY_ID is invalid');
+    integer('CLOUDFLARE_TURN_TTL_SECONDS', 14_400, 60, 172_800);
+    return;
+  }
+
+  const staticIce = process.env.INTERNET_VOICE_ICE_SERVERS_JSON?.trim();
+  if (!staticIce || !staticIceServersContainTurn(staticIce)) {
+    throw new Error('Production Caller requires a TURN/TURNS relay or Cloudflare TURN credentials');
+  }
+}
+
 if (process.env.NODE_ENV !== 'production') throw new Error('NODE_ENV must be production');
 if (process.env.DEV_EXPOSE_OTP === 'true') throw new Error('DEV_EXPOSE_OTP must not be enabled in production');
 
@@ -185,6 +221,7 @@ if (callerClosedBetaEnabled) {
   emailAddress('SUPPORT_EMAIL');
   integer('CALLER_MINIMUM_AGE', undefined, 13, 99);
   required('CALLER_AGE_POLICY_VERSION');
+  validateInternetVoiceLaunchTransport();
 }
 
 integer('SESSION_TTL_HOURS', 720, 1, 8760);

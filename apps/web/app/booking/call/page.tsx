@@ -152,7 +152,7 @@ export default function BookingCallPage() {
         if (result.timing.remainingSeconds !== null) setRemainingSeconds(result.timing.remainingSeconds);
         setWarning(result.timing.warning);
         if (result.terminal) {
-          setEndedBySafety(result.status === 'safety_terminated');
+          setEndedBySafety(false);
           setPhase('ended');
           setRemainingSeconds(0);
           setWarning(null);

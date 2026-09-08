@@ -16,7 +16,8 @@ test('pre-call quote comes from live bootstrap pricing and current wallet rather
   assert.match(quote, /getJson<Bootstrap>\('bootstrap'\)/);
   assert.match(quote, /getJson<WalletResponse>\('wallet'\)/);
   assert.match(quote, /callerRatePerMinuteMinor/);
-  assert.match(quote, /\(rate \* BigInt\(seconds\) \+ BigInt\(59\)\) \/ BigInt\(60\)/);
+  assert.match(quote, /BigInt\(bootstrap\.pricing\.callerRatePerMinuteMinor\) \* BigInt\(seconds\)/);
+  assert.match(quote, /BigInt\(59\)\) \/ BigInt\(60\)/);
   assert.match(quote, /فقط زمان اتصال واقعی کم می‌شود/);
   assert.doesNotMatch(quote, /4000|۴۰۰۰|2800|۲۸۰۰|1200|۱۲۰۰/);
 });
@@ -37,8 +38,10 @@ test('booking is timezone-explicit, deferred-price truthful and re-quotes before
   assert.match(booking, /new Date\(scheduledLocal\)\.toISOString\(\)/);
   assert.match(booking, /<CallCostQuote maxSeconds=\{maxSeconds\} deferred/);
   assert.match(quote, /ثبت رزرو الآن مبلغی نگه نمی‌دارد/);
-  assert.match(bookingCall, /<CallCostQuote bookingId=\{bookingId\}/);
+  assert.match(bookingCall, /<CallCostQuote bookingId=\{bookingId\} callId=\{existingCallId\}/);
   assert.match(quote, /getJson<BookingResponse>\('bookings'\)/);
+  assert.match(quote, /getJson<CallResponse>\(`calls\/\$\{callId\}`\)/);
+  assert.match(quote, /این تماس قبلاً ایجاد شده/);
 });
 
 test('no-answer state releases the hold, auto-offlines listener and returns alternatives', () => {

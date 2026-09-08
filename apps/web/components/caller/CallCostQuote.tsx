@@ -28,9 +28,17 @@ type BookingResponse = {
   }>;
 };
 
+type CallResponse = {
+  callId: string;
+  currencyCode: string;
+  authorizedMinor: string;
+  maxBillableSeconds: number | null;
+};
+
 type Props = {
   maxSeconds?: number | null;
   bookingId?: string;
+  callId?: string;
   deferred?: boolean;
   className?: string;
 };
@@ -41,6 +49,7 @@ type Quote = {
   availableText: string;
   enough: boolean;
   seconds: number;
+  reservedAlready: boolean;
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -48,6 +57,19 @@ async function getJson<T>(path: string): Promise<T> {
   const payload = await response.json().catch(() => null) as (T & { error?: string }) | null;
   if (!response.ok || !payload) throw new Error(payload?.error || `http_${response.status}`);
   return payload;
+}
+
+function displayPricingForCurrency(
+  pricing: Bootstrap['pricing'],
+  currencyCode: string,
+): Bootstrap['pricing'] {
+  if (pricing.currencyCode === currencyCode) return pricing;
+  return {
+    ...pricing,
+    currencyCode,
+    displayUnit: currencyCode === 'IRR' ? 'toman' : 'currency',
+    displayDivisor: currencyCode === 'IRR' ? 10 : 1,
+  };
 }
 
 function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string {
@@ -73,7 +95,13 @@ function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string
   }
 }
 
-export default function CallCostQuote({ maxSeconds = null, bookingId = '', deferred = false, className }: Props) {
+export default function CallCostQuote({
+  maxSeconds = null,
+  bookingId = '',
+  callId = '',
+  deferred = false,
+  className,
+}: Props) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -85,16 +113,20 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', defer
       setLoading(true);
       setUnavailable(false);
       try {
-        const [bootstrap, walletResponse, bookingResponse] = await Promise.all([
+        const [bootstrap, walletResponse, bookingResponse, callResponse] = await Promise.all([
           getJson<Bootstrap>('bootstrap'),
           getJson<WalletResponse>('wallet'),
           maxSeconds === null && bookingId
             ? getJson<BookingResponse>('bookings')
             : Promise.resolve<BookingResponse>({ bookings: [] }),
+          maxSeconds === null && callId
+            ? getJson<CallResponse>(`calls/${callId}`)
+            : Promise.resolve<CallResponse | null>(null),
         ]);
         if (!active) return;
 
         const seconds = maxSeconds
+          ?? callResponse?.maxBillableSeconds
           ?? bookingResponse.bookings.find((item) => item.id === bookingId)?.maxBillableSeconds
           ?? 0;
         if (!Number.isInteger(seconds) || seconds <= 0) {
@@ -103,17 +135,25 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', defer
           return;
         }
 
-        const rate = BigInt(bootstrap.pricing.callerRatePerMinuteMinor);
-        const hold = (rate * BigInt(seconds) + BigInt(59)) / BigInt(60);
-        const wallet = walletResponse.wallets.find((item) => item.currencyCode === bootstrap.pricing.currencyCode);
+        const reservedAlready = Boolean(callResponse);
+        const currencyCode = callResponse?.currencyCode ?? bootstrap.pricing.currencyCode;
+        const pricing = displayPricingForCurrency(bootstrap.pricing, currencyCode);
+        const hold = callResponse
+          ? BigInt(callResponse.authorizedMinor)
+          : (BigInt(bootstrap.pricing.callerRatePerMinuteMinor) * BigInt(seconds) + BigInt(59)) / BigInt(60);
+        const rate = callResponse
+          ? (hold * BigInt(60)) / BigInt(seconds)
+          : BigInt(bootstrap.pricing.callerRatePerMinuteMinor);
+        const wallet = walletResponse.wallets.find((item) => item.currencyCode === currencyCode);
         const available = BigInt(wallet?.availableMinor ?? '0');
 
         setQuote({
-          rateText: formatMinor(rate, bootstrap.pricing),
-          holdText: formatMinor(hold, bootstrap.pricing),
-          availableText: formatMinor(available, bootstrap.pricing),
-          enough: available >= hold,
+          rateText: formatMinor(rate, pricing),
+          holdText: formatMinor(hold, pricing),
+          availableText: formatMinor(available, pricing),
+          enough: reservedAlready || available >= hold,
           seconds,
+          reservedAlready,
         });
       } catch {
         if (active) {
@@ -127,15 +167,19 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', defer
 
     void load();
     return () => { active = false; };
-  }, [bookingId, maxSeconds]);
+  }, [bookingId, callId, maxSeconds]);
 
   return (
     <div className={className} role="status" aria-live="polite" aria-atomic="true">
       {loading && <span>در حال بررسی نرخ و اعتبار…</span>}
       {!loading && quote && (
         <>
-          <strong>نرخ فعلی: {quote.rateText} برای هر دقیقه اتصال واقعی.</strong>
-          {deferred ? (
+          <strong>نرخ این گفت‌وگو: {quote.rateText} برای هر دقیقه اتصال واقعی.</strong>
+          {quote.reservedAlready ? (
+            <span>
+              این تماس قبلاً ایجاد شده و تا {quote.holdText} برای سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه رزرو شده است. مبلغ نهایی فقط بر اساس زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
+            </span>
+          ) : deferred ? (
             <span>
               با نرخ فعلی، سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه به حداکثر {quote.holdText} اعتبار نیاز دارد. ثبت رزرو الآن مبلغی نگه نمی‌دارد؛ نرخ و موجودی هنگام شروع تماس دوباره روی سرور بررسی می‌شود.
             </span>

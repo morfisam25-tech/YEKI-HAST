@@ -5,6 +5,7 @@ import test from 'node:test';
 const listenerPage = await readFile(new URL('../apps/web/app/listener/work/page.tsx', import.meta.url), 'utf8');
 const listenerProxy = await readFile(new URL('../apps/web/app/api/listener/[...path]/route.ts', import.meta.url), 'utf8');
 const homePage = await readFile(new URL('../apps/web/app/page.tsx', import.meta.url), 'utf8');
+const publicProxy = await readFile(new URL('../apps/web/proxy.ts', import.meta.url), 'utf8');
 
 test('Web Listener proxy keeps the session token server-side and allow-lists work operations', () => {
   assert.match(listenerProxy, /WEB_SESSION_COOKIE/);
@@ -70,8 +71,9 @@ test('Web Listener does not render Caller identity, country, phone or payment co
   assert.doesNotMatch(listenerPage, /caller_user_id|callerUserId|callerCountry|paymentCurrency|phoneNumber|providerBridge/);
 });
 
-test('verified web session exposes Caller and Listener onboarding entry points', () => {
-  assert.match(homePage, /href="\/talk"/);
+test('verified web session exposes the listener onboarding entry point but not the closed public conversation flow', () => {
   assert.match(homePage, /href="\/listener"/);
-  assert.match(homePage, /می‌خواهم شنونده باشم/);
+  assert.match(homePage, /ادامه مسیر شنونده/);
+  assert.doesNotMatch(homePage, /href="\/talk"/);
+  assert.match(publicProxy, /matcher: \['\/talk', '\/booking\/:path\*', '\/listener\/work'\]/);
 });

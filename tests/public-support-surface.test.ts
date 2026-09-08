@@ -23,12 +23,10 @@ test('mailbox usability is not treated as proven by source alone and production 
   assert.doesNotMatch(emailSmoke, /imap\.gmail\.com/);
 });
 
-test('public home describes Internet Voice as primary and masked PSTN as optional fallback', () => {
-  assert.match(home, /تماس صوتی را مستقیم از اینترنت/);
-  assert.match(home, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
-  assert.match(home, /شماره تلفن[\s\S]*برای آن لازم نیست|شماره تماس[\s\S]*برای آن لازم نیست/);
-  assert.match(home, /۱۰، ۳۰ و ۶۰ دقیقه/);
-  assert.match(home, /HOLD اعتبار/);
-  assert.match(home, /صدای هر دو طرف واقعاً متصل شده باشد/);
-  assert.doesNotMatch(home, /تماس صوتی هنوز فعال نیست/);
+test('public home describes human listening without advertising closed conversation capability', () => {
+  assert.match(home, /فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی/);
+  assert.match(home, /شنونده به شما فرصت حرف‌زدن می‌دهد/);
+  assert.match(home, /این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست/);
+  assert.match(home, /گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده/);
+  assert.doesNotMatch(home, /Caller|HOLD|Internet Voice|تماس تلفنی ماسک‌شده|v1\./);
 });

@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const callerPage = await readFile(new URL('../apps/web/app/talk/page.tsx', import.meta.url), 'utf8');
 const callerProxy = await readFile(new URL('../apps/web/app/api/caller/[...path]/route.ts', import.meta.url), 'utf8');
+const publicProxy = await readFile(new URL('../apps/web/proxy.ts', import.meta.url), 'utf8');
 const manifestSource = await readFile(new URL('../apps/web/app/manifest.ts', import.meta.url), 'utf8');
 const pwaRegister = await readFile(new URL('../apps/web/app/PwaRegister.tsx', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../apps/web/public/sw.js', import.meta.url), 'utf8');
@@ -62,8 +63,15 @@ test('Web listener cards distinguish verified status from self-declared intro', 
   assert.match(callerPage, /معرفی خوداظهاری \(تأییدنشده\)/);
 });
 
-test('Web Caller is an installable PWA without caching authenticated or call data', () => {
-  assert.match(manifestSource, /start_url: '\/talk'/);
+test('dormant Caller implementation is not a public production surface while its release gate is closed', () => {
+  assert.match(publicProxy, /request\.nextUrl\.pathname === '\/listener\/work'/);
+  assert.match(publicProxy, /matcher: \['\/talk', '\/booking\/:path\*', '\/listener\/work'\]/);
+  assert.match(publicProxy, /NextResponse\.redirect\(new URL\('\/', request\.url\)\)/);
+  assert.match(publicProxy, /NextResponse\.redirect\(new URL\('\/listener', request\.url\)\)/);
+});
+
+test('Web remains an installable PWA without making the closed Caller route its entrypoint or caching authenticated data', () => {
+  assert.match(manifestSource, /start_url: '\/'/);
   assert.match(manifestSource, /display: 'standalone'/);
   assert.match(manifestSource, /\/icon\.svg/);
   assert.match(pwaRegister, /serviceWorker\.register\('\/sw\.js'/);

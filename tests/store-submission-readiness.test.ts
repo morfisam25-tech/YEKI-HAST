@@ -40,22 +40,21 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy covers current listener path and truthfully marks Caller and Internet Voice closed in production', () => {
-  assert.match(privacyPage, /Web و اپ موبایل/);
-  assert.match(privacyPage, /نام مستعار/);
+test('privacy policy covers the current listener path and truthfully marks public voice closed', () => {
+  assert.match(privacyPage, /نسخه وب و اپ موبایل/);
+  assert.match(privacyPage, /نام نمایشی/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
-  assert.match(privacyPage, /مسیر عمومی Caller/);
-  assert.match(privacyPage, /تماس صوتی اینترنتی/);
-  assert.match(privacyPage, /فعال نیستند/);
+  assert.match(privacyPage, /گفت‌وگوی صوتی عمومی/);
+  assert.match(privacyPage, /برای استفاده عمومی فعال نیستند/);
   assert.match(privacyPage, /RECORD_AUDIO/);
-  assert.match(privacyPage, /مسیر عمومی Caller و تماس صوتی در وضعیت فعلی production بسته است/);
+  assert.match(privacyPage, /مسیر عمومی گفت‌وگوی صوتی در نسخه عملیاتی فعلی بسته است/);
   assert.match(privacyPage, /صدای مکالمه از این قابلیت جمع‌آوری یا منتقل نمی‌شود/);
   assert.match(privacyPage, /WebRTC/);
   assert.match(privacyPage, /TURN relay/);
-  assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
-  assert.match(privacyPage, /پیش از باز شدن Caller یا Internet Voice در production/);
+  assert.match(privacyPage, /مسیر.*ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
+  assert.match(privacyPage, /پیش از فعال‌شدن عمومی گفت‌وگوی صوتی/);
   assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
   assert.match(privacyPage, /نگهداری ضروری/);
 });
@@ -65,8 +64,8 @@ test('account deletion is discoverable in app and truthfully completable from th
   assert.match(mobileRoot, /accountDeletionUrl/);
   assert.match(deletionPage, /\/api\/account\/deletion-request/);
   assert.match(deletionPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
-  assert.match(deletionPage, /حساب حذف شد/);
-  assert.match(deletionPage, /نشست‌ها فوراً باطل می‌شوند/);
+  assert.match(deletionPage, /حساب شما حذف شد/);
+  assert.match(deletionPage, /نشست‌های فعال بسته می‌شوند/);
 });
 
 test('current mobile package has no known analytics or advertising SDK that would invalidate privacy draft', () => {

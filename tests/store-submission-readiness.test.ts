@@ -41,23 +41,23 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
 });
 
 test('privacy policy covers current listener path and truthfully marks contact and Internet Voice closed in production', () => {
-  assert.match(privacyPage, /وب و اپ موبایل/);
-  assert.match(privacyPage, /نام مستعار/);
+  assert.match(privacyPage, /نسخه فعلی وب و اپ/);
+  assert.match(privacyPage, /نام نمایشی/);
   assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
   assert.match(privacyPage, /معرفی کوتاه اختیاری/);
   assert.match(privacyPage, /SecureStore/);
-  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده/);
-  assert.match(privacyPage, /تماس صوتی اینترنتی/);
+  assert.match(privacyPage, /مسیر عمومی تماس صوتی بسته است/);
+  assert.match(privacyPage, /تماس اینترنتی/);
   assert.match(privacyPage, /فعال نیستند/);
   assert.match(privacyPage, /RECORD_AUDIO/);
-  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده و تماس صوتی در وضعیت فعلی production بسته است/);
-  assert.match(privacyPage, /صدای مکالمه از این قابلیت جمع‌آوری یا منتقل نمی‌شود/);
+  assert.match(privacyPage, /در محیط عمومی فعلی، قابلیت تماس صوتی بسته است/);
+  assert.match(privacyPage, /کاربر عادی وارد مسیر عملیاتی انتقال صدای مکالمه نمی‌شود/);
   assert.match(privacyPage, /WebRTC/);
-  assert.match(privacyPage, /واسط TURN/);
-  assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
-  assert.match(privacyPage, /پیش از باز شدن تماس‌گیرنده یا تماس صوتی اینترنتی در production/);
-  assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
-  assert.match(privacyPage, /نگهداری ضروری/);
+  assert.match(privacyPage, /از TURN عبور کند/);
+  assert.match(privacyPage, /مسیری برای ضبط یا ذخیره محتوای صوتی مکالمه ندارد/);
+  assert.match(privacyPage, /اگر تماس صوتی بعداً برای عموم باز شود/);
+  assert.match(privacyPage, /حذف کامل همان لحظه انجام می‌شود/);
+  assert.match(privacyPage, /به بررسی نگهداری نیاز داشته باشد/);
 });
 
 test('account deletion is discoverable in app and truthfully completable from the public web resource', () => {
@@ -65,8 +65,8 @@ test('account deletion is discoverable in app and truthfully completable from th
   assert.match(mobileRoot, /accountDeletionUrl/);
   assert.match(deletionPage, /\/api\/account\/deletion-request/);
   assert.match(deletionPage, /payload\.deletionCompleted \? 'completed' : 'requested'/);
-  assert.match(deletionPage, /حساب حذف شد/);
-  assert.match(deletionPage, /نشست‌ها فوراً باطل می‌شوند/);
+  assert.match(deletionPage, /حساب شما حذف شد/);
+  assert.match(deletionPage, /نشست‌های فعال حساب لغو شده‌اند/);
 });
 
 test('current mobile package has no known analytics or advertising SDK that would invalidate privacy draft', () => {

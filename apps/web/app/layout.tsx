@@ -4,7 +4,7 @@ import './styles.css';
 
 export const metadata = {
   title: 'یکی هست',
-  description: 'یک آدم واقعی برای وقتی که فقط می‌خواهی حرف بزنی.',
+  description: 'فضایی برای شنیده‌شدن با احترام توسط یک شنونده انسانی.',
   manifest: '/manifest.webmanifest',
   themeColor: '#1e1a17',
 };

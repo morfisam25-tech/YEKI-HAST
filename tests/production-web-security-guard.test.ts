@@ -37,6 +37,19 @@ test('Web and Admin deny framing and restrict browser capabilities by default', 
   }
 });
 
+
+test('Web voice routes allow microphone only where live audio is used', () => {
+  const routePolicies = new Map(
+    webVercel.headers
+      .filter((entry: any) => ['/talk', '/booking/call', '/listener/work'].includes(entry.source))
+      .map((entry: any) => [entry.source, new Map((entry.headers ?? []).map((header: any) => [String(header.key).toLowerCase(), String(header.value)]))]),
+  );
+
+  for (const route of ['/talk', '/booking/call', '/listener/work']) {
+    assert.equal(routePolicies.get(route)?.get('permissions-policy'), 'camera=(), geolocation=(), microphone=(self), payment=(), usb=()');
+  }
+});
+
 test('production browser sessions use __Host cookies and strict cookie attributes', () => {
   assert.match(webBackend, /NODE_ENV === 'production' \? '__Host-yeki_web_session' : 'yeki_web_session'/);
   assert.match(adminBackend, /NODE_ENV === 'production' \? '__Host-yeki_admin_session' : 'yeki_admin_session'/);

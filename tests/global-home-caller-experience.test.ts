@@ -34,7 +34,7 @@ test('home explains human listening, personal-contact boundaries, profile truth 
 });
 
 test('public Persian voice is respectful and login remains useful without forcing listener onboarding', () => {
-  assert.doesNotMatch(page, /می‌توانی|می‌کنی|می‌شوی|باشی|بگویی|بدهی|ببری/);
+  assert.doesNotMatch(page, /(?:^|[\s>])(تو|می‌توانی|می‌کنی|می‌شوی|باشی|بگویی|بدهی|ببری)(?=[\s<،.!؟]|$)/m);
   assert.match(page, /\/api\/auth\/request/);
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);

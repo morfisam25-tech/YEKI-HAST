@@ -1,0 +1,46 @@
+name: Ops Generate Web V2 Smoke Copy
+
+on:
+  push:
+    branches:
+      - ops-generate-web-v2-smoke-copy-2350f89
+    paths:
+      - .github/workflows/ops-generate-web-v2-smoke-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate corrected workflow as non-workflow blob
+        env:
+          EXPECTED_MAIN_SHA: 2350f89b315f8c2f4824d820795ffc884961c22e
+          COPY_BRANCH: fix/web-v2-current-privacy-smoke-copy
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA" || { echo '::error::main moved; refusing generation'; exit 1; }
+          mkdir -p ops/generated
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('.github/workflows/deploy-production-web-v2.yml').read_text()
+          old = "check_path /privacy 'Web و اپ موبایل'"
+          new = "check_path /privacy 'در وب و اپ موبایل'"
+          if src.count(old) != 1:
+              raise SystemExit(f'expected exactly one stale privacy smoke needle, found {src.count(old)}')
+          Path('ops/generated/deploy-production-web-v2.yml').write_text(src.replace(old, new, 1))
+          PY
+          git diff --check -- ops/generated/deploy-production-web-v2.yml
+          git config user.name 'morfisam25-tech'
+          git config user.email 'morfisam25@gmail.com'
+          git switch -c "$COPY_BRANCH"
+          git add ops/generated/deploy-production-web-v2.yml
+          git commit -m 'ops: materialize corrected Web deploy workflow blob'
+          git push origin "$COPY_BRANCH"

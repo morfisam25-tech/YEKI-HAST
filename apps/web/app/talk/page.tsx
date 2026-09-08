@@ -66,9 +66,9 @@ function formatWallet(wallet: Wallet | null): string {
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
     authentication_required: 'برای تماس ابتدا از صفحه اصلی وارد حساب شو.',
-    caller_closed_beta: 'Caller هنوز در این محیط باز نشده است.',
-    caller_closed_beta_disabled: 'Caller هنوز در این محیط باز نشده است.',
-    caller_age_policy_not_configured: 'قانون سن Caller در این محیط هنوز تنظیم نشده است.',
+    caller_closed_beta: 'مسیر گفت‌وگو هنوز در این محیط باز نشده است.',
+    caller_closed_beta_disabled: 'مسیر گفت‌وگو هنوز در این محیط باز نشده است.',
+    caller_age_policy_not_configured: 'قانون سنی تماس در این محیط هنوز تنظیم نشده است.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی سرویس را تأیید کنی.',
     caller_consent_required: 'برای ادامه باید قوانین استفاده و مرزبندی ایمنی را بپذیری.',
     no_listener_available: 'این شنونده دیگر آنلاین نیست. یک گزینه دیگر انتخاب کن.',
@@ -449,7 +449,7 @@ export default function TalkPage() {
           <p className="kicker">اعتبار قابل استفاده</p>
           <h1>{formatWallet(wallet)}</h1>
         </div>
-        <p>زمان انتخابی سقف تماس است. قبل از اتصال فقط HOLD می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود.</p>
+        <p>زمان انتخابی سقف تماس است. پیش از اتصال، مبلغ فقط موقتاً کنار گذاشته می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود.</p>
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
@@ -460,7 +460,7 @@ export default function TalkPage() {
           <section className="call-setup" aria-labelledby="rules-title">
             <p className="kicker">قبل از اولین تماس</p>
             <h2 id="rules-title">مرزهای گفت‌وگو روشن است</h2>
-            <p>«یکی هست» برای شنیده‌شدن و گفت‌وگوی محترمانه است. شنونده مشاور پزشکی، روان‌شناس، وکیل یا سرویس اضطراری نیست. این فضا برای دوست‌یابی، سکس‌چت، گرفتن شماره/آیدی یا انتقال رابطه به بیرون اپ ساخته نشده است.</p>
+            <p>«یکی هست» برای شنیده‌شدن و گفت‌وگوی محترمانه است. شنونده درمانگر، پزشک، وکیل یا سرویس اضطراری نیست. این فضا برای آشنایی عاطفی، گفت‌وگوی جنسی، درخواست اطلاعات تماس شخصی یا انتقال رابطه به بیرون از سرویس طراحی نشده است.</p>
             <label className="age-check">
               <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />
               <span>تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</span>

@@ -73,5 +73,5 @@ test('Web Listener does not render Caller identity, country, phone or payment co
 test('verified web session exposes Caller and Listener onboarding entry points', () => {
   assert.match(homePage, /href="\/talk"/);
   assert.match(homePage, /href="\/listener"/);
-  assert.match(homePage, /می‌خواهم شنونده باشم/);
+  assert.match(homePage, /درخواست شنونده‌شدن/);
 });

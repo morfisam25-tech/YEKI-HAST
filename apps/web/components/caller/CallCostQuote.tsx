@@ -145,7 +145,7 @@ export default function CallCostQuote({ maxSeconds = null, bookingId = '', defer
             </span>
           )}
           <span>اعتبار قابل استفاده الآن: {quote.availableText}.</span>
-          {!quote.enough && <span>اعتبار فعلی برای این سقف زمانی کافی نیست؛ سقف کوتاه‌تر انتخاب کن یا بعد از فعال‌شدن مسیر پرداخت، اعتبارت را افزایش بده.</span>}
+          {!quote.enough && <span>اعتبار فعلی برای این سقف زمانی کافی نیست؛ سقف کوتاه‌تر انتخاب کن یا اعتبارت را افزایش بده.</span>}
           {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ همین نرخ و موجودی با شروع تماس دوباره تأیید می‌شود.</span>}
         </>
       )}

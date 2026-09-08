@@ -84,7 +84,8 @@
   margin-top: 7px;
 }
 
-.link {
+.link,
+.bookingConsent a {
   color: #47423a;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
@@ -325,6 +326,20 @@
   font-size: 13px;
 }
 
+.bookingConsent {
+  border-top: 1px solid #e7e1d8;
+  padding-top: 16px;
+  display: grid;
+  gap: 11px;
+  color: #5e584f;
+  line-height: 1.8;
+}
+
+.bookingConsent p {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+
 .checkRow {
   display: grid;
   grid-template-columns: 20px 1fr;
@@ -336,7 +351,9 @@
 }
 
 .checkRow input {
-  margin-top: 5px;
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
 }
 
 .booking {
@@ -440,6 +457,136 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.reportArea {
+  width: min(560px, 100%);
+  text-align: right;
+}
+
+.reportArea details {
+  width: 100%;
+  border-top: 1px solid #e7e1d8;
+  padding-top: 8px;
+}
+
+.reportArea summary {
+  min-height: 44px;
+  padding: 10px 2px;
+  cursor: pointer;
+  color: #4f4940;
+  font-weight: 800;
+}
+
+.reportArea summary small {
+  display: block;
+  margin-top: 4px;
+  color: #857d71;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.reportArea details > p {
+  margin: 6px 0 0;
+  color: #6f685e;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.reportArea form {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.reportArea form label {
+  display: grid;
+  gap: 7px;
+  color: #5e584f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reportArea select,
+.reportArea textarea {
+  width: 100%;
+  border: 1px solid #d3ccc2;
+  border-radius: 13px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #25231f;
+  font: inherit;
+}
+
+.reportArea select {
+  min-height: 46px;
+}
+
+.reportArea textarea {
+  min-height: 108px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+.reportArea form label small {
+  color: #8a8276;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.reportArea [data-report-block] {
+  grid-template-columns: 22px 1fr;
+  align-items: start;
+}
+
+.reportArea [data-report-block] input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.reportArea button[type='submit'] {
+  min-height: 46px;
+  border: 1px solid #686157;
+  border-radius: 14px;
+  padding: 10px 16px;
+  background: #fff;
+  color: #39352f;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.reportArea button[type='submit']:disabled {
+  opacity: .48;
+  cursor: default;
+}
+
+.reportArea form p {
+  margin: 0;
+  line-height: 1.75;
+  font-size: 13px;
+}
+
+.listener:focus-visible,
+.control:focus-visible,
+.pill:focus-visible,
+.secondary:focus-visible,
+.primary:focus-visible,
+.primaryLink:focus-visible,
+.danger:focus-visible,
+.endButton:focus-visible,
+.safetyButton:focus-visible,
+.checkRow input:focus-visible,
+.reportArea summary:focus-visible,
+.reportArea button:focus-visible,
+.reportArea select:focus-visible,
+.reportArea textarea:focus-visible,
+.reportArea input:focus-visible,
+.link:focus-visible,
+.brand:focus-visible {
+  outline: 3px solid #655f55;
+  outline-offset: 3px;
 }
 
 @media (max-width: 640px) {

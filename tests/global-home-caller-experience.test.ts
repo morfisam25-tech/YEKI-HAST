@@ -27,7 +27,7 @@ test('home explains human listening, personal-contact boundaries, profile truth 
   assert.match(page, /درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس/);
   assert.match(page, /متن معرفی را خود شنونده می‌نویسد/);
   assert.match(page, /اگر موردی جداگانه بررسی شده باشد/);
-  assert.match(page, /پایان عادی تماس/);
+  assert.match(page, /تماس را به شکل عادی پایان دهید/);
   assert.match(page, /خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل/);
   assert.match(page, /شنونده پیش از ارزیابی با نقش و مرزهای آن آشنا می‌شود/);
   assert.match(page, /این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست/);
@@ -39,7 +39,7 @@ test('public Persian voice is respectful and login remains useful without forcin
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
   assert.match(page, /اگر فقط می‌خواهید با سرویس آشنا شوید، نیازی به ورود نیست/);
-  assert.match(page, /اگر برای گفت‌وگو وارد شدید، گفت‌وگوی عمومی فعلاً باز نیست/);
+  assert.match(page, /اگر برای گفت‌وگو وارد شدید، گفت‌وگوی عمومی فعلاً باز نیست\. ورود شما انجام شده و فعلاً کاری از طرف شما لازم نیست/);
   assert.match(page, /اگر برای شنونده‌شدن آمده‌اید/);
   assert.match(page, /ادامه مسیر شنونده/);
   assert.doesNotMatch(page, /Caller|v1\.2|HOLD|cookie|JavaScript|feature gate|release/i);

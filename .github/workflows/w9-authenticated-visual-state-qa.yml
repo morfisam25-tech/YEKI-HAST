@@ -250,7 +250,7 @@ jobs:
             await assertLayout(page, 'VISUAL_FIXTURE_ONLY_booking_call_ready_' + viewportName);
             await screenshot(page, 'VISUAL_FIXTURE_ONLY-booking-call-ready-' + viewportName + '-full');
             await page.getByRole('button', { name: 'آماده‌ام، شروع کن' }).click();
-            await page.getByRole('alert').waitFor({ timeout: 10000 });
+            await page.locator('[role="alert"]:not(#\\__next-route-announcer__)').first().waitFor({ timeout: 10000 });
             await assertLayout(page, 'VISUAL_FIXTURE_ONLY_booking_call_mic_error_' + viewportName);
             await screenshot(page, 'VISUAL_FIXTURE_ONLY-booking-call-controlled-error-' + viewportName + '-full');
             await context.close();

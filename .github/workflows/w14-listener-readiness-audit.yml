@@ -172,11 +172,12 @@ jobs:
           );
           const provider = prod('KYC_INQUIRY_PROVIDER');
           const inquiry = prod('NEXTPAY_INQUIRY_API');
-          const encryption = prod('KYC_ENCRYPTION_KEY');
-          const hash = prod('KYC_HASH_KEY');
+          const activeKeyId = prod('ACTIVE_DATA_ENCRYPTION_KEY_ID');
+          const encryptionKeys = prod('DATA_ENCRYPTION_KEYS');
+          const hash = prod('KYC_HASH_PEPPER');
           const providerConfigured = provider?.value === 'nextpay';
           const inquiryConfigured = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(inquiry?.value ?? '');
           console.log('W14_KYC_PROVIDER_CONFIGURED=' + (providerConfigured && inquiryConfigured ? 'YES' : 'NO'));
-          console.log('W14_KYC_SECURITY_CONFIGURED=' + (Boolean(encryption?.value) && Boolean(hash?.value) ? 'YES' : 'NO'));
+          console.log('W14_KYC_SECURITY_CONFIGURED=' + (Boolean(activeKeyId?.value) && Boolean(encryptionKeys?.value) && Boolean(hash?.value) ? 'YES' : 'NO'));
           console.log('W14_KYC_EXECUTION_PATH_PRESENT=NO');
           NODE

@@ -62,7 +62,7 @@ function formatMinor(amountMinor: bigint, pricing: QuoteResponse['pricing']): st
       currency: pricing.currencyCode,
       currencyDisplay: 'code',
     });
-    const digits = formatter.resolvedOptions().maximumFractionDigits;
+    const digits = formatter.resolvedOptions().maximumFractionDigits ?? 0;
     return formatter.format(Number(amountMinor) / 10 ** digits);
   } catch {
     return `${amountMinor.toString()} ${pricing.currencyCode}`;

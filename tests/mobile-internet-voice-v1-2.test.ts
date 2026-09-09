@@ -18,8 +18,8 @@ test('Android native build declares WebRTC dependency, plugin and audio-only mic
 });
 
 test('Android Store-facing shell describes Internet Voice accurately and exposes required public policy/support links', () => {
-  assert.match(app, /تماس اصلی از اینترنت برقرار می‌شود/);
-  assert.match(app, /برای Internet Voice شماره تلفن لازم نیست/);
+  assert.match(app, /تماس صوتی از اینترنت انجام می‌شود/);
+  assert.match(app, /شماره واقعی دو طرف نمایش داده نمی‌شود/);
   assert.doesNotMatch(app, /شماره تماس جداگانه تأیید می‌شود/);
   assert.match(app, /https:\/\/yekihast\.app\/privacy/);
   assert.match(app, /https:\/\/yekihast\.app\/terms/);

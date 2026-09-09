@@ -45,6 +45,10 @@ const migrationSources: MigrationSource[] = [
     filename: '0007_global_caller_market_feedback.sql',
     path: join(migrationsDir, '0007_global_caller_market_feedback.sql'),
   },
+  {
+    filename: '0008_caller_quote_bindings.sql',
+    path: join(migrationsDir, '0008_caller_quote_bindings.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

@@ -595,7 +595,7 @@
   padding-top: 32px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: .78rem;
+  font-size: 13px;
 }
 
 .footerBrand { align-items: flex-start; flex-wrap: wrap; max-width: 300px; color: var(--ink); }

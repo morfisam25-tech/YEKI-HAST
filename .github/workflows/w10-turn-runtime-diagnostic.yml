@@ -84,9 +84,13 @@ jobs:
           }
 
           for (const line of source.split(/\r?\n/)) {
-            const match = /^([A-Z0-9_]+)=(?:"((?:\\.|[^"])*)"|([^\\r\\n]*))$/.exec(line);
+            const match = /^([A-Z0-9_]+)=(?:"((?:\\.|[^"])*)"|'((?:\\.|[^'])*)'|([^\\r\\n]*))$/.exec(line);
             if (!match) continue;
-            const value = match[2] !== undefined ? decodeEnvValue(match[2]) : match[3].trim();
+            const value = match[2] !== undefined
+              ? decodeEnvValue(match[2])
+              : match[3] !== undefined
+                ? match[3].replace(/\\'/g, "'")
+                : match[4].trim();
             process.env[match[1]] = value;
           }
 

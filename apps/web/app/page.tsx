@@ -112,14 +112,14 @@ export default function Page() {
           <p className={styles.eyebrow}><span aria-hidden="true">●</span> گفت‌وگو با یک آدم واقعی</p>
           <h1 id="page-title">گاهی فقط لازم است یکی واقعاً گوش بدهد.</h1>
           <p className={styles.heroLead}>
-            با یک شنونده واقعی حرف بزن؛ بدون قضاوت و بدون اینکه مجبور باشی همه‌چیز را از اول توضیح بدهی.
+            با یک شنونده واقعی حرف بزن؛ بدون قضاوت و بدون اینکه مجبور باشی همه‌چیز را از اول توضیح بدهی. یک آدم واقعی گوش می‌دهد. لازم نیست دنبال راه‌حل باشی.
           </p>
           <div className={styles.heroActions}>
             <a className={styles.primaryAction} href="#login">شروع با ایمیل <span aria-hidden="true">←</span></a>
             <a className={styles.textAction} href="#how-it-works">ببین چطور کار می‌کند <span aria-hidden="true">↓</span></a>
           </div>
           <p className={styles.availability}>
-            گفت‌وگوی عمومی فعلاً باز نیست؛ گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده. ورود با ایمیل و مسیر شنونده‌شدن در دسترس است.
+            گفت‌وگوی عمومی فعلاً باز نیست؛ گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده. مسیر شنونده‌شدن فعال است و ورود با ایمیل در دسترس است.
           </p>
         </div>
 
@@ -199,8 +199,8 @@ export default function Page() {
         <div className={styles.trustPanel}>
           <p className={styles.sectionKicker}>مرزها روشن‌اند</p>
           <h2 id="trust-title">شنونده قرار نیست زندگی‌ات را مدیریت کند.</h2>
-          <p>نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. این سرویس مشاوره، درمان یا پاسخ اضطراری نیست.</p>
-          <a className={styles.outlineAction} href="/trust">مرکز اعتماد و ایمنی <span aria-hidden="true">←</span></a>
+          <p>اینجا فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است. نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. این سرویس مشاوره، درمان یا پاسخ اضطراری نیست.</p>
+          <a className={styles.outlineAction} href="/trust">مرکز اعتماد، ایمنی و گزارش <span aria-hidden="true">←</span></a>
         </div>
         <div className={styles.trustPoints}>
           <div><span className={styles.pointIcon}>◌</span><div><strong>ضبط خاموش</strong><p>در عرضه‌ی فعلی، محتوای صوتی مکالمه ضبط یا ذخیره نمی‌شود.</p></div></div>
@@ -213,7 +213,7 @@ export default function Page() {
         <div>
           <p className={styles.sectionKicker}>اگر خوب گوش می‌دهی</p>
           <h2 id="listener-title">شنونده‌ی یکی هست شو.</h2>
-          <p>پیش از ارزیابی، با نقش شنونده، مرزهای رابطه و اصول ایمنی آشنا می‌شوی.</p>
+          <p>پیش از ارزیابی، با نقش شنونده، مرزهای رابطه و اصول ایمنی آشنا می‌شوی. اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست.</p>
         </div>
         <a className={styles.darkAction} href="/listener">مسیر شنونده‌شدن <span aria-hidden="true">←</span></a>
       </section>
@@ -262,7 +262,7 @@ export default function Page() {
               <h3>خوش آمدی.</h3>
               <div className={styles.verifiedNotice}><p>حساب <strong dir="ltr">{verifiedEmail}</strong> با موفقیت تأیید شد.</p><p>گفت‌وگوی عمومی هنوز برای استفاده همگانی باز نشده است.</p></div>
               <div className={styles.verifiedActions}>
-                <a className={styles.listenerAction} href="/listener">مسیر شنونده‌شدن</a>
+                <a className={styles.listenerAction} href="/listener">ادامه مسیر شنونده</a>
                 <button className={styles.textButton} type="button" onClick={logout}>خروج از حساب</button>
               </div>
             </div>
@@ -273,7 +273,7 @@ export default function Page() {
       <footer className={styles.footer}>
         <div className={styles.footerBrand}><span className={styles.brandMark} aria-hidden="true">ی</span><strong>یکی هست</strong><p>برای وقت‌هایی که فقط می‌خواهی کسی گوش بدهد.</p></div>
         <nav className={styles.footerNav} aria-label="پیوندهای پایانی">
-          <a href="/trust">اعتماد</a><a href="/safety">ایمنی</a><a href="/faq">سؤالات متداول</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/account/delete">حذف حساب</a>
+          <a href="/trust">اعتماد</a><a href="/safety">ایمنی</a><a href="/faq">سؤالات متداول</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین استفاده</a><a href="/account/delete">حذف حساب</a><a href="mailto:sales@uniqueholding.com.tr">پشتیبانی</a>
         </nav>
       </footer>
     </main>

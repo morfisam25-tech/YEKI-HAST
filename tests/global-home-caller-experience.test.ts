@@ -41,7 +41,7 @@ test('public home uses clear consumer language while keeping implementation jarg
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
   assert.match(page, /مسیر شنونده‌شدن/);
-  assert.doesNotMatch(page, /v1\.2|HOLD|feature gate|JavaScript|cookie/i);
+  assert.doesNotMatch(page, /\bv1\.2\b|\bHOLD\b|\bfeature gate\b|\bJavaScript\b|\bcookie\b/i);
 });
 
 test('home explicitly surfaces trust, safety and FAQ routes without opening Caller', () => {

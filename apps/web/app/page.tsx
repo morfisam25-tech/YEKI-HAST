@@ -168,7 +168,7 @@ export default function Page() {
       <section className={styles.momentsSection} aria-labelledby="moments-title">
         <div className={styles.momentsLead}>
           <p className={styles.sectionEyebrow}>آدم‌ها به دلیل‌های مختلفی حرف می‌زنند</p>
-          <h2 id="moments-title">برای هر لحظه، یک شکل از تنهایی وجود دارد.</h2>
+          <h2 id="moments-title">بعضی وقت‌ها، حرف‌زدن خودش کافی است.</h2>
           <p>«یکی هست» قرار نیست زندگی را توضیح بدهد. فقط جایی می‌سازد که بتوانی چند دقیقه، خودت باشی.</p>
         </div>
         <div className={styles.momentsImage} role="img" aria-label="دو نسل در دو خانه، در یک ارتباط گرم" />
@@ -182,7 +182,7 @@ export default function Page() {
       <section className={styles.productSection} aria-labelledby="product-title">
         <div className={styles.productCopy}>
           <p className={styles.sectionEyebrow}>محصولی که پشت این حس است</p>
-          <h2 id="product-title">کمتر دنبال‌کردن. بیشتر شنیدن.</h2>
+          <h2 id="product-title">برای شنیدن، مسیر را ساده نگه داشته‌ایم.</h2>
           <p>مسیر «یکی هست» کوتاه نگه داشته شده: ورود روشن، مرزهای مشخص، و یک گفت‌وگوی صوتی که هر دو طرف می‌دانند برای چه آمده‌اند.</p>
           <div className={styles.featureList}>
             <div><span>◌</span><p><strong>ورود با ایمیل</strong><small>بدون ساختن رمز عبور</small></p></div>
@@ -218,7 +218,7 @@ export default function Page() {
       <section className={styles.listenerSection} aria-labelledby="listener-title">
         <div>
           <p className={styles.sectionEyebrow}>برای آدم‌هایی که خوب گوش می‌دهند</p>
-          <h2 id="listener-title">شنونده‌شدن، فقط آنلاین‌بودن نیست.</h2>
+          <h2 id="listener-title">شنونده‌شدن، از خوب گوش‌دادن شروع می‌شود.</h2>
           <p>اگر می‌دانی چطور به حرف یک آدم جا بدهی، مسیر شنونده‌شدن را ببین. آموزش و ارزیابی، قبل از شروع نقش قرار دارند.</p>
         </div>
         <a className={styles.darkButton} href="/listener">مسیر شنونده‌شدن <span aria-hidden="true">←</span></a>

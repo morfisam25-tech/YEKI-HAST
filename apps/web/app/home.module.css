@@ -3,9 +3,9 @@
 .page a { color: inherit; text-decoration: none; }
 .header { position: absolute; z-index: 10; inset: 0 0 auto; width: min(1240px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; }
-.brandMark { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; color: #ffd49f; font-size: 24px; line-height: 1; transform: rotate(180deg); }
-.brand strong { display: block; font-size: 17px; letter-spacing: -.04em; }
-.brand small { display: block; margin-top: 3px; color: rgba(255,255,255,.62); font-size: 10px; }
+.brandMark { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(233,156,88,.10); color: #ffd49f; font-size: 25px; line-height: 1; transform: rotate(180deg); }
+.brand strong { display: block; color: #fff; font-size: 18px; letter-spacing: -.04em; }
+.brand small { display: block; margin-top: 3px; color: rgba(255,255,255,.76); font-size: 11px; }
 .nav { display: flex; align-items: center; gap: 26px; color: rgba(255,255,255,.78); font-size: 13px; }
 .nav a { transition: color .2s ease; }
 .nav a:hover { color: #fff; }
@@ -15,7 +15,7 @@
 .heroShade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(4,9,16,.96) 0%, rgba(4,9,16,.83) 34%, rgba(4,9,16,.18) 71%, rgba(4,9,16,.18)); }
 .heroContent { width: min(1240px, calc(100% - 48px)); margin: 100px auto 0; padding-bottom: 50px; }
 .eyebrowLight, .sectionEyebrow { margin: 0 0 17px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
-.heroContent h1 { max-width: 630px; margin: 0; font-size: clamp(48px, 6vw, 82px); line-height: 1.12; letter-spacing: -.055em; }
+.heroContent h1 { max-width: 630px; margin: 0; font-size: clamp(43px, 5.2vw, 71px); line-height: 1.12; letter-spacing: -.055em; }
 .heroLead { max-width: 440px; margin: 28px 0 0; color: rgba(255,255,255,.8); font-size: clamp(18px, 2vw, 22px); line-height: 1.9; }
 .heroActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 34px; }
 .primaryButton, .darkButton, .outlineButton, .ghostButton { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 12px 20px; border-radius: 8px; font-weight: 800; font-size: 14px; transition: transform .2s ease, background .2s ease, border-color .2s ease; }
@@ -36,7 +36,7 @@
 .diasporaPhoto { background-image: url('/w9/diaspora.webp'); }
 .dualCopy { align-self: center; padding: 60px clamp(28px, 6vw, 90px); }
 .dualCopy h2 { font-size: clamp(34px, 4vw, 55px); }
-.dualCopy > p:not(.sectionEyebrow), .productCopy > p:not(.sectionEyebrow), .listenerSection p:not(.sectionEyebrow), .faqSection p:not(.sectionEyebrow) { margin: 25px 0 0; color: var(--muted); font-size: 17px; line-height: 2; }
+.dualCopy > p:not(.sectionEyebrow), .productCopy > p:not(.sectionEyebrow), .listenerSection p:not(.sectionEyebrow), .faqSection p:not(.sectionEyebrow) { margin: 25px 0 0; color: var(--muted); font-size: 18px; line-height: 2; }
 .textLink { display: inline-flex; align-items: center; gap: 10px; margin-top: 28px; color: #efb172 !important; font-size: 14px; font-weight: 800; }
 .howSection { padding: 125px 0 120px; }
 .sectionHeader { display: flex; align-items: end; justify-content: space-between; gap: 30px; border-bottom: 1px solid var(--line); padding-bottom: 30px; }
@@ -50,14 +50,14 @@
 .momentsSection { position: relative; display: grid; grid-template-columns: .9fr 1.1fr; gap: 58px; align-items: center; padding: 40px 0 130px; }
 .momentsLead { padding-top: 22px; }
 .momentsLead h2 { font-size: clamp(34px, 4.1vw, 56px); }
-.momentsLead > p:not(.sectionEyebrow) { max-width: 460px; margin: 25px 0 0; color: var(--muted); line-height: 2; }
+.momentsLead > p:not(.sectionEyebrow) { max-width: 460px; margin: 25px 0 0; color: var(--muted); font-size: 18px; line-height: 2; }
 .momentsImage { min-height: 560px; background: url('/w9/generations.webp') center / cover no-repeat; }
 .momentList { grid-column: 1; display: grid; gap: 0; margin-top: -180px; padding: 0 26px; z-index: 1; background: rgba(14,17,23,.94); }
 .momentList div { display: grid; gap: 7px; padding: 22px 0; border-bottom: 1px solid var(--line); }
 .momentList div:last-child { border-bottom: 0; }
 .momentList strong { color: #fff; font-size: 15px; }
 .momentList span { color: var(--muted); font-size: 13px; }
-.productSection { display: grid; grid-template-columns: .92fr 1.08fr; gap: 70px; align-items: center; padding: 125px 0; border-top: 1px solid var(--line); }
+.productSection { display: grid; grid-template-columns: .92fr 1.08fr; gap: 70px; align-items: center; padding: 125px clamp(24px, 5vw, 64px); border: 1px solid rgba(255,255,255,.08); background: #171a20; }
 .productCopy h2 { font-size: clamp(35px, 4vw, 58px); }
 .featureList { display: grid; gap: 18px; margin-top: 37px; }
 .featureList > div { display: flex; align-items: start; gap: 14px; }
@@ -91,7 +91,7 @@
 .listenerSection { display: flex; align-items: center; justify-content: space-between; gap: 55px; padding: 100px clamp(30px, 7vw, 110px); background: #f0e3d6; color: #2b211c; }
 .listenerSection .sectionEyebrow { color: #9e572e; }
 .listenerSection h2 { color: #2b211c; font-size: clamp(35px, 4vw, 57px); }
-.listenerSection p:not(.sectionEyebrow) { max-width: 560px; color: #6f5e54; }
+.listenerSection p:not(.sectionEyebrow) { max-width: 560px; color: #6f5e54; font-size: 18px; }
 .darkButton { flex: 0 0 auto; background: #1f2024; color: #fff !important; }
 .faqSection { display: grid; grid-template-columns: .85fr 1.15fr; gap: 70px; padding: 130px 0; }
 .faqSection h2 { font-size: clamp(35px, 4vw, 56px); }
@@ -124,4 +124,4 @@
 .footerLinks { display: flex; flex-wrap: wrap; gap: 17px; }
 .footer p { justify-self: end; margin: 0; }
 @media (max-width: 850px) { .nav a:not(.navLogin) { display: none; } .hero { min-height: 690px; } .heroContent { margin-top: 80px; } .introSection, .dualSection, .productSection, .faqSection, .loginSection { grid-template-columns: 1fr; gap: 40px; } .introSection { padding: 85px 0; } .dualCopy { order: -1; padding-bottom: 0; } .photoPanel { min-height: 400px; } .momentsSection { grid-template-columns: 1fr; gap: 25px; } .momentsImage { min-height: 420px; } .momentList { grid-column: auto; margin-top: -90px; } .productSection { padding: 90px 0; } .productVisual { min-height: 530px; } .trustHeading, .sectionHeader { display: block; } .sectionHeader h2 { margin-top: 25px; } .trustHeading h2 { margin-top: 25px; } .listenerSection { display: grid; gap: 32px; } .footer { grid-template-columns: 1fr; } .footer p { justify-self: start; } }
-@media (max-width: 560px) { .header, .heroContent, .introSection, .dualSection, .howSection, .momentsSection, .productSection, .trustSection, .listenerSection, .faqSection, .loginSection, .footer { width: min(100% - 32px, 1240px); } .header { padding-top: 20px; } .hero { min-height: 735px; align-items: end; } .heroShade { background: linear-gradient(180deg, rgba(4,9,16,.28) 0%, rgba(4,9,16,.72) 44%, rgba(4,9,16,.98) 100%); } .heroContent { margin-bottom: 45px; } .heroContent h1 { font-size: 48px; } .heroLead { font-size: 17px; } .heroCaption { display: none; } .introSection, .howSection, .momentsSection, .productSection, .trustSection, .faqSection { padding-top: 78px; padding-bottom: 78px; } .stepsGrid, .trustGrid { grid-template-columns: 1fr; } .stepCard, .trustGrid article { min-height: auto; padding: 25px 0; border-left: 0; border-bottom: 1px solid var(--line); } .stepCard h3 { margin-top: 28px; } .trustGrid { margin-top: 35px; } .trustGrid article:last-child { border-bottom: 0; } .productVisual { min-height: 450px; } .phoneShell { width: 215px; height: 430px; } .productPhoto { width: 190px; height: 190px; left: -8px; } .phoneGreeting { margin-top: 32px; font-size: 19px; } .phonePanel strong { font-size: 16px; } .loginSection { padding: 60px 22px; width: 100%; } .loginPanel { padding: 25px 20px; } .listenerSection { width: 100%; padding: 58px 22px; } .dualCopy { padding: 45px 0 0; } .photoPanel { min-height: 310px; } .faqSection { gap: 35px; } .footerLinks { gap: 12px; } }
+@media (max-width: 560px) { .header, .heroContent, .introSection, .dualSection, .howSection, .momentsSection, .productSection, .trustSection, .listenerSection, .faqSection, .loginSection, .footer { width: min(100% - 32px, 1240px); } .header { padding-top: 20px; } .hero { min-height: 735px; align-items: end; } .heroShade { background: linear-gradient(180deg, rgba(4,9,16,.28) 0%, rgba(4,9,16,.72) 44%, rgba(4,9,16,.98) 100%); } .heroContent { margin-bottom: 45px; } .heroContent h1 { font-size: clamp(40px, 11vw, 43px); } .heroLead { font-size: 17px; } .heroCaption { display: none; } .introSection, .howSection, .momentsSection, .productSection, .trustSection, .faqSection { padding-top: 78px; padding-bottom: 78px; } .stepsGrid, .trustGrid { grid-template-columns: 1fr; } .stepCard, .trustGrid article { min-height: auto; padding: 25px 0; border-left: 0; border-bottom: 1px solid var(--line); } .stepCard h3 { margin-top: 28px; } .trustGrid { margin-top: 35px; } .trustGrid article:last-child { border-bottom: 0; } .productVisual { min-height: 450px; } .phoneShell { width: 215px; height: 430px; } .productPhoto { width: 190px; height: 190px; left: -8px; } .phoneGreeting { margin-top: 32px; font-size: 19px; } .phonePanel strong { font-size: 16px; } .loginSection { padding: 60px 22px; width: 100%; } .loginPanel { padding: 25px 20px; } .listenerSection { width: 100%; padding: 58px 22px; } .dualCopy { padding: 45px 0 0; } .photoPanel { min-height: 310px; } .faqSection { gap: 35px; } .footerLinks { gap: 12px; } }

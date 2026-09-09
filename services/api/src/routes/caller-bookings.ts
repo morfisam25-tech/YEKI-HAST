@@ -10,6 +10,16 @@ import { requireCurrentCallerAgeAssertion } from './caller.ts';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
 
+type QuoteBinding = {
+  caller_market_id: string;
+  pricing_plan_id: string;
+  quote_target: string;
+  max_billable_seconds: number;
+  booking_id: string | null;
+  authorized_minor: string;
+  currency_code: string;
+};
+
 function requireUuid(value: unknown, code: string): string {
   const id = String(value ?? '').trim();
   if (!UUID_RE.test(id)) throw new HttpError(400, code);
@@ -34,6 +44,42 @@ function parseMaxSeconds(value: unknown): number {
   catch { throw new HttpError(400, 'invalid_session_cap'); }
 }
 
+async function lockedQuoteBinding(
+  client: Parameters<Parameters<typeof withTransaction>[0]>[0],
+  userId: string,
+  target: 'booking' | 'booking_start',
+  maxSeconds: number,
+  bookingId: string | null,
+): Promise<QuoteBinding> {
+  const result = await client.query<QuoteBinding>(`
+    SELECT caller_market_id::text, pricing_plan_id::text, quote_target,
+           max_billable_seconds, booking_id::text, authorized_minor::text, currency_code
+    FROM app.caller_quote_bindings
+    WHERE caller_user_id=$1
+      AND quote_target=$2
+      AND max_billable_seconds=$3
+      AND ($4::uuid IS NULL OR booking_id=$4::uuid)
+      AND expires_at>now()
+    FOR UPDATE
+  `, [userId, target, maxSeconds, bookingId]);
+  const binding = result.rows[0];
+  if (!binding) throw new HttpError(409, 'quote_required');
+  return binding;
+}
+
+function assertBindingMatchesContext(
+  binding: QuoteBinding,
+  context: Awaited<ReturnType<typeof resolveCallerMarketContext>>,
+) {
+  if (
+    binding.caller_market_id !== context.market.id
+    || binding.pricing_plan_id !== context.pricing.id
+    || binding.currency_code !== context.pricing.currencyCode
+  ) {
+    throw new HttpError(409, 'quote_stale');
+  }
+}
+
 export async function createCallerBooking(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
   await requireCurrentCallerAgeAssertion(userId);
@@ -43,11 +89,9 @@ export async function createCallerBooking(req: IncomingMessage, res: ServerRespo
     languageCode?: unknown;
     scheduledAt?: unknown;
     maxSeconds?: unknown;
-    pricingPlanId?: unknown;
   }>(req);
   const clientRequestId = requireString(body.clientRequestId, 'clientRequestId', 8, 100);
   const availabilityId = requireUuid(body.availabilityId, 'invalid_availability');
-  const pricingPlanId = requireUuid(body.pricingPlanId, 'invalid_pricing_plan');
   const languageCode = parseLanguage(body.languageCode);
   const scheduledAt = parseInstant(body.scheduledAt, 'invalid_scheduled_at');
   const maxSeconds = parseMaxSeconds(body.maxSeconds);
@@ -81,7 +125,8 @@ export async function createCallerBooking(req: IncomingMessage, res: ServerRespo
     if (existing.rows[0]) return { ...existing.rows[0], idempotent: true };
 
     const context = await resolveCallerMarketContext(userId, client as unknown as SqlRunner);
-    if (pricingPlanId !== context.pricing.id) throw new HttpError(409, 'quote_stale');
+    const binding = await lockedQuoteBinding(client, userId, 'booking', maxSeconds, null);
+    assertBindingMatchesContext(binding, context);
 
     const caller = await client.query<{ declared_gender: string | null }>(
       'SELECT declared_gender::text FROM app.caller_profiles WHERE user_id=$1',
@@ -186,6 +231,7 @@ export async function createCallerBooking(req: IncomingMessage, res: ServerRespo
       scheduledAt.toISOString(),
       maxSeconds,
     ]);
+    await client.query('DELETE FROM app.caller_quote_bindings WHERE caller_user_id=$1', [userId]);
     return { ...inserted.rows[0], idempotent: false };
   });
 
@@ -207,8 +253,7 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
   const { userId } = await requireAuth(req);
   await requireCurrentCallerAgeAssertion(userId);
   if (!UUID_RE.test(bookingId)) throw new HttpError(400, 'invalid_booking');
-  const body = await readJson<{ pricingPlanId?: unknown }>(req);
-  const pricingPlanId = requireUuid(body.pricingPlanId, 'invalid_pricing_plan');
+  await readJson<Record<string, never>>(req);
 
   const call = await withTransaction(async (client) => {
     await client.query(
@@ -295,7 +340,6 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
 
     const context = await resolveCallerMarketContext(userId, client as unknown as SqlRunner);
     if (booking.caller_market_id !== context.market.id) throw new HttpError(409, 'booking_market_changed');
-    if (pricingPlanId !== context.pricing.id) throw new HttpError(409, 'quote_stale');
     if (
       booking.product_id !== context.product.id
       || booking.service_id !== context.service.id
@@ -303,6 +347,14 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
     ) {
       throw new HttpError(409, 'booking_context_changed');
     }
+    const binding = await lockedQuoteBinding(
+      client,
+      userId,
+      'booking_start',
+      booking.max_billable_seconds,
+      booking.id,
+    );
+    assertBindingMatchesContext(binding, context);
 
     const active = await client.query(`
       SELECT 1
@@ -336,6 +388,12 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
       requestedMaxSeconds: booking.max_billable_seconds,
     });
     if (!authorization) throw new HttpError(402, 'insufficient_balance');
+    if (
+      authorization.maxBillableSeconds !== binding.max_billable_seconds
+      || authorization.authorizedMinor !== BigInt(binding.authorized_minor)
+    ) {
+      throw new HttpError(409, 'quote_stale');
+    }
 
     const inserted = await client.query<{
       id: string;
@@ -385,6 +443,7 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
     `, [walletRow.id, authorization.authorizedMinor.toString()]);
     if (!walletUpdate.rowCount) throw new HttpError(409, 'wallet_reservation_conflict');
 
+    await client.query('DELETE FROM app.caller_quote_bindings WHERE caller_user_id=$1', [userId]);
     await client.query(`
       INSERT INTO app.call_events(call_session_id, status, source, metadata)
       VALUES ($1,'routing','api',$2::jsonb)
@@ -393,6 +452,7 @@ export async function startCallerBooking(req: IncomingMessage, res: ServerRespon
       callerMarketId: context.market.id,
       callerMarketCode: context.market.code,
       pricingPlanId: context.pricing.id,
+      quoteBound: true,
       listenerBaseCurrencyCode: context.listenerBase.currencyCode,
       listenerBaseRatePerMinuteMinor: context.listenerBase.ratePerMinuteMinor.toString(),
     })]);

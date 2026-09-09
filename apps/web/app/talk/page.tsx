@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CallCostQuote from '../../components/caller/CallCostQuote';
 import ReportPanel from '../../components/caller/ReportPanel';
 import styles from './talk.module.css';
 
@@ -337,7 +338,7 @@ export default function TalkPage() {
         } else if (result.status === 'missed') {
           setEndedBySafety(false);
           setPhase('ended');
-          setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
+          setNotice('این شنونده الان پاسخگو نیست. مبلغی از اعتبارت کم نشده. می‌تونی یک شنونده دیگه انتخاب کنی یا اعتبارت رو نگه داری.');
           cleanupRtc();
           void refreshMarketplace();
         }
@@ -353,7 +354,7 @@ export default function TalkPage() {
         .then(() => {
           setEndedBySafety(false);
           setPhase('ended');
-          setNotice('شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
+          setNotice('این شنونده الان پاسخگو نیست. مبلغی از اعتبارت کم نشده. می‌تونی یک شنونده دیگه انتخاب کنی یا اعتبارت رو نگه داری.');
           cleanupRtc();
           void refreshMarketplace();
         })
@@ -365,6 +366,7 @@ export default function TalkPage() {
     setSelected(listener);
     setEndedBySafety(false);
     setCallId(null);
+    setConnectedAt(null);
     const preferred = listener.languages.find((item) => item.code === languageFilter)
       ?? listener.languages.find((item) => item.code === 'fa')
       ?? listener.languages[0];
@@ -376,6 +378,9 @@ export default function TalkPage() {
     if (!selected || busy || !policiesReady) return;
     setBusy(true);
     setEndedBySafety(false);
+    setConnectedAt(null);
+    setRemainingSeconds(null);
+    setWarning(null);
     setPhase('preparing');
     setError('');
     setNotice('در حال آماده‌کردن میکروفن…');
@@ -511,6 +516,34 @@ export default function TalkPage() {
               </section>
             )}
 
+            {phase === 'ended' && !endedBySafety && connectedAt && callId && (
+              <section className={styles.section} aria-labelledby="after-call-title">
+                <div>
+                  <p className={styles.eyebrow}>بعد از گفت‌وگو</p>
+                  <h2 id="after-call-title" className={styles.heading}>گفت‌وگو تمام شد</h2>
+                  <p className={styles.helper}>اگر مشکلی پیش آمد، گزارش را برای همین تماس ثبت کن. اگر شنونده هنوز در دسترس باشد، می‌توانی دوباره همان نفر را انتخاب کنی.</p>
+                </div>
+                <div className={styles.reportArea}>
+                  <ReportPanel callId={callId} endpoint="safety/report" ended />
+                </div>
+                {selected && (
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() => {
+                      setPhase('idle');
+                      setCallId(null);
+                      setConnectedAt(null);
+                      setNotice('');
+                      setError('');
+                    }}
+                  >
+                    دوباره با {selected.nickname} گفت‌وگو کن
+                  </button>
+                )}
+              </section>
+            )}
+
             <section className={styles.section} aria-labelledby="listeners-title">
               <div className={styles.sectionHeading}>
                 <div>
@@ -561,7 +594,12 @@ export default function TalkPage() {
                         : `امتیاز ${listener.ratingAverage.toFixed(1)} از ۵ · ${faNumber(listener.ratingCount)} نظر`}
                       {listener.completedCalls > 0 ? ` · ${faNumber(listener.completedCalls)} گفت‌وگوی انجام‌شده` : ''}
                     </span>
-                    {listener.listeningStyle && <span className={styles.listeningStyle}>شیوه شنیدن: {listener.listeningStyle}</span>}
+                    {listener.listeningStyle && (
+                      <span className={styles.listeningStyle}>
+                        شیوه شنیدن: {listener.listeningStyle}
+                        <small>این توضیح را خود شنونده نوشته و توسط یکی هست راستی‌آزمایی نشده است.</small>
+                      </span>
+                    )}
                     {listener.shortIntro && (
                       <span className={styles.intro}>
                         {listener.shortIntro}
@@ -611,10 +649,7 @@ export default function TalkPage() {
                   </label>
                 </div>
 
-                <div className={styles.trustNote}>
-                  <strong>قبل از اتصال هزینه‌ای محاسبه نمی‌شود.</strong>
-                  <span>اگر شنونده پاسخ ندهد، مبلغی از اعتبار کم نمی‌شود.</span>
-                </div>
+                <CallCostQuote maxSeconds={capSeconds} className={styles.trustNote} />
 
                 <div className={styles.consent}>
                   <p>این سرویس برای شنیده‌شدن و گفت‌وگوی محترمانه است؛ جای اورژانس یا خدمات تخصصی پزشکی، روان‌شناسی و حقوقی نیست. اطلاعات تماس شخصی هم نباید ردوبدل شود.</p>

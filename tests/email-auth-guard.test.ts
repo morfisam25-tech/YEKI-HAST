@@ -12,6 +12,7 @@ const smoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs
 const security = await readFile(new URL('../services/api/src/lib/security.ts', import.meta.url), 'utf8');
 const handler = await readFile(new URL('../services/api/src/handler.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../apps/mobile/App.tsx', import.meta.url), 'utf8');
+const migrationManifest = await readFile(new URL('../scripts/current-migration-manifest.mjs', import.meta.url), 'utf8');
 const verifyDb = await readFile(new URL('../scripts/verify-production-db.mjs', import.meta.url), 'utf8');
 const verifySecurity = await readFile(new URL('../scripts/verify-production-security-config.mjs', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');
@@ -23,8 +24,11 @@ const migrationHash = createHash('sha256').update(migration).digest('hex');
 test('email auth migration has the production-tracked canonical hash', () => {
   assert.equal(migrationHash, '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90');
   assert.match(migrate, /0002_email_auth\.sql/);
-  assert.match(verifyDb, /0002_email_auth\.sql/);
-  assert.match(verifyDb, new RegExp(migrationHash));
+  assert.match(migrationManifest, /0002_email_auth\.sql/);
+  assert.match(migrationManifest, /createHash\('sha256'\)\.update\(sql\)\.digest\('hex'\)/);
+  assert.match(verifyDb, /currentMigrationEntries/);
+  assert.match(verifyDb, /migration tracking mismatch/);
+  assert.match(migrate, /Applied migration changed on disk/);
 });
 
 test('email identities and OTP challenges stay in private_data', () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import PostCallFeedback from './PostCallFeedback';
 
 export const REPORT_REASONS = [
   { value: 'sexual_behavior', label: 'رفتار یا محتوای جنسی نامناسب' },
@@ -76,60 +77,63 @@ export default function ReportPanel({ callId, endpoint, ended = false }: ReportP
   const blockId = `report-block-${callId}`;
 
   return (
-    <details>
-      <summary>
-        <span>گزارش رفتار</span>
-        <small>{ended ? 'بعد از پایان گفت‌وگو هم قابل ثبت است' : 'بدون پایان خودکار گفت‌وگو'}</small>
-      </summary>
-      <p>
-        {ended
-          ? 'گفت‌وگو پایان یافته است. اگر لازم است، می‌توانی رفتار این شنونده را ثبت کنی.'
-          : 'گزارش برای ثبت رفتار در سرویس است و گفت‌وگو را خودکار پایان نمی‌دهد. برای خروج فوری، از «خروج فوری و مسدودکردن» استفاده کن.'}
-      </p>
-      <form onSubmit={(event) => void submit(event)}>
-        <label htmlFor={categoryId}>
-          <span>دلیل گزارش</span>
-          <select
-            id={categoryId}
-            value={category}
-            required
-            onChange={(event) => setCategory(event.target.value as ReportCategory | '')}
-          >
-            <option value="">انتخاب کن</option>
-            {REPORT_REASONS.map((reason) => (
-              <option key={reason.value} value={reason.value}>{reason.label}</option>
-            ))}
-          </select>
-        </label>
+    <>
+      {ended && <PostCallFeedback callId={callId} />}
+      <details>
+        <summary>
+          <span>گزارش رفتار</span>
+          <small>{ended ? 'بعد از پایان گفت‌وگو هم قابل ثبت است' : 'بدون پایان خودکار گفت‌وگو'}</small>
+        </summary>
+        <p>
+          {ended
+            ? 'گفت‌وگو پایان یافته است. اگر لازم است، می‌توانی رفتار این شنونده را ثبت کنی.'
+            : 'گزارش برای ثبت رفتار در سرویس است و گفت‌وگو را خودکار پایان نمی‌دهد. برای خروج فوری، از «خروج فوری و مسدودکردن» استفاده کن.'}
+        </p>
+        <form onSubmit={(event) => void submit(event)}>
+          <label htmlFor={categoryId}>
+            <span>دلیل گزارش</span>
+            <select
+              id={categoryId}
+              value={category}
+              required
+              onChange={(event) => setCategory(event.target.value as ReportCategory | '')}
+            >
+              <option value="">انتخاب کن</option>
+              {REPORT_REASONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>{reason.label}</option>
+              ))}
+            </select>
+          </label>
 
-        <label htmlFor={detailsId}>
-          <span>توضیح بیشتر (اختیاری)</span>
-          <textarea
-            id={detailsId}
-            value={details}
-            maxLength={4000}
-            rows={4}
-            onChange={(event) => setDetails(event.target.value)}
-          />
-          <small>{details.length.toLocaleString('fa-IR')} از ۴٬۰۰۰ نویسه</small>
-        </label>
+          <label htmlFor={detailsId}>
+            <span>توضیح بیشتر (اختیاری)</span>
+            <textarea
+              id={detailsId}
+              value={details}
+              maxLength={4000}
+              rows={4}
+              onChange={(event) => setDetails(event.target.value)}
+            />
+            <small>{details.length.toLocaleString('fa-IR')} از ۴٬۰۰۰ نویسه</small>
+          </label>
 
-        <label htmlFor={blockId} data-report-block>
-          <input
-            id={blockId}
-            type="checkbox"
-            checked={blockCounterparty}
-            onChange={(event) => setBlockCounterparty(event.target.checked)}
-          />
-          <span>هم‌زمان این شنونده را مسدود کن</span>
-        </label>
+          <label htmlFor={blockId} data-report-block>
+            <input
+              id={blockId}
+              type="checkbox"
+              checked={blockCounterparty}
+              onChange={(event) => setBlockCounterparty(event.target.checked)}
+            />
+            <span>هم‌زمان این شنونده را مسدود کن</span>
+          </label>
 
-        <button type="submit" disabled={busy || !category}>
-          {busy ? 'در حال ثبت…' : 'ثبت گزارش'}
-        </button>
-        {reportError && <p role="alert">{reportError}</p>}
-        {reportNotice && <p role="status" aria-live="polite">{reportNotice}</p>}
-      </form>
-    </details>
+          <button type="submit" disabled={busy || !category}>
+            {busy ? 'در حال ثبت…' : 'ثبت گزارش'}
+          </button>
+          {reportError && <p role="alert">{reportError}</p>}
+          {reportNotice && <p role="status" aria-live="polite">{reportNotice}</p>}
+        </form>
+      </details>
+    </>
   );
 }

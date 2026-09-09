@@ -10,6 +10,10 @@ const EXPECTED_MIGRATIONS = new Map([
   ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
   ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
 ]);
+const REQUIRED_W3_MIGRATIONS = [
+  '0007_global_caller_market_feedback.sql',
+  '0008_caller_quote_bindings.sql',
+] as const;
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -96,6 +100,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         wallet_hold_events_ready: boolean;
         listener_availability_ready: boolean;
         call_reservations_ready: boolean;
+        call_ratings_ready: boolean;
+        caller_favorites_ready: boolean;
+        caller_quote_bindings_ready: boolean;
+        caller_profile_market_ready: boolean;
+        reservation_caller_market_ready: boolean;
+        call_caller_market_ready: boolean;
+        listener_currency_ready: boolean;
+        platform_contribution_nullable_ready: boolean;
+        quote_binding_columns_ready: boolean;
+        call_rating_columns_ready: boolean;
+        favorite_columns_ready: boolean;
         pg_cron_ready: boolean;
         pg_cron_database_ready: boolean;
         internet_voice_sweeper_ready: boolean;
@@ -115,6 +130,55 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           to_regclass('app.wallet_hold_events') IS NOT NULL AS wallet_hold_events_ready,
           to_regclass('app.listener_availability') IS NOT NULL AS listener_availability_ready,
           to_regclass('app.call_reservations') IS NOT NULL AS call_reservations_ready,
+          to_regclass('app.call_ratings') IS NOT NULL AS call_ratings_ready,
+          to_regclass('app.caller_favorite_listeners') IS NOT NULL AS caller_favorites_ready,
+          to_regclass('app.caller_quote_bindings') IS NOT NULL AS caller_quote_bindings_ready,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='caller_profiles'
+              AND column_name='market_id'
+          ) AS caller_profile_market_ready,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='call_reservations'
+              AND column_name='caller_market_id' AND is_nullable='NO'
+          ) AS reservation_caller_market_ready,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='call_sessions'
+              AND column_name='caller_market_id' AND is_nullable='NO'
+          ) AS call_caller_market_ready,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='call_sessions'
+              AND column_name='listener_currency_code' AND is_nullable='NO'
+          ) AS listener_currency_ready,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='call_sessions'
+              AND column_name='platform_contribution_minor' AND is_nullable='YES'
+          ) AS platform_contribution_nullable_ready,
+          (
+            SELECT count(*)=9
+            FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='caller_quote_bindings'
+              AND column_name IN (
+                'caller_user_id','caller_market_id','pricing_plan_id','quote_target',
+                'max_billable_seconds','booking_id','authorized_minor','currency_code','expires_at'
+              )
+          ) AS quote_binding_columns_ready,
+          (
+            SELECT count(*)=5
+            FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='call_ratings'
+              AND column_name IN ('call_session_id','caller_user_id','listener_user_id','service_id','rating')
+          ) AS call_rating_columns_ready,
+          (
+            SELECT count(*)=2
+            FROM information_schema.columns
+            WHERE table_schema='app' AND table_name='caller_favorite_listeners'
+              AND column_name IN ('caller_user_id','listener_user_id')
+          ) AS favorite_columns_ready,
           EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS pg_cron_ready,
           current_setting('cron.database_name', true)=current_database() AS pg_cron_database_ready,
           to_regprocedure('app.sweep_internet_voice_sessions(integer)') IS NOT NULL AS internet_voice_sweeper_ready,
@@ -142,6 +206,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         && row?.wallet_hold_events_ready
         && row?.listener_availability_ready
         && row?.call_reservations_ready
+        && row?.call_ratings_ready
+        && row?.caller_favorites_ready
+        && row?.caller_quote_bindings_ready
+        && row?.caller_profile_market_ready
+        && row?.reservation_caller_market_ready
+        && row?.call_caller_market_ready
+        && row?.listener_currency_ready
+        && row?.platform_contribution_nullable_ready
+        && row?.quote_binding_columns_ready
+        && row?.call_rating_columns_ready
+        && row?.favorite_columns_ready
         && row?.pg_cron_ready
         && row?.pg_cron_database_ready
         && row?.internet_voice_sweeper_ready
@@ -162,6 +237,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           walletHoldEvents: Boolean(row?.wallet_hold_events_ready),
           listenerAvailability: Boolean(row?.listener_availability_ready),
           callReservations: Boolean(row?.call_reservations_ready),
+          callRatings: Boolean(row?.call_ratings_ready),
+          callerFavorites: Boolean(row?.caller_favorites_ready),
+          callerQuoteBindings: Boolean(row?.caller_quote_bindings_ready),
+          callerProfileMarket: Boolean(row?.caller_profile_market_ready),
+          reservationCallerMarket: Boolean(row?.reservation_caller_market_ready),
+          callCallerMarket: Boolean(row?.call_caller_market_ready),
+          listenerCurrency: Boolean(row?.listener_currency_ready),
+          platformContributionNullable: Boolean(row?.platform_contribution_nullable_ready),
+          quoteBindingColumns: Boolean(row?.quote_binding_columns_ready),
+          callRatingColumns: Boolean(row?.call_rating_columns_ready),
+          favoriteColumns: Boolean(row?.favorite_columns_ready),
           pgCron: Boolean(row?.pg_cron_ready),
           pgCronDatabase: Boolean(row?.pg_cron_database_ready),
           internetVoiceSweeper: Boolean(row?.internet_voice_sweeper_ready),
@@ -240,7 +326,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           '0003_internet_voice_transport.sql',
           '0004_booking.sql',
           '0005_no_answer_hold_idempotency.sql',
-          '0006_internet_voice_server_sweeper.sql'
+          '0006_internet_voice_server_sweeper.sql',
+          '0007_global_caller_market_feedback.sql',
+          '0008_caller_quote_bindings.sql'
         )
       `);
       const migrationMap = new Map(
@@ -249,6 +337,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       for (const [filename, expectedSha] of EXPECTED_MIGRATIONS) {
         if (migrationMap.get(filename) !== expectedSha) {
           console.error('readiness_migration_integrity_mismatch', { filename });
+          sendJson(res, 503, { ok: false, error: 'service_not_ready' });
+          return;
+        }
+      }
+      for (const filename of REQUIRED_W3_MIGRATIONS) {
+        const sha = migrationMap.get(filename);
+        if (!sha || !/^[0-9a-f]{64}$/i.test(sha)) {
+          console.error('readiness_w3_migration_missing', { filename });
           sendJson(res, 503, { ok: false, error: 'service_not_ready' });
           return;
         }

@@ -151,7 +151,6 @@ export default function DeleteAccountPage() {
                 type="email"
                 autoComplete="email"
                 inputMode="email"
-                placeholder="name@example.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={busy}
@@ -176,7 +175,6 @@ export default function DeleteAccountPage() {
                 autoComplete="one-time-code"
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="------"
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
                 disabled={busy}

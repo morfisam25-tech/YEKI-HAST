@@ -589,3 +589,59 @@
   .secondary { transition: none !important; }
   .listener:hover { transform: none; }
 }
+
+
+/* W9 Phase 2 visual system */
+.page {
+  --ink: #f8f2eb;
+  --ink-soft: #d8c9c0;
+  --muted: #b9b0b0;
+  --line: rgba(255,255,255,.11);
+  --line-strong: rgba(255,255,255,.22);
+  --surface: #171a20;
+  --accent-dark: #e8a15f;
+  --coral: #d77e68;
+  --amber: #e8a15f;
+  --dusk: #30252a;
+  --danger: #ed9b8d;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(215,126,104,.13), transparent 28rem),
+    radial-gradient(circle at 8% 4%, rgba(232,161,95,.10), transparent 25rem),
+    #0e1117;
+  color: var(--ink);
+  color-scheme: dark;
+}
+.header { border-color: var(--line); }
+.brand { color: var(--ink); }
+.brand::before { border: 1px solid rgba(255,255,255,.24); background-color: rgba(232,161,95,.08); box-shadow: 0 10px 24px rgba(0,0,0,.22); }
+.eyebrow { border-color: rgba(232,161,95,.20); background: rgba(232,161,95,.12); color: var(--accent-dark); }
+.title, .heading { color: var(--ink); }
+.lead, .meta, .styleText, .intro small, .empty, .helper, .bookingConsent, .checkRow { color: var(--muted); }
+.timeZone { border-color: var(--line); background: rgba(255,255,255,.045); color: var(--muted); }
+.timeZone strong { color: var(--ink-soft); }
+.link, .bookingConsent a { color: var(--accent-dark); }
+.card, .callCard { border-color: var(--line); background: var(--surface); box-shadow: 0 24px 70px rgba(0,0,0,.22); }
+.listener { border-color: var(--line); background: #20232a; box-shadow: 0 18px 50px rgba(0,0,0,.16); }
+.listener:hover { border-color: rgba(232,161,95,.42); box-shadow: 0 20px 54px rgba(0,0,0,.22); }
+.listenerSelected { border-color: var(--accent-dark); background: rgba(232,161,95,.10); box-shadow: 0 0 0 3px rgba(232,161,95,.12), 0 20px 54px rgba(0,0,0,.22); }
+.listenerName, .bookingTopline strong { color: var(--ink); }
+.verified, .status { border-color: rgba(232,161,95,.30); background: rgba(232,161,95,.12); color: #ffd5a5; }
+.intro, .bookingConsent, .booking { border-color: var(--line); }
+.field { color: var(--ink-soft); }
+.control, .reportArea select, .reportArea textarea { border-color: var(--line-strong); background: #11151b; color: var(--ink); }
+.pill, .secondary, .endButton, .safetyButton, .reportArea button[type='submit'] { border-color: var(--line-strong); background: #11151b; color: var(--ink-soft); }
+.pillActive { border-color: var(--accent-dark); background: rgba(232,161,95,.14); color: #ffe0b5; }
+.primary, .primaryLink { border-color: rgba(232,161,95,.42); background: linear-gradient(135deg, #30252a, #4b2d2d); }
+.trustNote { border-color: rgba(232,161,95,.22); background: rgba(232,161,95,.09); color: #f2d1ad; }
+.error { border-color: rgba(237,155,141,.28); background: rgba(122,48,48,.22); color: #ffc0b5; }
+.notice { border-color: rgba(232,161,95,.22); background: rgba(232,161,95,.10); color: #f2d1ad; }
+.liveState { border-color: rgba(232,161,95,.30); background: rgba(232,161,95,.12); color: #ffd5a5; }
+.liveStateWarning { border-color: rgba(232,191,121,.34); background: rgba(232,191,121,.12); color: #f3d497; }
+.timeCard { border-color: var(--line); background: #20232a; box-shadow: 0 18px 50px rgba(0,0,0,.18); }
+.timeCard span, .timeCard small { color: var(--muted); }
+.timeCard strong { color: var(--ink); }
+.timeWarning { border-color: rgba(232,191,121,.34); background: rgba(232,191,121,.12); }
+.danger, .safetyButton { border-color: rgba(237,155,141,.34); background: rgba(122,48,48,.22); color: #ffc0b5; }
+.reportArea summary, .reportArea details > p { color: var(--muted); }
+.reportArea summary small, .reportArea form label small { color: #918889; }
+.page a:focus-visible, .listener:focus-visible, .control:focus-visible, .pill:focus-visible, .secondary:focus-visible, .primary:focus-visible, .primaryLink:focus-visible, .danger:focus-visible, .endButton:focus-visible, .safetyButton:focus-visible, .checkRow input:focus-visible, .reportArea summary:focus-visible, .reportArea button:focus-visible, .reportArea select:focus-visible, .reportArea textarea:focus-visible, .reportArea input:focus-visible { outline-color: var(--accent-dark); }

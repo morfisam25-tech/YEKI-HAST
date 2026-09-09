@@ -72,7 +72,7 @@ test('Web Listener does not render Caller identity, country, phone or payment co
 
 test('verified web session exposes Listener onboarding while the public Caller gate remains closed', () => {
   assert.match(homePage, /href="\/listener"/);
-  assert.match(homePage, /ادامه مسیر شنونده/);
-  assert.match(homePage, /گفت‌وگوی عمومی فعلاً باز نیست/);
+  assert.match(homePage, /شنونده‌شدن/);
+  assert.match(homePage, /گفت‌وگوی عمومی فعلاً بسته است/);
   assert.doesNotMatch(homePage, /href="\/talk"/);
 });

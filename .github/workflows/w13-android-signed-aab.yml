@@ -50,7 +50,8 @@ jobs:
             --profile production \
             --non-interactive \
             --wait \
-            --json > ../../w13-eas-build.json
+            --json > /tmp/w13-eas-build.json
+          cp /tmp/w13-eas-build.json ../../w13-eas-build.json
           cat ../../w13-eas-build.json
 
       - name: Download EAS AAB

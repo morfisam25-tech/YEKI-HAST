@@ -37,6 +37,7 @@ jobs:
 
       - name: Generate Android project and debug APK
         run: |
+          npm --workspace @yeki-hast/mobile run generate:artwork
           cd apps/mobile
           npx expo prebuild --platform android --clean --no-install
           cd android

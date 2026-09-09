@@ -115,8 +115,8 @@ export default function Page() {
             با یک شنونده واقعی حرف بزن؛ بدون قضاوت و بدون اینکه مجبور باشی همه‌چیز را از اول توضیح بدهی. یک آدم واقعی گوش می‌دهد. لازم نیست دنبال راه‌حل باشی.
           </p>
           <div className={styles.heroActions}>
-            <a className={styles.primaryAction} href="#login">شروع با ایمیل <span aria-hidden="true">←</span></a>
-            <a className={styles.textAction} href="#experience">ببین چطور کار می‌کند <span aria-hidden="true">↓</span></a>
+            <a className={styles.primaryAction} href="#experience">شروع با ایمیل <span aria-hidden="true">←</span></a>
+            <a className={styles.textAction} href="#trust">اعتماد و امنیت <span aria-hidden="true">↓</span></a>
           </div>
           <p className={styles.availability}>
             گفت‌وگوی عمومی فعلاً باز نیست؛ گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده. مسیر شنونده‌شدن فعال است و ورود با ایمیل در دسترس است.
@@ -199,13 +199,13 @@ export default function Page() {
         <div className={styles.trustPanel}>
           <p className={styles.sectionKicker}>مرزها روشن‌اند</p>
           <h2 id="trust-title">شنونده قرار نیست زندگی‌ات را مدیریت کند.</h2>
-          <p>اینجا فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است. هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد؛ اینجا تمرکز روی شنیدن یک انسان است. نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس، بخشی از این رابطه نیست. این سرویس مشاوره، درمان یا پاسخ اضطراری نیست.</p>
+          <p>اینجا فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است. هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد؛ اینجا تمرکز روی شنیدن یک انسان است. نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس، بخشی از این رابطه نیست. این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست.</p>
           <a className={styles.outlineAction} href="/trust">مرکز اعتماد، ایمنی و گزارش <span aria-hidden="true">←</span></a>
         </div>
         <div className={styles.trustPoints}>
-          <div><span className={styles.pointIcon}>◌</span><div><strong>ضبط خاموش</strong><p>در عرضه‌ی فعلی، محتوای صوتی مکالمه ضبط یا ذخیره نمی‌شود.</p></div></div>
+          <div><span className={styles.pointIcon}>◌</span><div><strong>ضبط خاموش</strong><p>در عرضه‌ی فعلی، محتوای صوتی مکالمه ضبط یا ذخیره نمی‌شود. اگر موردی جداگانه بررسی شده باشد، همان مورد جدا از متن خود فرد نشان داده می‌شود.</p></div></div>
           <div><span className={styles.pointIcon}>⌁</span><div><strong>اطلاعات شخصی در اختیار توست</strong><p>متن معرفی را خود شنونده می‌نویسد. برای شنیده‌شدن لازم نیست هر اطلاعاتی را درباره‌ی خودت بگویی.</p></div></div>
-          <div><span className={styles.pointIcon}>↗</span><div><strong>هر وقت بخواهی تمام می‌کنی</strong><p>رابطه‌ی شنونده و کاربر باید در چارچوب سرویس باقی بماند.</p></div></div>
+          <div><span className={styles.pointIcon}>↗</span><div><strong>هر وقت بخواهی تمام می‌کنی</strong><p>تو می‌توانی تماس را به شکل عادی پایان بدهی. خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل در نظر گرفته شده است.</p></div></div>
         </div>
       </section>
 
@@ -213,7 +213,7 @@ export default function Page() {
         <div>
           <p className={styles.sectionKicker}>اگر برای شنونده‌شدن آمده‌ای</p>
           <h2 id="listener-title">شنونده‌ی یکی هست شو.</h2>
-          <p>پیش از ارزیابی، با نقش شنونده، مرزهای رابطه و اصول ایمنی آشنا می‌شوی. اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست.</p>
+          <p>شنونده پیش از ارزیابی با نقش و مرزهای آن آشنا می‌شود. اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست.</p>
         </div>
         <a className={styles.darkAction} href="/listener">مسیر شنونده‌شدن <span aria-hidden="true">←</span></a>
       </section>

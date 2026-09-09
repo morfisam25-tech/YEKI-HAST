@@ -116,7 +116,7 @@ export default function Page() {
           </p>
           <div className={styles.heroActions}>
             <a className={styles.primaryAction} href="#login">شروع با ایمیل <span aria-hidden="true">←</span></a>
-            <a className={styles.textAction} href="#how-it-works">ببین چطور کار می‌کند <span aria-hidden="true">↓</span></a>
+            <a className={styles.textAction} href="#experience">ببین چطور کار می‌کند <span aria-hidden="true">↓</span></a>
           </div>
           <p className={styles.availability}>
             گفت‌وگوی عمومی فعلاً باز نیست؛ گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده. مسیر شنونده‌شدن فعال است و ورود با ایمیل در دسترس است.
@@ -179,7 +179,7 @@ export default function Page() {
         </ol>
       </section>
 
-      <section className={styles.momentsSection} aria-labelledby="moments-title">
+      <section id="experience" className={styles.momentsSection} aria-labelledby="moments-title">
         <div className={styles.momentsHeader}>
           <p className={styles.sectionKicker}>برای وقت‌های واقعی</p>
           <h2 id="moments-title">هر حرفی لازم نیست یک راه‌حل داشته باشد.</h2>
@@ -204,14 +204,14 @@ export default function Page() {
         </div>
         <div className={styles.trustPoints}>
           <div><span className={styles.pointIcon}>◌</span><div><strong>ضبط خاموش</strong><p>در عرضه‌ی فعلی، محتوای صوتی مکالمه ضبط یا ذخیره نمی‌شود.</p></div></div>
-          <div><span className={styles.pointIcon}>⌁</span><div><strong>اطلاعات شخصی در اختیار توست</strong><p>برای شنیده‌شدن لازم نیست هر اطلاعاتی را درباره‌ی خودت بگویی.</p></div></div>
+          <div><span className={styles.pointIcon}>⌁</span><div><strong>اطلاعات شخصی در اختیار توست</strong><p>متن معرفی را خود شنونده می‌نویسد. برای شنیده‌شدن لازم نیست هر اطلاعاتی را درباره‌ی خودت بگویی.</p></div></div>
           <div><span className={styles.pointIcon}>↗</span><div><strong>هر وقت بخواهی تمام می‌کنی</strong><p>رابطه‌ی شنونده و کاربر باید در چارچوب سرویس باقی بماند.</p></div></div>
         </div>
       </section>
 
       <section className={styles.listenerBanner} aria-labelledby="listener-title">
         <div>
-          <p className={styles.sectionKicker}>اگر خوب گوش می‌دهی</p>
+          <p className={styles.sectionKicker}>اگر برای شنونده‌شدن آمده‌ای</p>
           <h2 id="listener-title">شنونده‌ی یکی هست شو.</h2>
           <p>پیش از ارزیابی، با نقش شنونده، مرزهای رابطه و اصول ایمنی آشنا می‌شوی. اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست.</p>
         </div>

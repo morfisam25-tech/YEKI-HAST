@@ -1,0 +1,279 @@
+name: W10 TURN runtime diagnostic
+
+on:
+  push:
+    branches:
+      - diag/w10-turn-runtime-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  turn-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+      VERCEL_TEAM_SLUG: unique-6ff0
+      PRODUCTION_SHA: 2350f89b315f8c2f4824d820795ffc884961c22e
+    steps:
+      - name: Checkout exact production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 2350f89b315f8c2f4824d820795ffc884961c22e
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install temporary Chromium test tooling
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Pull production env and run direct TURN plus relay diagnostic
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "::add-mask::$VERCEL_TOKEN"
+          pull_dir="$(mktemp -d)"
+          cleanup() {
+            if [ -f "$pull_dir/.env.production.local" ]; then
+              unlink "$pull_dir/.env.production.local"
+            fi
+            if [ -f "$pull_dir/.vercel/project.json" ]; then
+              unlink "$pull_dir/.vercel/project.json"
+            fi
+            rmdir "$pull_dir/.vercel" 2>/dev/null || true
+            rmdir "$pull_dir" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          mkdir -p "$pull_dir/.vercel"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > "$pull_dir/.vercel/project.json"
+          (
+            cd "$pull_dir"
+            "$GITHUB_WORKSPACE/node_modules/.bin/vercel" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          )
+          env_file="$pull_dir/.env.production.local"
+          test -s "$env_file"
+          W10_ENV_FILE="$env_file" node --experimental-strip-types <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const envFile = process.env.W10_ENV_FILE;
+          const source = readFileSync(envFile, 'utf8');
+
+          function decodeEnvValue(value) {
+            return value
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, '\r')
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, '\\');
+          }
+
+          for (const line of source.split(/\r?\n/)) {
+            const match = /^([A-Z0-9_]+)="((?:\\.|[^"])*)"$/.exec(line);
+            if (match) process.env[match[1]] = decodeEnvValue(match[2]);
+          }
+
+          function mask(value) {
+            if (value) process.stdout.write('::add-mask::' + value + '\n');
+          }
+
+          mask(process.env.CLOUDFLARE_TURN_KEY_ID);
+          mask(process.env.CLOUDFLARE_TURN_API_TOKEN);
+
+          const keyIdPresent = Boolean(process.env.CLOUDFLARE_TURN_KEY_ID?.trim());
+          const apiTokenPresent = Boolean(process.env.CLOUDFLARE_TURN_API_TOKEN?.trim());
+          const ttl14400 = process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim() === '14400';
+
+          console.log('TURN_KEY_ID_PRESENT=' + (keyIdPresent ? 'YES' : 'NO'));
+          console.log('TURN_API_TOKEN_PRESENT=' + (apiTokenPresent ? 'YES' : 'NO'));
+          console.log('TTL_14400=' + (ttl14400 ? 'PASS' : 'FAIL'));
+          if (!keyIdPresent || !apiTokenPresent || !ttl14400) {
+            console.log('PRODUCTION_ENV=FAIL');
+            process.exit(1);
+          }
+          console.log('PRODUCTION_ENV=PASS');
+
+          const { getInternetVoiceClientConfig } = await import('./services/api/src/providers/call-transport.ts');
+
+          let turnConfig;
+          try {
+            turnConfig = await getInternetVoiceClientConfig();
+          } catch (error) {
+            const category = error instanceof Error && error.message === 'invalid_cloudflare_turn_ttl'
+              ? 'invalid_ttl'
+              : error instanceof Error && error.message === 'invalid_cloudflare_turn_config'
+                ? 'invalid_turn_config'
+                : 'cloudflare_turn_credentials_unavailable';
+            console.log('TURN_CREDENTIAL_MINT=FAIL');
+            console.log('TURN_ERROR_CATEGORY=' + category);
+            console.log('RELAY_CONFIGURED=NO');
+            console.log('TURN_URL_PRESENT=NO');
+            process.exit(1);
+          }
+
+          const turnUrls = turnConfig.iceServers.flatMap((server) =>
+            Array.isArray(server.urls) ? server.urls : [server.urls]
+          );
+          const turnUrlPresent = turnUrls.some((url) => /^turns?:/i.test(url));
+          const relayConfigured = turnConfig.relayConfigured === true;
+          console.log('TURN_CREDENTIAL_MINT=PASS');
+          console.log('RELAY_CONFIGURED=' + (relayConfigured ? 'YES' : 'NO'));
+          console.log('TURN_URL_PRESENT=' + (turnUrlPresent ? 'YES' : 'NO'));
+          if (!relayConfigured || !turnUrlPresent) {
+            console.log('SELECTED_ICE=FAIL');
+            console.log('RELAY_PACKET_DATA=FAIL');
+            process.exit(1);
+          }
+
+          async function relayPacketTest(iceServers) {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              const page = await browser.newPage();
+              return await page.evaluate(async (servers) => {
+                const config = { iceServers: servers, iceTransportPolicy: 'relay' };
+                const a = new RTCPeerConnection(config);
+                const b = new RTCPeerConnection(config);
+                let aReceived = 0;
+                let bReceived = 0;
+                let bChannel;
+                let bChannelResolve;
+                let bSent = false;
+                const bChannelReady = new Promise((resolve) => { bChannelResolve = resolve; });
+
+                const bytesOf = (value) => {
+                  if (typeof value === 'string') return value.length;
+                  if (value instanceof ArrayBuffer) return value.byteLength;
+                  if (ArrayBuffer.isView(value)) return value.byteLength;
+                  return 0;
+                };
+
+                const waitFor = async (predicate, timeout = 30000) => {
+                  const start = Date.now();
+                  while (!predicate()) {
+                    if (Date.now() - start > timeout) throw new Error('webrtc_timeout');
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                  }
+                };
+
+                const waitGathered = async (pc) => {
+                  if (pc.iceGatheringState === 'complete') return;
+                  await new Promise((resolve, reject) => {
+                    const timer = setTimeout(() => reject(new Error('ice_gather_timeout')), 30000);
+                    pc.addEventListener('icegatheringstatechange', () => {
+                      if (pc.iceGatheringState === 'complete') {
+                        clearTimeout(timer);
+                        resolve();
+                      }
+                    });
+                  });
+                };
+
+                b.addEventListener('datachannel', (event) => {
+                  bChannel = event.channel;
+                  bChannel.binaryType = 'arraybuffer';
+                  bChannel.addEventListener('message', (message) => {
+                    bReceived += bytesOf(message.data);
+                    if (!bSent) {
+                      bSent = true;
+                      bChannel.send(new Uint8Array(4096).buffer);
+                    }
+                  });
+                  bChannelResolve();
+                });
+
+                const aChannel = a.createDataChannel('w10-turn');
+                aChannel.binaryType = 'arraybuffer';
+                aChannel.addEventListener('message', (message) => {
+                  aReceived += bytesOf(message.data);
+                });
+
+                a.setLocalDescription(await a.createOffer());
+                await waitGathered(a);
+                await b.setRemoteDescription(a.localDescription);
+                b.setLocalDescription(await b.createAnswer());
+                await waitGathered(b);
+                await a.setRemoteDescription(b.localDescription);
+
+                await waitFor(() =>
+                  a.connectionState === 'connected' &&
+                  b.connectionState === 'connected'
+                );
+                await waitFor(() => aChannel.readyState === 'open');
+                await bChannelReady;
+                await waitFor(() => bChannel?.readyState === 'open');
+
+                aChannel.send(new Uint8Array(4096).buffer);
+                await waitFor(() => aReceived > 0 && bReceived > 0);
+
+                const stats = await a.getStats();
+                let selectedPair;
+                for (const item of stats.values()) {
+                  if (item.type === 'transport' && item.selectedCandidatePairId) {
+                    selectedPair = stats.get(item.selectedCandidatePairId);
+                    break;
+                  }
+                }
+                if (!selectedPair) {
+                  selectedPair = [...stats.values()].find((item) =>
+                    item.type === 'candidate-pair' &&
+                    item.state === 'succeeded' &&
+                    (item.selected === true || item.nominated === true)
+                  );
+                }
+
+                const local = selectedPair && stats.get(selectedPair.localCandidateId);
+                const remote = selectedPair && stats.get(selectedPair.remoteCandidateId);
+                const localType = local?.candidateType || 'unknown';
+                const remoteType = remote?.candidateType || 'unknown';
+                const pairState = selectedPair?.state || 'unknown';
+                const bytesSent = Number(selectedPair?.bytesSent || 0);
+                const bytesReceived = Number(selectedPair?.bytesReceived || 0);
+
+                const pass = localType === 'relay' &&
+                  remoteType === 'relay' &&
+                  pairState === 'succeeded' &&
+                  bytesSent > 0 &&
+                  bytesReceived > 0;
+
+                a.close();
+                b.close();
+                return { pass, localType, remoteType, pairState, bytesSent, bytesReceived };
+              }, iceServers);
+            } finally {
+              await browser.close();
+            }
+          }
+
+          const relay = await relayPacketTest(turnConfig.iceServers);
+          console.log('SELECTED_ICE=' + (relay.pass ? 'RELAY' : 'FAIL'));
+          console.log('RELAY_PACKET_DATA=' + (relay.pass ? 'PASS' : 'FAIL'));
+          if (!relay.pass) process.exit(1);
+
+          const summary = [
+            '## W10 TURN runtime diagnostic',
+            '',
+            '- PRODUCTION_ENV: PASS',
+            '- TTL_14400: PASS',
+            '- TURN_CREDENTIAL_MINT: PASS',
+            '- RELAY_CONFIGURED: YES',
+            '- TURN_URL_PRESENT: YES',
+            '- SELECTED_ICE: ' + (relay.pass ? 'RELAY' : 'FAIL'),
+            '- RELAY_PACKET_DATA: ' + (relay.pass ? 'PASS' : 'FAIL'),
+            '- No credentials, usernames, passwords, IP addresses, or raw env content were recorded.'
+          ].join('\n');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n');
+          NODE

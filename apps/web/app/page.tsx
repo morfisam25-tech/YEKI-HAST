@@ -199,7 +199,7 @@ export default function Page() {
         <div className={styles.trustPanel}>
           <p className={styles.sectionKicker}>مرزها روشن‌اند</p>
           <h2 id="trust-title">شنونده قرار نیست زندگی‌ات را مدیریت کند.</h2>
-          <p>اینجا فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است. نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. این سرویس مشاوره، درمان یا پاسخ اضطراری نیست.</p>
+          <p>اینجا فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است. هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد؛ اینجا تمرکز روی شنیدن یک انسان است. نقش شنونده، توجه‌کردن و همراه‌ماندن با حرف توست. درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس، بخشی از این رابطه نیست. این سرویس مشاوره، درمان یا پاسخ اضطراری نیست.</p>
           <a className={styles.outlineAction} href="/trust">مرکز اعتماد، ایمنی و گزارش <span aria-hidden="true">←</span></a>
         </div>
         <div className={styles.trustPoints}>
@@ -225,7 +225,7 @@ export default function Page() {
           <p>برای ورود فقط ایمیل لازم است. کد را به همان ایمیل می‌فرستیم و نشست ورود را روی همین مرورگر نگه می‌داریم.</p>
           <div className={styles.loginLinks}>
             <a href="/privacy">حریم خصوصی</a>
-            <a href="/faq">سؤالات متداول</a>
+            <a href="/faq">پرسش‌های رایج</a>
           </div>
         </div>
 
@@ -260,7 +260,7 @@ export default function Page() {
             <div className={styles.verifiedState}>
               <span className={styles.formLabel}>ورود انجام شد</span>
               <h3>خوش آمدی.</h3>
-              <div className={styles.verifiedNotice}><p>حساب <strong dir="ltr">{verifiedEmail}</strong> با موفقیت تأیید شد.</p><p>گفت‌وگوی عمومی هنوز برای استفاده همگانی باز نشده است.</p></div>
+              <div className={styles.verifiedNotice}><p>حساب <strong dir="ltr">{verifiedEmail}</strong> با موفقیت تأیید شد.</p><p>اگر برای گفت‌وگو وارد شدی، گفت‌وگوی عمومی فعلاً باز نیست. ورودت انجام شده و فعلاً کاری از طرف تو لازم نیست.</p></div>
               <div className={styles.verifiedActions}>
                 <a className={styles.listenerAction} href="/listener">ادامه مسیر شنونده</a>
                 <button className={styles.textButton} type="button" onClick={logout}>خروج از حساب</button>

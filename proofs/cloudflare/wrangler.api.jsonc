@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "yeki-hast-api-w12-compat-proof",
+  "main": "api-worker.ts",
+  "compatibility_date": "2026-09-09",
+  "workers_dev": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "NODE_ENV": "development",
+    "DATABASE_URL": "postgresql://compat.invalid/placeholder"
+  }
+}

@@ -86,340 +86,200 @@ export default function Page() {
   }
 
   return (
-    <main className={styles.home}>
+    <main className={styles.page}>
       <header className={styles.header}>
-        <div className={styles.brandLockup}>
-          <strong className={styles.brand}>یکی هست</strong>
-          <span className={styles.brandPromise}>یک انسان، برای شنیدن</span>
-        </div>
-        <nav className={styles.headerNav} aria-label="دسترسی سریع">
-          <a href="#login">ورود</a>
+        <a className={styles.brand} href="#top" aria-label="یکی هست، صفحه اصلی">
+          <span className={styles.brandMark} aria-hidden="true">◒</span>
+          <span>
+            <strong>یکی هست</strong>
+            <small>یک انسان، برای شنیدن</small>
+          </span>
+        </a>
+        <nav className={styles.nav} aria-label="ناوبری اصلی">
+          <a href="#how">چطور کار می‌کند</a>
+          <a href="#trust">اعتماد و مرزها</a>
           <a href="/listener">شنونده‌شدن</a>
+          <a className={styles.navLogin} href="#login">ورود</a>
         </nav>
       </header>
 
-      <section className={styles.hero} aria-labelledby="page-title">
-        <div className={styles.heroMain}>
-          <p className={styles.eyebrow}>گفت‌وگو با یک شنونده انسانی</p>
-          <h1 id="page-title" className={styles.heroTitle}>یک آدم واقعی گوش می‌دهد. لازم نیست دنبال راه‌حل باشی.</h1>
-          <p className={styles.heroLead}>
-            می‌توانی از هرجای حرف شروع کنی، مکث کنی یا روشن بگویی که راه‌حل نمی‌خواهی. شنونده قرار است با توجه همراه حرفت بماند، نه اینکه زندگی‌ات را مدیریت کند.
-          </p>
+      <section id="top" className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.heroImage} role="img" aria-label="دو نفر در دو خانه، در یک گفت‌وگوی انسانی">
+          <div className={styles.heroShade} />
+        </div>
+        <div className={styles.heroContent}>
+          <p className={styles.eyebrowLight}>گفت‌وگو با یک شنوندهٔ انسانی</p>
+          <h1 id="hero-title">گاهی فقط لازم است یکی واقعاً گوش بدهد.</h1>
+          <p className={styles.heroLead}>هرجای حرف که هستی، از همان‌جا شروع کن. بدون قضاوت، بدون عجله.</p>
           <div className={styles.heroActions}>
-            <a className={styles.primaryAction} href="#experience">ببین این تجربه چه شکلی است</a>
-            <a className={styles.secondaryAction} href="#trust">مرزها و کنترل</a>
+            <a className={styles.primaryButton} href="#login">با ایمیل وارد شو</a>
+            <a className={styles.ghostButton} href="#how">تجربه را ببین <span aria-hidden="true">←</span></a>
           </div>
-          <p className={styles.availability}>
-            <strong>وضعیت فعلی: </strong>گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده. مسیر شنونده‌شدن فعال است و ورود با ایمیل برای حساب و همین مسیر در دسترس است.
-          </p>
-        </div>
-
-        <aside className={styles.heroAside} aria-label="برای حرف‌زدن چه چیزی لازم نیست">
-          <p className={styles.heroAsideTitle}>برای شروع حرف‌زدن لازم نیست:</p>
-          <ul className={styles.heroAsideList}>
-            <li>از قبل بدانی دقیقاً چه می‌خواهی بگویی.</li>
-            <li>از شنونده راه‌حل یا توصیه بخواهی.</li>
-            <li>همه‌چیز را یک‌باره و کامل توضیح بدهی.</li>
-          </ul>
-        </aside>
-      </section>
-
-      <section id="experience" className={styles.section} aria-labelledby="experience-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>وقتی حرف می‌زنی</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="experience-title" className={styles.sectionTitle}>لازم نیست حرف‌ها مرتب و آماده باشند.</h2>
-          <p className={styles.sectionIntro}>
-            ممکن است وسط یک موضوع سراغ موضوع دیگری بروی یا چند لحظه چیزی برای گفتن نداشته باشی. این‌ها مانع شنیده‌شدن نیستند.
-          </p>
-          <ul className={styles.freedomList}>
-            <li className={styles.freedomItem}>
-              <strong>از هرجای حرف شروع کن.</strong>
-              <span>لازم نیست اول داستان را خلاصه کنی یا همه زمینه را توضیح بدهی.</span>
-            </li>
-            <li className={styles.freedomItem}>
-              <strong>اگر راه‌حل نمی‌خواهی، بگو.</strong>
-              <span>می‌توانی روشن کنی که فعلاً فقط می‌خواهی حرفت شنیده شود.</span>
-            </li>
-            <li className={styles.freedomItem}>
-              <strong>برای مکث جا هست.</strong>
-              <span>سکوت بخشی از صحبت است؛ لازم نیست هر چند ثانیه چیزی برای گفتن پیدا کنی.</span>
-            </li>
-            <li className={styles.freedomItem}>
-              <strong>مسیر حرف را عوض کن.</strong>
-              <span>اگر نمی‌خواهی موضوعی را ادامه بدهی، لازم نیست آن را تا نتیجه پیش ببری.</span>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section className={styles.section} aria-labelledby="human-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>چرا یک انسان؟</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="human-title" className={styles.sectionTitle}>گاهی مهم است طرف مقابل واقعاً یک نفر باشد.</h2>
-          <p className={styles.sectionIntro}>
-            هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد. دوست و متخصص هم جای خودشان را دارند. بعضی وقت‌ها نیاز چیز دیگری است: حرفت را به یک آدم بگویی و بدانی یک انسان همان‌جا گوش می‌دهد.
-          </p>
-          <div className={styles.humanStatement}>
-            <p>«یکی هست» فضایی برای گفت‌وگوی محترمانه با یک شنونده انسانی است؛ تمرکز این رابطه روی شنیدن است، نه تبدیل هر حرف به تحلیل، برنامه یا توصیه.</p>
-            <p>این انتخاب قرار نیست جای دوست، ابزارهای دیجیتال یا کمک حرفه‌ای را بگیرد. برای وقت‌هایی است که می‌خواهی یک نفر دیگر واقعاً حرفت را بشنود.</p>
+          <div className={styles.betaNote}>
+            <span className={styles.statusDot} aria-hidden="true" />
+            <span><strong>گفت‌وگوی عمومی فعلاً بسته است.</strong> ورود و مسیر شنونده‌شدن در دسترس است.</span>
           </div>
         </div>
+        <div className={styles.heroCaption}>دو اتاق. دو زندگی. یک حضور.</div>
       </section>
 
-      <section className={styles.section} aria-labelledby="listener-does-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>نقش شنونده</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="listener-does-title" className={styles.sectionTitle}>شنونده قرار نیست هر حرف را به توصیه تبدیل کند.</h2>
-          <p className={styles.sectionIntro}>
-            شنونده با توجه حرفت را دنبال می‌کند و به تو جا می‌دهد صحبت را با ریتم خودت پیش ببری.
-          </p>
-          <dl className={styles.listenerDefinition}>
-            <div className={styles.definitionRow}>
-              <dt>دنبال‌کردن</dt>
-              <dd>به چیزی که می‌گویی توجه می‌کند و رشته حرف را بی‌دلیل عوض نمی‌کند.</dd>
-            </div>
-            <div className={styles.definitionRow}>
-              <dt>پرسیدن</dt>
-              <dd>اگر به ادامه حرف کمک کند، سؤال باز و محترمانه می‌پرسد؛ نه برای بازجویی یا رساندن تو به پاسخ خاصی.</dd>
-            </div>
-            <div className={styles.definitionRow}>
-              <dt>بازتاب</dt>
-              <dd>گاهی آنچه شنیده را با کلمات خودش برمی‌گرداند تا مطمئن شود درست فهمیده است.</dd>
-            </div>
-            <div className={styles.definitionRow}>
-              <dt>جا برای سکوت</dt>
-              <dd>لازم نیست هر مکثی با حرف یا توصیه پر شود.</dd>
-            </div>
-          </dl>
-          <div className={styles.boundaryNote}>
-            <strong>مرز نقش روشن است. </strong>این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست. نقش شنونده برای آشنایی عاطفی یا ادامه یک رابطه شخصی بیرون از سرویس هم تعریف نشده است.
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section} aria-labelledby="journey-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>مسیر صحبت</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="journey-title" className={styles.sectionTitle}>وقتی گفت‌وگوی عمومی فعال شود، مسیر ساده است.</h2>
-          <p className={styles.sectionIntro}>ورود، انتخاب شنونده و شروع صحبت؛ بدون اینکه برای دیدن توضیحات عمومی مجبور به ساخت حساب باشی.</p>
-          <ol className={styles.journey}>
-            <li className={styles.journeyItem}>
-              <div>
-                <h3>با ایمیل وارد می‌شوی.</h3>
-                <p>مالکیت ایمیل با کد ورود تأیید می‌شود. برای آشنایی با سرویس، ورود لازم نیست.</p>
-              </div>
-            </li>
-            <li className={styles.journeyItem}>
-              <div>
-                <h3>شنونده را انتخاب می‌کنی.</h3>
-                <p>بخشی از متن پروفایل را خود شنونده می‌نویسد. هر اطلاعاتی که جداگانه بررسی شده باشد باید روشن و متمایز نشان داده شود.</p>
-              </div>
-            </li>
-            <li className={styles.journeyItem}>
-              <div>
-                <h3>حرف را با ریتم خودت پیش می‌بری.</h3>
-                <p>می‌توانی بگویی چه می‌خواهی و چه نمی‌خواهی؛ شنونده هم باید در چارچوب نقش خودش بماند.</p>
-              </div>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section id="trust" className={styles.section} aria-labelledby="trust-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>اعتماد و کنترل</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="trust-title" className={styles.sectionTitle}>حق انتخاب باید در خود تجربه دیده شود.</h2>
-          <p className={styles.sectionIntro}>
-            بهتر است پیش از شروع بدانی چه چیزی در اختیار توست و رابطه شنونده با کاربر چه مرزی دارد.
-          </p>
-          <div className={styles.trustGrid}>
-            <article className={styles.trustItem}>
-              <h3>تو انتخاب می‌کنی چه چیزی را بگویی.</h3>
-              <p>لازم نیست اطلاعات شخصی‌ای را که برای حرفت ضروری نمی‌دانی وارد صحبت کنی.</p>
-            </article>
-            <article className={styles.trustItem}>
-              <h3>رابطه در چارچوب «یکی هست» می‌ماند.</h3>
-              <p>درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس، بخشی از رابطه شنونده و کاربر نیست.</p>
-            </article>
-            <article className={styles.trustItem}>
-              <h3>رفتار نامناسب جایی در این رابطه ندارد.</h3>
-              <p>آزار، تهدید، توهین یا درخواست نامناسب با نقش شنونده و هدف این فضا سازگار نیست.</p>
-            </article>
-            <article className={styles.trustItem}>
-              <h3>همه اطلاعات پروفایل از یک جنس نیستند.</h3>
-              <p>متن معرفی را خود شنونده می‌نویسد. اگر موردی جداگانه بررسی شده باشد، باید همان مورد به‌صورت مشخص از متن خود فرد جدا شود.</p>
-            </article>
-            <article className={styles.trustItem}>
-              <h3>پایان تماس در اختیار توست.</h3>
-              <p>وقتی گفت‌وگوی عمومی فعال شود، می‌توانی تماس را به شکل عادی پایان بدهی. برای موقعیت ناامن هم خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل در نظر گرفته شده است.</p>
-            </article>
-          </div>
-          <div className={styles.inlineLinks}>
-            <a href="/trust">مرکز اعتماد</a>
-            <a href="/safety">ایمنی و گزارش</a>
-            <a href="/faq">پرسش‌های رایج</a>
-            <a href="/privacy">جزئیات حریم خصوصی</a>
-            <a href="/terms">قوانین استفاده</a>
-            <a href="/account/delete">حذف حساب</a>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section} aria-labelledby="quality-title">
-        <div className={styles.sectionLabel}>
-          <p className={styles.sectionKicker}>آمادگی شنونده</p>
-        </div>
-        <div className={styles.sectionBody}>
-          <h2 id="quality-title" className={styles.sectionTitle}>شنونده پیش از ارزیابی با نقش و مرزهای آن آشنا می‌شود.</h2>
-          <p className={styles.sectionIntro}>
-            ساخت حساب یا نوشتن پروفایل به‌تنهایی برای آماده‌شدن کافی نیست. مسیر فعلی شنونده‌شدن، آموزش را پیش از ارزیابی قرار می‌دهد.
-          </p>
-          <ul className={styles.qualitySteps}>
-            <li className={styles.qualityStep}>
-              <strong>شنیدن فعال</strong>
-              <span>متقاضی با هدف نقش، توجه به حرف طرف مقابل و شکل سؤال‌پرسیدن آشنا می‌شود.</span>
-            </li>
-            <li className={styles.qualityStep}>
-              <strong>مرزهای رابطه</strong>
-              <span>آموزش شامل مرز ارتباط و برخورد با موقعیت‌هایی است که حساسیت بیشتری می‌خواهند.</span>
-            </li>
-            <li className={styles.qualityStep}>
-              <strong>ارزیابی</strong>
-              <span>بعد از آموزش، ارزیابی بخشی از مسیر شنونده‌شدن است؛ صرف ساخت حساب یا نوشتن پروفایل کافی نیست.</span>
-            </li>
-            <li className={styles.qualityStep}>
-              <strong>معرفی و اطلاعات بررسی‌شده</strong>
-              <span>متن معرفی را خود شنونده می‌نویسد. اگر اطلاعاتی جداگانه بررسی شده باشد، نتیجه باید با همان عنوان مشخص شود.</span>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section className={styles.listenerCta} aria-labelledby="become-listener-title">
+      <section className={styles.introSection} aria-labelledby="intro-title">
+        <div className={styles.sectionEyebrow}>برای وقت‌هایی که</div>
         <div>
-          <p className={styles.eyebrow}>برای کسانی که می‌خواهند شنونده شوند</p>
-          <h2 id="become-listener-title">خوب شنیدن، مسئولیت و مهارت می‌خواهد.</h2>
-          <p>مسیر شنونده‌شدن فعال است و شامل آشنایی با نقش، آموزش و ارزیابی می‌شود. اگر برای همین نقش آمده‌ای، می‌توانی جزئیات مسیر را جداگانه ببینی.</p>
+          <h2 id="intro-title">آدم‌ها همیشه دنبال راه‌حل نیستند.</h2>
+          <p className={styles.introText}>گاهی می‌خواهی چیزی را با صدای بلند بگویی و بدانی آن طرف خط، یک آدم واقعی با توجه گوش می‌دهد. همین.</p>
         </div>
-        <a className={styles.listenerLink} href="/listener">درباره شنونده‌شدن</a>
+      </section>
+
+      <section className={styles.dualSection} aria-labelledby="distance-title">
+        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک مرد در شهر جدید و یک زن در خانه‌ای آشنا، در دو سوی یک تماس" />
+        <div className={styles.dualCopy}>
+          <p className={styles.sectionEyebrow}>فاصله همیشه روی نقشه نیست</p>
+          <h2 id="distance-title">از تهران تا تورنتو، بعضی شب‌ها شبیه هم‌اند.</h2>
+          <p>بعد از یک روز سخت، وقتی خانواده دور است یا دوستت در دسترس نیست، لازم نیست همه‌چیز را مرتب و کامل توضیح بدهی. می‌توانی با زبان خودت حرف بزنی؛ شنونده برای فهمیدن عجله نمی‌کند.</p>
+          <a className={styles.textLink} href="#login">برای آشنایی، وارد شو <span aria-hidden="true">←</span></a>
+        </div>
+      </section>
+
+      <section id="how" className={styles.howSection} aria-labelledby="how-title">
+        <div className={styles.sectionHeader}>
+          <p className={styles.sectionEyebrow}>ساده شروع می‌شود</p>
+          <h2 id="how-title">سه قدم تا یک گفت‌وگوی واقعی</h2>
+        </div>
+        <div className={styles.stepsGrid}>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>۰۱</span>
+            <h3>با ایمیل وارد می‌شوی</h3>
+            <p>رمز عبور لازم نیست. یک کد کوتاه به ایمیلت می‌آید.</p>
+          </article>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>۰۲</span>
+            <h3>زبان و زمانت را انتخاب می‌کنی</h3>
+            <p>وقتی گفت‌وگوی عمومی باز شود، انتخاب شنونده و زمان در اختیار توست.</p>
+          </article>
+          <article className={styles.stepCard}>
+            <span className={styles.stepNumber}>۰۳</span>
+            <h3>حرف را با ریتم خودت پیش می‌بری</h3>
+            <p>می‌توانی مکث کنی، موضوع را عوض کنی یا هر وقت خواستی تماس را تمام کنی.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className={styles.momentsSection} aria-labelledby="moments-title">
+        <div className={styles.momentsLead}>
+          <p className={styles.sectionEyebrow}>آدم‌ها به دلیل‌های مختلفی حرف می‌زنند</p>
+          <h2 id="moments-title">برای هر لحظه، یک شکل از تنهایی وجود دارد.</h2>
+          <p>«یکی هست» قرار نیست زندگی را توضیح بدهد. فقط جایی می‌سازد که بتوانی چند دقیقه، خودت باشی.</p>
+        </div>
+        <div className={styles.momentsImage} role="img" aria-label="دو نسل در دو خانه، در یک ارتباط گرم" />
+        <div className={styles.momentList}>
+          <div><strong>وقتی دور از خانه‌ای</strong><span>هیچ‌کس امروزت را ندیده است.</span></div>
+          <div><strong>وقتی با خانواده حرف نمی‌شود</strong><span>گاهی شنیده‌شدن، قبل از توضیح‌دادن می‌آید.</span></div>
+          <div><strong>وقتی خوابت نمی‌برد</strong><span>می‌توانی از یک گفت‌وگوی ساده شروع کنی.</span></div>
+        </div>
+      </section>
+
+      <section className={styles.productSection} aria-labelledby="product-title">
+        <div className={styles.productCopy}>
+          <p className={styles.sectionEyebrow}>محصولی که پشت این حس است</p>
+          <h2 id="product-title">کمتر دنبال‌کردن. بیشتر شنیدن.</h2>
+          <p>مسیر «یکی هست» کوتاه نگه داشته شده: ورود روشن، مرزهای مشخص، و یک گفت‌وگوی صوتی که هر دو طرف می‌دانند برای چه آمده‌اند.</p>
+          <div className={styles.featureList}>
+            <div><span>◌</span><p><strong>ورود با ایمیل</strong><small>بدون ساختن رمز عبور</small></p></div>
+            <div><span>◌</span><p><strong>گفت‌وگوی صوتی</strong><small>در چارچوبی که از قبل روشن است</small></p></div>
+            <div><span>◌</span><p><strong>خروج و گزارش</strong><small>کنترل تماس همیشه با توست</small></p></div>
+          </div>
+        </div>
+        <div className={styles.productVisual}>
+          <div className={styles.phoneShell}>
+            <div className={styles.phoneTop}><span>۹:۴۱</span><span>● ● ●</span></div>
+            <div className={styles.phoneBrand}><span className={styles.phoneMark}>◒</span><strong>یکی هست</strong></div>
+            <div className={styles.phoneGreeting}>امشب، حرفی هست؟</div>
+            <div className={styles.phonePanel}><small>مسیر تو</small><strong>یک گفت‌وگوی آرام</strong><span>با یک شنوندهٔ انسانی</span><button type="button" disabled>فعلاً بسته است</button></div>
+            <div className={styles.phoneFooter}><span>خانه</span><span>گفت‌وگو</span><span>حساب</span></div>
+          </div>
+          <div className={styles.productPhoto} role="img" aria-label="دستی که روی آیکن یکی هست در تلفن می‌زند" />
+        </div>
+      </section>
+
+      <section id="trust" className={styles.trustSection} aria-labelledby="trust-title">
+        <div className={styles.trustHeading}>
+          <p className={styles.sectionEyebrow}>اعتماد، قبل از صمیمیت</p>
+          <h2 id="trust-title">مرزها را از اول روشن می‌کنیم.</h2>
+        </div>
+        <div className={styles.trustGrid}>
+          <article><span>۰۱</span><h3>این درمان نیست.</h3><p>شنونده جای پزشک، روان‌شناس، دوست یا خدمات اضطراری نیست.</p></article>
+          <article><span>۰۲</span><h3>اطلاعاتت انتخاب خودت است.</h3><p>لازم نیست چیزی را بگویی که برای گفت‌وگویت ضروری نمی‌دانی.</p></article>
+          <article><span>۰۳</span><h3>هر وقت بخواهی، تمام می‌کنی.</h3><p>پایان تماس و گزارش‌کردن تجربه، بخشی از کنترل توست.</p></article>
+        </div>
+        <a className={styles.outlineButton} href="/trust">مرکز اعتماد را بخوان</a>
+      </section>
+
+      <section className={styles.listenerSection} aria-labelledby="listener-title">
+        <div>
+          <p className={styles.sectionEyebrow}>برای آدم‌هایی که خوب گوش می‌دهند</p>
+          <h2 id="listener-title">شنونده‌شدن، فقط آنلاین‌بودن نیست.</h2>
+          <p>اگر می‌دانی چطور به حرف یک آدم جا بدهی، مسیر شنونده‌شدن را ببین. آموزش و ارزیابی، قبل از شروع نقش قرار دارند.</p>
+        </div>
+        <a className={styles.darkButton} href="/listener">مسیر شنونده‌شدن <span aria-hidden="true">←</span></a>
+      </section>
+
+      <section className={styles.faqSection} aria-labelledby="faq-title">
+        <div>
+          <p className={styles.sectionEyebrow}>سؤال‌های کوتاه</p>
+          <h2 id="faq-title">قبل از شروع، جواب چند سؤال روشن است.</h2>
+        </div>
+        <div className={styles.faqList}>
+          <details><summary>«یکی هست» برای چیست؟</summary><p>برای گفت‌وگوی محترمانه با یک شنوندهٔ انسانی؛ وقتی می‌خواهی حرفت شنیده شود.</p></details>
+          <details><summary>الان می‌توانم با شنونده تماس بگیرم؟</summary><p>نه. گفت‌وگوی عمومی و رزرو تماس فعلاً بسته است. این صفحه وضعیت فعلی را پنهان نمی‌کند.</p></details>
+          <details><summary>شنونده چه نقشی دارد؟</summary><p>گوش‌دادن با توجه، پرسیدن محترمانه و رعایت مرزها؛ نه درمان، تشخیص یا مدیریت زندگی تو.</p></details>
+        </div>
+        <a className={styles.textLink} href="/faq">همه پرسش‌ها و پاسخ‌ها <span aria-hidden="true">←</span></a>
       </section>
 
       <section id="login" className={styles.loginSection} aria-labelledby="login-title">
         <div className={styles.loginCopy}>
-          <p className={styles.eyebrow}>ورود با ایمیل</p>
-          <h2 id="login-title">ورود با ایمیل، بدون رمز عبور.</h2>
-          <p>ورود فعلاً برای حساب و ادامه مسیر شنونده‌شدن استفاده می‌شود. اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست.</p>
+          <p className={styles.eyebrowLight}>آمادهٔ آشنایی هستی؟</p>
+          <h2 id="login-title">از یک ایمیل شروع کن.</h2>
+          <p>ورود فعلاً برای حساب و ادامهٔ مسیر شنونده‌شدن استفاده می‌شود. برای خواندن دربارهٔ «یکی هست»، لازم نیست وارد شوی.</p>
         </div>
-
         <div className={styles.loginPanel} aria-live="polite">
           {step === 'email' && (
             <form onSubmit={requestCode} className={styles.loginForm}>
-              <div>
-                <p className={styles.formEyebrow}>ورود به حساب</p>
-                <h3>ایمیل تو</h3>
-                <p className={styles.helper}>یک کد ۶ رقمی برای ورود به همین ایمیل می‌فرستیم.</p>
-              </div>
-
-              <label className={styles.fieldLabel} htmlFor="email">ایمیل</label>
-              <input
-                id="email"
-                name="email"
-                className={`${styles.field} ${styles.emailField}`}
-                aria-label="ایمیل"
-                autoComplete="email"
-                inputMode="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                disabled={busy}
-                dir="ltr"
-              />
-
+              <div><span className={styles.formStep}>ورود با ایمیل</span><h3>کد را به کجا بفرستیم؟</h3></div>
+              <label htmlFor="email">ایمیل</label>
+              <input id="email" name="email" type="email" inputMode="email" autoComplete="email" dir="ltr" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
               {error && <p className={styles.error} role="alert">{error}</p>}
-
-              <button className={styles.submitButton} type="submit" disabled={busy}>
-                {busy ? 'در حال ارسال…' : 'دریافت کد ورود'}
-              </button>
-
-              <p className={styles.privacyNote}>
-                ایمیل برای ورود و امنیت حساب استفاده می‌شود. جزئیات استفاده و نگهداری داده‌ها در <a href="/privacy">حریم خصوصی</a> آمده است.
-              </p>
+              <button className={styles.primaryButton} type="submit" disabled={busy}>{busy ? 'در حال ارسال…' : 'ارسال کد ورود'}</button>
+              <p className={styles.formNote}>کد ورود فقط برای همین ایمیل ارسال می‌شود.</p>
             </form>
           )}
-
           {step === 'code' && (
             <form onSubmit={verifyCode} className={styles.loginForm}>
-              <div>
-                <p className={styles.formEyebrow}>تأیید ایمیل</p>
-                <h3>کد ورود</h3>
-                <p className={styles.helper}>کد ۶ رقمی ارسال‌شده به <span dir="ltr">{verifiedEmail}</span> را وارد کن.</p>
-              </div>
-
-              <label className={styles.fieldLabel} htmlFor="code">کد ۶ رقمی</label>
-              <input
-                id="code"
-                name="code"
-                className={`${styles.field} ${styles.codeField}`}
-                aria-label="کد ورود"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="------"
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                disabled={busy}
-              />
-
+              <div><span className={styles.formStep}>یک قدم مانده</span><h3>کد شش‌رقمی را وارد کن.</h3><p className={styles.formNote}>کد به <b dir="ltr">{verifiedEmail}</b> فرستاده شد.</p></div>
+              <label htmlFor="code">کد ورود</label>
+              <input id="code" name="code" className={styles.codeInput} inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="۰۰۰۰۰۰" required />
               {error && <p className={styles.error} role="alert">{error}</p>}
-
-              <button className={styles.submitButton} type="submit" disabled={busy || code.length !== 6}>
-                {busy ? 'در حال بررسی…' : 'تأیید و ورود'}
-              </button>
-              <button className={styles.textButton} type="button" onClick={editEmail} disabled={busy}>
-                اصلاح ایمیل
-              </button>
+              <button className={styles.primaryButton} type="submit" disabled={busy}>{busy ? 'در حال بررسی…' : 'تأیید و ورود'}</button>
+              <button className={styles.plainButton} type="button" onClick={editEmail}>ویرایش ایمیل</button>
             </form>
           )}
-
           {step === 'verified' && (
-            <div className={styles.verifiedState}>
-              <p className={styles.formEyebrow}>ورود انجام شد</p>
-              <h3>ایمیلت تأیید شد.</h3>
-              <div className={styles.verifiedNotice}>
-                <p>اگر برای گفت‌وگو وارد شدی، گفت‌وگوی عمومی فعلاً باز نیست. ورودت انجام شده و فعلاً کاری از طرف تو لازم نیست.</p>
-                <p>اگر برای شنونده‌شدن آمده‌ای، مسیر ثبت‌نام، آموزش و ارزیابی فعال است.</p>
-              </div>
-              <div className={styles.verifiedActions}>
-                <a className={styles.verifiedListenerLink} href="/listener">ادامه مسیر شنونده</a>
-                <button className={styles.textButton} type="button" onClick={() => void logout()}>خروج از حساب</button>
-              </div>
+            <div className={styles.loginForm}>
+              <span className={styles.successMark}>✓</span>
+              <h3>ایمیل تأیید شد.</h3>
+              <p className={styles.formNote}>حساب تو آماده است. برای ادامهٔ مسیر، از بخش شنونده‌شدن وارد شو.</p>
+              <a className={styles.primaryButton} href="/listener">ادامه به شنونده‌شدن</a>
+              <button className={styles.plainButton} type="button" onClick={() => void logout()}>خروج از حساب</button>
             </div>
           )}
         </div>
       </section>
 
       <footer className={styles.footer}>
-        <p>«یکی هست» برای گفت‌وگوی محترمانه با یک شنونده انسانی طراحی شده است؛ تو انتخاب می‌کنی چه بگویی و شنونده در چارچوب نقش خودش می‌ماند.</p>
-        <nav className={styles.footerNav} aria-label="اطلاعات عمومی سرویس">
-          <a href="/trust">مرکز اعتماد</a>
-          <a href="/safety">ایمنی</a>
-          <a href="/faq">پرسش‌های رایج</a>
-          <a href="/privacy">حریم خصوصی</a>
-          <a href="/terms">قوانین استفاده</a>
-          <a href="/account/delete">حذف حساب</a>
-          <a href="mailto:sales@uniqueholding.com.tr">پشتیبانی</a>
-        </nav>
+        <a className={styles.brand} href="#top"><span className={styles.brandMark} aria-hidden="true">◒</span><span><strong>یکی هست</strong><small>یک انسان، برای شنیدن</small></span></a>
+        <div className={styles.footerLinks}><a href="/trust">اعتماد</a><a href="/safety">ایمنی</a><a href="/privacy">حریم خصوصی</a><a href="/terms">قوانین</a><a href="/faq">پرسش‌های رایج</a></div>
+        <p>برای حرف‌هایی که لازم نیست تنهایی حملشان کنی.</p>
       </footer>
     </main>
   );

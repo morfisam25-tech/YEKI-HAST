@@ -258,3 +258,44 @@
   .header { flex-direction: column; align-items: flex-start; gap: 14px; }
   .statusBox { border-radius: 22px; }
 }
+
+
+/* W9 Phase 2 visual system */
+.page {
+  --bg: #0e1117;
+  --surface: #171a20;
+  --surface-2: #20232a;
+  --text: #f8f2eb;
+  --muted: #b9b0b0;
+  --soft: #d8c9c0;
+  --line: rgba(255,255,255,.11);
+  --accent: #e8a15f;
+  --coral: #d77e68;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(215,126,104,.13), transparent 28rem),
+    radial-gradient(circle at 8% 4%, rgba(232,161,95,.10), transparent 25rem),
+    var(--bg);
+  color: var(--text);
+}
+.header { width: min(1060px, calc(100% - 48px)); border-color: var(--line); }
+.brand { color: var(--text); font-size: 19px; letter-spacing: -.04em; }
+.brand::before { width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.24); background-color: rgba(232,161,95,.08); box-shadow: 0 10px 24px rgba(0,0,0,.22); }
+.topNav a, .footer a, .detail a { color: var(--accent); }
+.shell { width: min(920px, calc(100% - 48px)); }
+.hero h1 { color: var(--text); font-size: clamp(2.3rem, 5vw, 4.2rem); }
+.hero::before { background: linear-gradient(90deg, var(--coral), var(--accent)); }
+.eyebrow { color: var(--accent); background: rgba(232,161,95,.12); border: 1px solid rgba(232,161,95,.20); }
+.lead, .detail p { color: var(--muted); }
+.item { border-color: var(--line); background: var(--surface); box-shadow: 0 18px 50px rgba(0,0,0,.16); }
+.item summary { color: var(--soft); }
+.item summary:hover { color: var(--accent); }
+.icon { border-color: rgba(232,161,95,.28); background: rgba(232,161,95,.10); color: var(--accent); }
+.item[open] .icon { background: rgba(232,161,95,.18); }
+.answer { border-color: var(--line); }
+.shortAnswer { color: #f0c58f; }
+.statusBox { background: linear-gradient(145deg, #262027, #3b282b 62%, #4b2b2a); box-shadow: 0 26px 70px rgba(0,0,0,.24); }
+.statusBox .eyebrow { color: #ffd3a0; background: rgba(255,255,255,.08); }
+.statusBox > p:last-child { color: #f7e9dc; }
+.footer { border-color: var(--line); }
+.page a:focus-visible { outline-color: var(--accent); }

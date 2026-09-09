@@ -299,3 +299,5 @@
 .statusBox > p:last-child { color: #f7e9dc; }
 .footer { border-color: var(--line); }
 .page a:focus-visible { outline-color: var(--accent); }
+
+.page { width: 100%; max-width: none; margin: 0; }

@@ -134,11 +134,13 @@ test('Booking uses a booking quote and requires a fresh booking_start re-quote b
 test('Caller charge currency is separate from Listener base payout currency with no invented FX contribution', () => {
   assert.match(migration7, /listener_currency_code varchar\(3\)/);
   assert.match(migration7, /platform_contribution_minor DROP NOT NULL/);
+  assert.match(migration7, /FOREIGN KEY \(call_session_id, listener_user_id, currency_code\)[\s\S]*REFERENCES app\.call_sessions\(id, listener_user_id, listener_currency_code\)/);
   assert.match(settlement, /row\.currency_code === row\.listener_currency_code/);
-  assert.match(settlement, /listener_currency_code/);
-  assert.match(settlement, /platformContributionPendingFx/);
-  assert.match(settlement, /platformContributionMinor: sameCurrency/);
-  assert.match(settlement, /: null/);
+  assert.match(settlement, /row\.listener_currency_code/);
+  assert.match(settlement, /platform_contribution_minor=CASE/);
+  assert.match(settlement, /WHEN currency_code=listener_currency_code/);
+  assert.match(settlement, /ELSE NULL/);
+  assert.match(settlement, /platformContributionPendingFx: !sameCurrency/);
 });
 
 test('Listener base payout is resolved from the shared Listener marketplace, not Caller country', () => {
@@ -169,6 +171,8 @@ test('migration runner recognizes 0007 and 0008 and remains transaction/hash ide
   assert.match(migrateRunner, /await client\.query\('BEGIN'\)/);
   assert.match(migrateRunner, /await client\.query\('ROLLBACK'\)/);
   assert.match(migrateRunner, /continue;/);
+  assert.doesNotMatch(migration7, /^BEGIN;|^COMMIT;/m);
+  assert.doesNotMatch(migration8, /^BEGIN;|^COMMIT;/m);
 });
 
 test('production readiness explicitly requires W3 migrations and schema', () => {

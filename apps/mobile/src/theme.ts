@@ -1,0 +1,31 @@
+export const mobileTheme = {
+  deep: '#0E1117',
+  surface: '#171B22',
+  surfaceRaised: '#20252D',
+  panel: '#272C34',
+  paper: '#F7EFE5',
+  paperSoft: '#F0E3D6',
+  ink: '#2B211C',
+  inkStrong: '#17100B',
+  onDark: '#F8F1E9',
+  muted: '#B8ADA2',
+  mutedInk: '#6F5E54',
+  accent: '#E99C58',
+  accentStrong: '#E59B56',
+  accentSoft: '#F3C494',
+  lineDark: 'rgba(255,255,255,0.14)',
+  lineLight: '#D8CABE',
+  field: '#FFF9F2',
+  danger: '#9B413A',
+  dangerSurface: '#F8E8E2',
+  success: '#405C46',
+  successSurface: '#E8EFE6',
+  warning: '#7A5A2A',
+  warningSurface: '#F8EBD3',
+} as const;
+
+export const mobileRadius = {
+  small: 8,
+  medium: 12,
+  large: 16,
+} as const;

@@ -11,7 +11,7 @@ const heroEnd = page.indexOf('</section>', heroStart);
 const hero = page.slice(heroStart, heroEnd);
 
 test('home stays caller-first, tells the closed-service truth once and does not make login a hero destination', () => {
-  assert.match(page, /یک آدم واقعی گوش می‌دهد\. لازم نیست دنبال راه‌حل باشید/);
+  assert.match(page, /یک آدم واقعی گوش می‌دهد\. لازم نیست دنبال راه‌حل باشی/);
   assert.match(page, /هوش مصنوعی می‌تواند برای فکرکردن، نوشتن یا تحلیل مفید باشد/);
   assert.equal(page.split(closedNotice).length - 1, 1);
   assert.match(hero, /href="#experience"/);
@@ -27,21 +27,32 @@ test('home explains human listening, personal-contact boundaries, profile truth 
   assert.match(page, /درخواست یا ردوبدل‌کردن شماره، آیدی یا راه تماس برای ادامه یک رابطه شخصی بیرون از سرویس/);
   assert.match(page, /متن معرفی را خود شنونده می‌نویسد/);
   assert.match(page, /اگر موردی جداگانه بررسی شده باشد/);
-  assert.match(page, /تماس را به شکل عادی پایان دهید/);
+  assert.match(page, /تماس را به شکل عادی پایان بدهی/);
   assert.match(page, /خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل/);
   assert.match(page, /شنونده پیش از ارزیابی با نقش و مرزهای آن آشنا می‌شود/);
   assert.match(page, /این خدمت مشاوره، درمان، تشخیص پزشکی یا پاسخ اضطراری نیست/);
 });
 
-test('public home keeps product copy free of implementation jargon and login remains useful without forcing listener onboarding', () => {
+test('public home uses warm singular consumer voice while keeping implementation jargon out', () => {
+  assert.match(page, /اگر فقط می‌خواهی با سرویس آشنا شوی، نیازی به ورود نیست/);
+  assert.match(page, /اگر برای گفت‌وگو وارد شدی، گفت‌وگوی عمومی فعلاً باز نیست\. ورودت انجام شده و فعلاً کاری از طرف تو لازم نیست/);
+  assert.match(page, /اگر برای شنونده‌شدن آمده‌ای/);
+  assert.match(page, /تو انتخاب می‌کنی چه چیزی را بگویی/);
   assert.match(page, /\/api\/auth\/request/);
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
-  assert.match(page, /اگر فقط می‌خواهید با سرویس آشنا شوید، نیازی به ورود نیست/);
-  assert.match(page, /اگر برای گفت‌وگو وارد شدید، گفت‌وگوی عمومی فعلاً باز نیست\. ورود شما انجام شده و فعلاً کاری از طرف شما لازم نیست/);
-  assert.match(page, /اگر برای شنونده‌شدن آمده‌اید/);
   assert.match(page, /ادامه مسیر شنونده/);
   assert.doesNotMatch(page, />[^<]*(?:v1\.2|HOLD|feature gate|JavaScript|cookie)[^<]*</i);
+});
+
+test('home explicitly surfaces trust, safety and FAQ routes without opening Caller', () => {
+  assert.match(page, /href="\/trust"/);
+  assert.match(page, /href="\/safety"/);
+  assert.match(page, /href="\/faq"/);
+  assert.match(page, /مرکز اعتماد/);
+  assert.match(page, /ایمنی و گزارش|>ایمنی</);
+  assert.match(page, /پرسش‌های رایج/);
+  assert.doesNotMatch(page, /href="\/talk"/);
 });
 
 test('home-scoped visual system keeps focus, RTL, mobile layout and readable trust-critical text', () => {

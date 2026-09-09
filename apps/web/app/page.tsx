@@ -204,7 +204,7 @@ export default function Page() {
         </div>
         <div className={styles.trustPoints}>
           <div><span className={styles.pointIcon}>◌</span><div><strong>ضبط خاموش</strong><p>در عرضه‌ی فعلی، محتوای صوتی مکالمه ضبط یا ذخیره نمی‌شود. اگر موردی جداگانه بررسی شده باشد، همان مورد جدا از متن خود فرد نشان داده می‌شود.</p></div></div>
-          <div><span className={styles.pointIcon}>⌁</span><div><strong>اطلاعات شخصی در اختیار توست</strong><p>متن معرفی را خود شنونده می‌نویسد. برای شنیده‌شدن لازم نیست هر اطلاعاتی را درباره‌ی خودت بگویی.</p></div></div>
+          <div><span className={styles.pointIcon}>⌁</span><div><strong>تو انتخاب می‌کنی چه چیزی را بگویی</strong><p>متن معرفی را خود شنونده می‌نویسد. برای شنیده‌شدن لازم نیست هر اطلاعاتی را درباره‌ی خودت بگویی.</p></div></div>
           <div><span className={styles.pointIcon}>↗</span><div><strong>هر وقت بخواهی تمام می‌کنی</strong><p>تو می‌توانی تماس را به شکل عادی پایان بدهی. خروج امن جداگانه‌ای برای پایان تماس و مسدودکردن طرف مقابل در نظر گرفته شده است.</p></div></div>
         </div>
       </section>

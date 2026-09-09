@@ -1,0 +1,298 @@
+name: W9 authenticated visual-state QA
+
+on:
+  pull_request:
+    types: [synchronize, ready_for_review]
+    branches: [main]
+  workflow_dispatch:
+  push:
+    branches:
+      - 'visual/w9-independent-web-redesign-20260909'
+
+permissions:
+  contents: read
+
+jobs:
+  render-authenticated-states:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout W9 branch
+        uses: actions/checkout@v4
+        with:
+          ref: visual/w9-independent-web-redesign-20260909
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Build real Web app
+        run: npm --workspace @yeki-hast/web run build
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+
+      - name: Start real Web app
+        run: |
+          npm --workspace @yeki-hast/web run start -- --hostname 127.0.0.1 --port 3000 > /tmp/yeki-hast-web.log 2>&1 &
+          npx wait-on http://127.0.0.1:3000/ --timeout 120000
+          curl --fail --silent --show-error http://127.0.0.1:3000/ | grep -q 'یکی هست'
+
+      - name: Render real guest and fixture-only authenticated states
+        run: |
+          mkdir -p artifacts
+          node --input-type=module <<'EOF'
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless: true });
+          const base = 'http://127.0.0.1:3000';
+          const viewports = [
+            ['1440', 1440, 900],
+            ['390', 390, 844],
+            ['360', 360, 800],
+          ];
+          const realRoutes = [
+            ['listener', '/listener'],
+            ['talk', '/talk'],
+            ['booking', '/booking'],
+            ['booking-call', '/booking/call'],
+            ['account-delete', '/account/delete'],
+          ];
+
+          const language = { code: 'fa', nameFa: 'فارسی', nameEn: 'Persian', proficiency: 'fluent' };
+          const listener = {
+            id: 'fixture-listener-1',
+            nickname: 'آوا',
+            gender: 'female',
+            verified: false,
+            reliabilityScore: 0,
+            shortIntro: 'برای شنیدنِ بی‌قضاوت اینجا هستم.',
+            listeningStyle: 'آرام و باحوصله',
+            completedCalls: 0,
+            ratingAverage: null,
+            ratingCount: 0,
+            presence: 'online',
+            languages: [language],
+            nextAvailableAt: '2099-01-01T18:00:00.000Z',
+          };
+          const availability = [{
+            id: 'fixture-availability-1',
+            startsAt: '2099-01-01T18:00:00.000Z',
+            endsAt: '2099-01-01T20:00:00.000Z',
+            busy: [],
+          }];
+          const quote = {
+            market: { code: 'fixture', countryCode: 'CA', timezone: 'America/Toronto' },
+            pricing: {
+              pricingPlanId: 'fixture-plan',
+              currencyCode: 'CAD',
+              callerRatePerMinuteMinor: 100,
+              billingIncrementSeconds: 60,
+              displayUnit: 'currency',
+              displayDivisor: 100,
+            },
+            listenerBase: { currencyCode: 'IRR', ratePerMinuteMinor: 1, callerCountryIndependent: true },
+            session: { maxBillableSeconds: 1800, authorizedMinor: '3000', reservedAlready: false },
+            wallet: { currencyCode: 'CAD', balanceMinor: '10000', reservedMinor: '0', availableMinor: '10000', enough: true },
+          };
+
+          async function screenshot(page, name) {
+            await page.locator('body').waitFor();
+            await page.screenshot({ path: 'artifacts/' + name + '.png', fullPage: true });
+          }
+
+          async function assertLayout(page, label) {
+            const result = await page.evaluate(() => ({
+              dir: document.documentElement.getAttribute('dir'),
+              overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+              nextError: Boolean(document.querySelector('[data-nextjs-dialog]')),
+              text: document.body.innerText.trim().length,
+            }));
+            if (result.dir !== 'rtl') throw new Error(label + ': not RTL');
+            if (result.overflow) throw new Error(label + ': horizontal overflow');
+            if (result.nextError || !result.text) throw new Error(label + ': incomplete render');
+          }
+
+          for (const [routeName, route] of realRoutes) {
+            for (const [viewportName, width, height] of viewports) {
+              const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+              const page = await context.newPage();
+              const response = await page.goto(base + route, { waitUntil: 'networkidle', timeout: 120000 });
+              if (!response || !response.ok()) throw new Error(route + ': guest HTTP ' + (response?.status() ?? 'none'));
+              await assertLayout(page, 'REAL_GUEST_' + routeName + '_' + viewportName);
+              await screenshot(page, 'REAL_GUEST-' + routeName + '-' + viewportName + '-full');
+              await context.close();
+            }
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/listener/bootstrap', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify({ languages: [language] }),
+            }));
+            await context.route('**/api/listener/listener/application*', route => route.fulfill({
+              status: 404, contentType: 'application/json',
+              body: JSON.stringify({ error: 'listener_application_not_found' }),
+            }));
+            const page = await context.newPage();
+            await page.goto(base + '/listener', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_listener_onboarding_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-listener-onboarding-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            const training = ['role_boundary', 'active_listening', 'what_not_to_say', 'platform_rules', 'safety', 'closing_conversation', 'scenarios']
+              .map((module_key, index) => ({ module_key, status: index === 0 ? 'completed' : 'available', progress_percent: index === 0 ? 100 : 0, completed_at: index === 0 ? '2099-01-01T00:00:00.000Z' : null }));
+            const application = {
+              id: 'fixture-application-1',
+              status: 'training',
+              nickname: 'آوا',
+              declared_gender: 'female',
+              short_intro: 'برای شنیدنِ بی‌قضاوت اینجا هستم.',
+              listening_style: 'آرام و باحوصله',
+              created_at: '2099-01-01T00:00:00.000Z',
+              languages: [{ code: 'fa', proficiency: 'fluent' }],
+              training,
+              trainingComplete: false,
+              latestAssessment: null,
+            };
+            await context.route('**/api/listener/bootstrap', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify({ languages: [language] }),
+            }));
+            await context.route('**/api/listener/listener/application*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify(application),
+            }));
+            const page = await context.newPage();
+            await page.goto(base + '/listener', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_listener_training_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-listener-training-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/caller/listeners*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify({ listeners: [listener] }),
+            }));
+            await context.route('**/api/caller/caller/quote*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify(quote),
+            }));
+            const page = await context.newPage();
+            await page.goto(base + '/talk', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_talk_marketplace_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-talk-marketplace-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/caller/listeners*', route => route.fulfill({
+              status: 503, contentType: 'application/json',
+              body: JSON.stringify({ error: 'backend_unavailable' }),
+            }));
+            const page = await context.newPage();
+            await page.goto(base + '/talk', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_talk_error_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-talk-controlled-error-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/caller/bookable-listeners*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify({ listeners: [listener] }),
+            }));
+            await context.route('**/api/caller/bookings', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify({ bookings: [] }),
+            }));
+            await context.route('**/api/caller/caller/quote*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify(quote),
+            }));
+            const page = await context.newPage();
+            await page.goto(base + '/booking', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_booking_marketplace_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-booking-marketplace-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/caller/caller/quote*', route => route.fulfill({
+              status: 200, contentType: 'application/json',
+              body: JSON.stringify(quote),
+            }));
+            await context.addInitScript(() => {
+              Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+                configurable: true,
+                value: async () => { throw new DOMException('permission denied', 'NotAllowedError'); },
+              });
+            });
+            const page = await context.newPage();
+            await page.goto(base + '/booking/call?bookingId=fixture-booking', { waitUntil: 'networkidle', timeout: 120000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_booking_call_ready_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-booking-call-ready-' + viewportName + '-full');
+            await page.getByRole('button', { name: 'آماده‌ام، شروع کن' }).click();
+            await page.getByRole('alert').waitFor({ timeout: 10000 });
+            await assertLayout(page, 'VISUAL_FIXTURE_ONLY_booking_call_mic_error_' + viewportName);
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-booking-call-controlled-error-' + viewportName + '-full');
+            await context.close();
+          }
+
+          for (const [viewportName, width, height] of viewports) {
+            const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+            await context.route('**/api/auth/request', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }));
+            await context.route('**/api/auth/verify', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }));
+            await context.route('**/api/account/deletion-request', route => route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ deletionCompleted: false, reviewRequired: true }) }));
+            const page = await context.newPage();
+            await page.goto(base + '/account/delete', { waitUntil: 'networkidle', timeout: 120000 });
+            await page.getByLabel('ایمیل').fill('fixture@example.com');
+            await page.getByRole('button', { name: 'ارسال کد تأیید' }).click();
+            await page.getByRole('heading', { name: 'تأیید ایمیل' }).waitFor();
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-account-delete-code-' + viewportName + '-full');
+            await page.getByLabel('کد ۶ رقمی').fill('123456');
+            await page.getByRole('button', { name: 'تأیید ایمیل' }).click();
+            await page.getByRole('heading', { name: 'تأیید نهایی حذف' }).waitFor();
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-account-delete-confirm-' + viewportName + '-full');
+            await page.getByLabel('برای تأیید بنویسید: حذف حساب').fill('حذف حساب');
+            await page.getByRole('button', { name: 'حذف حساب' }).click();
+            await page.getByRole('heading', { name: 'حذف هنوز کامل نشده است.' }).waitFor();
+            await screenshot(page, 'VISUAL_FIXTURE_ONLY-account-delete-requested-' + viewportName + '-full');
+            await context.close();
+          }
+
+          await browser.close();
+          EOF
+
+      - name: Upload authenticated visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-authenticated-visual-state-qa
+          path: artifacts/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-authenticated-visual-state-qa-server-log
+          path: /tmp/yeki-hast-web.log
+          if-no-files-found: ignore

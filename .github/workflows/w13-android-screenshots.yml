@@ -10,12 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  screenshots:
+  build-debug-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-unique-6ff0.vercel.app
       CI: '1'
+      NODE_ENV: development
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,13 +36,48 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Generate Android project and debug APK
+      - name: Generate Android project and x86_64 debug APK
         run: |
           npm --workspace @yeki-hast/mobile run generate:artwork
           cd apps/mobile
           npx expo prebuild --platform android --clean --no-install
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: w13-debug-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  screenshots:
+    needs: build-debug-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_PUBLIC_API_BASE_URL: https://yeki-hast-unique-6ff0.vercel.app
+      CI: '1'
+      NODE_ENV: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install dependencies for Metro
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: w13-debug-apk
+          path: screenshot-apk
 
       - name: Enable KVM
         run: |
@@ -55,6 +91,7 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_6
+          disk-size: 2048M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
@@ -62,7 +99,7 @@ jobs:
             mkdir -p store-screenshots
             adb shell wm size 1080x1920
             adb shell wm density 420
-            adb install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r screenshot-apk/app-debug.apk
             cd apps/mobile
             (npx expo start --localhost --clear > /tmp/w13-metro.log 2>&1 &)
             cd ../..
@@ -112,7 +149,9 @@ jobs:
             python3 - <<'PY'
             from pathlib import Path
             import struct
-            for p in sorted(Path('store-screenshots').glob('*.png')):
+            files = sorted(Path('store-screenshots').glob('*.png'))
+            assert len(files) == 4, files
+            for p in files:
                 data = p.read_bytes()
                 assert data[:8] == b'\x89PNG\r\n\x1a\n', p
                 width, height = struct.unpack('>II', data[16:24])

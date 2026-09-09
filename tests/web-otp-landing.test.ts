@@ -8,15 +8,14 @@ const requestProxy = await readFile(new URL('../apps/web/app/api/auth/request/ro
 const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/route.ts', import.meta.url), 'utf8');
 const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
-test('web landing states the current email-first scope and closed voice gate in Persian', () => {
-  assert.match(page, /در نسخه فعلی/);
-  assert.match(page, /تماس صوتی و پرداخت هنوز برای استفاده عمومی/);
+test('web landing states the current email-first scope and closed caller gate in Persian', () => {
+  assert.match(page, /گفت‌وگوی عمومی فعلاً بسته است/);
+  assert.match(page, /ورود و مسیر شنونده‌شدن در دسترس است/);
   assert.match(page, /ورود با ایمیل/);
-  assert.match(page, /یک کد یک‌بارمصرف ۶ رقمی به ایمیل شما فرستاده می‌شود/);
-  assert.match(page, /href="\/talk"/);
-  assert.match(page, /دیدن مسیر گفت‌وگو/);
+  assert.match(page, /کد ورود فقط برای همین ایمیل ارسال می‌شود/);
   assert.match(page, /href="\/listener"/);
-  assert.match(page, /درخواست شنونده‌شدن/);
+  assert.match(page, /شنونده‌شدن/);
+  assert.doesNotMatch(page, /href="\/talk"/);
   assert.doesNotMatch(page, /تماس صوتی را مستقیم از اینترنت/);
   assert.doesNotMatch(page, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
   assert.doesNotMatch(page, /۱۰، ۳۰ و ۶۰ دقیقه/);
@@ -43,5 +42,5 @@ test('web verified session is HttpOnly and logout revokes the backend session be
 
 test('web landing keeps RTL responsive layouts explicit', () => {
   assert.match(styles, /grid-template-columns/);
-  assert.match(styles, /@media \(max-width: 800px\)/);
+  assert.match(styles, /@media \(max-width: 820px\)/);
 });

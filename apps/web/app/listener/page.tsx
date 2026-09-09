@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import styles from '../phase2.module.css';
 
 type TrainingModuleKey =
   | 'role_boundary'
@@ -479,7 +480,7 @@ export default function ListenerOnboardingPage() {
   const assessment = application?.latestAssessment ?? null;
 
   return (
-    <main className="listener-onboarding-page">
+    <main className={`${styles.listenerPage} listener-onboarding-page`}>
       <header className="site-header">
         <a className="brand" href="/">یکی هست</a>
         <span>مسیر شنونده · وب</span>
@@ -491,7 +492,7 @@ export default function ListenerOnboardingPage() {
           <h1>از ثبت‌نام تا آماده‌شدن برای کار</h1>
         </div>
         <p>
-          این مسیر همان قواعد نسخه موبایل را روی وب اجرا می‌کند: معرفی عمومی با نام مستعار، آموزش نقش و ایمنی، آزمون سناریویی و سپس احراز هویت خصوصی. هیچ مرحله‌ای صرفاً با کلیک کاربر «تأییدشده» اعلام نمی‌شود.
+          در این مسیر، معرفی عمومی، آموزش، آزمون سناریویی و احراز هویت خصوصی مرحله‌به‌مرحله پیش می‌روند. هیچ مرحله‌ای فقط با کلیک شما «تأییدشده» اعلام نمی‌شود.
         </p>
       </section>
 
@@ -678,13 +679,13 @@ export default function ListenerOnboardingPage() {
               <input id="legal-name" autoComplete="name" value={legalName} onChange={(event) => setLegalName(event.target.value.slice(0, 140))} />
 
               <label htmlFor="national-id">کد ملی</label>
-              <input id="national-id" inputMode="numeric" autoComplete="off" value={nationalId} onChange={(event) => setNationalId(event.target.value)} placeholder="۱۰ رقم" />
+              <input id="national-id" inputMode="numeric" autoComplete="off" value={nationalId} onChange={(event) => setNationalId(event.target.value)} placeholder="ده رقم" />
 
               <label htmlFor="birth-jalali">تاریخ تولد شمسی</label>
               <input id="birth-jalali" inputMode="numeric" autoComplete="off" value={birthJalali} onChange={(event) => setBirthJalali(event.target.value)} placeholder="مثلاً ۱۳۷۰-۰۵-۲۱" />
 
               <label htmlFor="iban">شماره شبا</label>
-              <input id="iban" dir="ltr" autoComplete="off" value={iban} onChange={(event) => setIban(event.target.value)} placeholder="IRxxxxxxxxxxxxxxxxxxxxxxxx" />
+              <input id="iban" dir="ltr" autoComplete="off" value={iban} onChange={(event) => setIban(event.target.value)} placeholder="شماره شبا با IR" />
 
               <label htmlFor="account-holder">نام صاحب حساب، اگر متفاوت است</label>
               <input id="account-holder" value={accountHolder} onChange={(event) => setAccountHolder(event.target.value.slice(0, 140))} />

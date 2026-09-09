@@ -1,0 +1,52 @@
+.creditPanel {
+  margin: 28px 0;
+}
+
+.creditForm {
+  display: grid;
+  grid-template-columns: 2fr 1fr 0.7fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.creditForm label {
+  display: grid;
+  gap: 8px;
+}
+
+.creditForm textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  border: 1px solid #41433b;
+  background: #151613;
+  color: #f7f5ef;
+  padding: 14px 15px;
+  border-radius: 12px;
+  font: 16px Arial, Tahoma, sans-serif;
+  outline: none;
+}
+
+.creditForm textarea:focus {
+  border-color: #87947d;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.creditActions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.creditKey input {
+  color: #aaa99f;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .creditForm {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -14,6 +15,14 @@ const productionDbVerifier = await readFile(
   new URL('../scripts/verify-production-db.mjs', import.meta.url),
   'utf8',
 );
+const migrationManifest = await readFile(
+  new URL('../scripts/current-migration-manifest.mjs', import.meta.url),
+  'utf8',
+);
+const sweeperMigration = await readFile(
+  new URL('../packages/db/migrations/0006_internet_voice_server_sweeper.sql', import.meta.url),
+  'utf8',
+);
 const apiVercel = JSON.parse(
   await readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
 );
@@ -21,6 +30,7 @@ const approvalMarker = (
   await readFile(new URL('../.launch/production-db-migration', import.meta.url), 'utf8')
 ).trim();
 
+const sweeperMigrationHash = createHash('sha256').update(sweeperMigration).digest('hex');
 const approvedMarker = /^approved=\d{4}-\d{2}-\d{2};project=weathered-bar-87205560;region=aws-us-east-1;host_sha256=e589e6310a67818d2dde702c353e0c94ecf12c4d710d78d6dfd57e4240e364c2$/;
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020';
@@ -81,9 +91,13 @@ test('production DB migration is idempotent and followed by read-only verificati
 });
 
 test('production DB verifier checks exact migration history and relation existence without regclass display-name assumptions', () => {
+  assert.equal(sweeperMigrationHash, '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b');
+  assert.match(migrationManifest, /0006_internet_voice_server_sweeper\.sql/);
+  assert.match(migrationManifest, /createHash\('sha256'\)\.update\(sql\)\.digest\('hex'\)/);
+  assert.match(productionDbVerifier, /currentMigrationEntries/);
   assert.match(productionDbVerifier, /SELECT filename, sha256[\s\S]*ORDER BY filename/);
-  assert.match(productionDbVerifier, /46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b/);
-  assert.doesNotMatch(productionDbVerifier, /efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254/);
+  assert.match(productionDbVerifier, /migrationMap\.size !== expectedMigrations\.size/);
+  assert.match(productionDbVerifier, /migrationMap\.get\(filename\) !== expectedSha/);
   assert.match(productionDbVerifier, /unexpected production migration record/);
   assert.match(productionDbVerifier, /production migration history is incomplete/);
   assert.match(productionDbVerifier, /to_regclass\(r\.relation_name\) IS NOT NULL AS present/);

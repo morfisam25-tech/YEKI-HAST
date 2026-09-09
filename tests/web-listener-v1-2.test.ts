@@ -24,8 +24,7 @@ test('Web Listener work mode fails closed when the tab goes to background', () =
   assert.match(listenerPage, /window\.addEventListener\('pagehide'/);
   assert.match(listenerPage, /navigator\.sendBeacon\('\/api\/listener\/listener\/presence'/);
   assert.match(listenerPage, /status: 'offline'/);
-  assert.match(listenerPage, /اعلان پس‌زمینه/);
-  assert.match(listenerPage, /دریافت تماس در پس‌زمینه تا زمان آماده‌شدن اعلان واقعی فعال نمی‌شود/);
+  assert.match(listenerPage, /اگر صفحه غیرفعال شود، وضعیت تو به‌طور خودکار از حالت آماده خارج می‌شود/);
 });
 
 test('Web Listener maintains presence heartbeat only for explicit online or paused work mode', () => {
@@ -51,8 +50,9 @@ test('Web Listener answers Internet Voice with browser WebRTC and server signali
 });
 
 test('Web Listener does not fake a recovered media session after page loss', () => {
-  assert.match(listenerPage, /سرور تماس را فعال می‌داند اما این تب اتصال صوتی زنده ندارد/);
-  assert.match(listenerPage, /این صفحه موفقیت جعلی نشان نمی‌دهد/);
+  assert.match(listenerPage, /activeCall\.status === 'connected' && !voiceReady/);
+  assert.match(listenerPage, /صدای زنده این گفت‌وگو در این صفحه در دسترس نیست/);
+  assert.match(listenerPage, /گفت‌وگو را پایان بده و بعد وضعیت را تازه کن/);
   assert.doesNotMatch(listenerPage, /fake_connected|mock_voice|dev_voice_success/);
 });
 
@@ -66,12 +66,13 @@ test('Web Listener exposes safe call termination, earnings and recent-call read 
 });
 
 test('Web Listener does not render Caller identity, country, phone or payment context before acceptance', () => {
-  assert.match(listenerPage, /هویت، کشور و اطلاعات پرداخت مخاطب قبل از پذیرش نمایش داده نمی‌شود/);
+  assert.match(listenerPage, /گروه‌هایی را انتخاب کن که در حال حاضر با گفت‌وگو با آن‌ها راحتی/);
   assert.doesNotMatch(listenerPage, /caller_user_id|callerUserId|callerCountry|paymentCurrency|phoneNumber|providerBridge/);
 });
 
-test('verified web session exposes Caller and Listener onboarding entry points', () => {
-  assert.match(homePage, /href="\/talk"/);
+test('verified web session exposes Listener onboarding while the public Caller gate remains closed', () => {
   assert.match(homePage, /href="\/listener"/);
-  assert.match(homePage, /درخواست شنونده‌شدن/);
+  assert.match(homePage, /شنونده‌شدن/);
+  assert.match(homePage, /گفت‌وگوی عمومی فعلاً بسته است/);
+  assert.doesNotMatch(homePage, /href="\/talk"/);
 });

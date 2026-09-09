@@ -1,0 +1,141 @@
+name: W9 Phase 2 foundation and rendered QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - visual/w9-independent-web-redesign-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  foundation-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout W9 Phase 2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: visual/w9-independent-web-redesign-20260909
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Foundation QA
+        run: npm run validate:foundation
+
+      - name: Web typecheck
+        run: npm --workspace @yeki-hast/web run typecheck
+
+      - name: Build real Web app
+        run: npm --workspace @yeki-hast/web run build
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+
+      - name: Start real Web app
+        run: |
+          npm --workspace @yeki-hast/web run start -- --hostname 127.0.0.1 --port 3000 > /tmp/yeki-hast-web.log 2>&1 &
+          echo $! > /tmp/yeki-hast-web.pid
+          npx wait-on http://127.0.0.1:3000/ --timeout 120000
+          curl --fail --silent --show-error http://127.0.0.1:3000/ > /tmp/home.html
+          grep -q 'یکی هست' /tmp/home.html
+
+      - name: Render and inspect every Phase 2 surface
+        run: |
+          mkdir -p artifacts
+          node --input-type=module <<'EOF'
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless: true });
+          const routes = [
+            ['listener', '/listener'],
+            ['trust', '/trust'],
+            ['safety', '/safety'],
+            ['faq', '/faq'],
+            ['privacy', '/privacy'],
+            ['terms', '/terms'],
+            ['account-delete', '/account/delete'],
+            ['talk', '/talk'],
+            ['booking', '/booking'],
+            ['booking-call', '/booking/call'],
+          ];
+          const viewports = [
+            ['1440', 1440, 900],
+            ['1280', 1280, 800],
+            ['tablet', 1024, 900],
+            ['390', 390, 844],
+            ['360', 360, 800],
+          ];
+
+          for (const [routeName, route] of routes) {
+            for (const [viewportName, width, height] of viewports) {
+              const page = await browser.newPage({
+                viewport: { width, height },
+                deviceScaleFactor: 1,
+              });
+              const errors = [];
+              page.on('pageerror', (error) => errors.push(error.message));
+              page.on('console', (message) => {
+                if (message.type() === 'error') errors.push(message.text());
+              });
+              const response = await page.goto('http://127.0.0.1:3000' + route, {
+                waitUntil: 'networkidle',
+                timeout: 120000,
+              });
+              if (!response || !response.ok()) {
+                throw new Error(route + ' returned ' + (response?.status() ?? 'no response'));
+              }
+              await page.locator('body').waitFor();
+              const inspection = await page.evaluate(() => ({
+                dir: document.documentElement.getAttribute('dir'),
+                bodyTextLength: document.body.innerText.trim().length,
+                horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+                hasHeading: Boolean(document.querySelector('h1, h2')),
+                nextError: Boolean(document.querySelector('[data-nextjs-dialog]')),
+                englishPlaceholders: Array.from(document.querySelectorAll('input[placeholder], textarea[placeholder]'))
+                  .map((element) => element.getAttribute('placeholder') || '')
+                  .filter((value) => /[A-Za-z]{3,}@|name@example|Enter|Type here/i.test(value)),
+              }));
+              if (inspection.dir !== 'rtl') throw new Error(route + ' is not RTL at ' + viewportName);
+              if (!inspection.bodyTextLength || !inspection.hasHeading) throw new Error(route + ' has incomplete content at ' + viewportName);
+              if (inspection.horizontalOverflow) throw new Error(route + ' has horizontal overflow at ' + viewportName);
+              if (inspection.nextError) throw new Error(route + ' has a Next error overlay at ' + viewportName);
+              if (inspection.englishPlaceholders.length) throw new Error(route + ' has English placeholder(s): ' + inspection.englishPlaceholders.join(', '));
+              if (errors.length) throw new Error(route + ' browser errors at ' + viewportName + ': ' + errors.join('; '));
+              await page.screenshot({
+                path: 'artifacts/' + routeName + '-' + viewportName + '-full.png',
+                fullPage: true,
+              });
+              await page.close();
+            }
+          }
+
+          await browser.close();
+          EOF
+
+      - name: Upload rendered Phase 2 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-phase2-rendered-evidence
+          path: artifacts/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-phase2-render-server-log
+          path: /tmp/yeki-hast-web.log
+          if-no-files-found: ignore

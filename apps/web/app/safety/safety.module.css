@@ -357,3 +357,5 @@
 .emergency .eyebrow { color: #ffd3a0; background: rgba(255,255,255,.08); }
 .emergency p { color: #f7e9dc; }
 .page a:focus-visible { outline-color: var(--accent); }
+
+.page { width: 100%; max-width: none; margin: 0; }

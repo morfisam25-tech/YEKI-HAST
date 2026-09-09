@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const listenerRoute = await readFile(new URL('../services/api/src/routes/listener.ts', import.meta.url), 'utf8');
+const adminRoute = await readFile(new URL('../services/api/src/routes/admin.ts', import.meta.url), 'utf8');
 const webOnboarding = await readFile(new URL('../apps/web/app/listener/page.tsx', import.meta.url), 'utf8');
 
 test('listener assessment API allows only one pending review per application', () => {
@@ -23,4 +24,15 @@ test('Web Listener keeps non-onboarding application states fail-closed', () => {
   assert.match(webOnboarding, /admin_review: 'در بررسی نهایی'/);
   assert.match(webOnboarding, /suspended: 'معلق'/);
   assert.match(webOnboarding, /این مرحله از داخل وب قابل تغییر نیست/);
+});
+
+
+test('admin cannot pass a legacy assessment after the required training set expands', () => {
+  const reviewStart = adminRoute.indexOf('export async function reviewListenerAssessment');
+  const review = adminRoute.slice(reviewStart);
+  const trainingGate = review.indexOf('listenerTrainingComplete(training.rows)');
+  const assessmentWrite = review.indexOf('UPDATE app.listener_assessment_attempts');
+  assert.ok(trainingGate >= 0);
+  assert.ok(assessmentWrite > trainingGate);
+  assert.match(review, /training_incomplete/);
 });

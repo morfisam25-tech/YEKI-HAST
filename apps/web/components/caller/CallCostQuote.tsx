@@ -90,8 +90,10 @@ export default function CallCostQuote({
       onQuoteChange?.(null);
       try {
         const params = new URLSearchParams();
-        if (maxSeconds !== null) params.set('maxSeconds', String(maxSeconds));
-        else if (bookingId) params.set('bookingId', bookingId);
+        if (maxSeconds !== null) {
+          params.set('maxSeconds', String(maxSeconds));
+          if (deferred) params.set('target', 'booking');
+        } else if (bookingId) params.set('bookingId', bookingId);
         else if (callId) params.set('callId', callId);
         else throw new Error('quote_target_missing');
 
@@ -119,7 +121,7 @@ export default function CallCostQuote({
 
     void load();
     return () => { active = false; };
-  }, [bookingId, callId, maxSeconds, onQuoteChange]);
+  }, [bookingId, callId, deferred, maxSeconds, onQuoteChange]);
 
   const pricing = quote?.pricing;
   const seconds = quote?.session.maxBillableSeconds ?? 0;

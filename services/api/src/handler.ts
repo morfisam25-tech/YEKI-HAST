@@ -76,6 +76,10 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && url.pathname === '/v1/caller/age-gate') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { setAgeGate } = await import('./routes/caller.ts'); return await setAgeGate(req, res); }
     if (method === 'POST' && url.pathname === '/v1/caller/waitlist') { ensureDatabaseReady(); const { joinWaitlist } = await import('./routes/caller.ts'); return await joinWaitlist(req, res); }
     if (method === 'GET' && url.pathname === '/v1/caller/calls/recent') { ensureDatabaseReady(); const { getCallerRecentCalls } = await import('./routes/caller-calls.ts'); return await getCallerRecentCalls(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/caller/market') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerMarket } = await import('./routes/caller-market.ts'); return await getCallerMarket(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/caller/market') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { setCallerMarket } = await import('./routes/caller-market.ts'); return await setCallerMarket(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/caller/bootstrap') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerBootstrap } = await import('./routes/caller-market.ts'); return await getCallerBootstrap(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/caller/quote') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerQuote } = await import('./routes/caller-quote.ts'); return await getCallerQuote(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseListeners } = await import('./routes/marketplace.ts'); return await browseListeners(req, res); }
     if (method === 'GET' && url.pathname === '/v1/bookable-listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseBookableListeners } = await import('./routes/booking-discovery.ts'); return await browseBookableListeners(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/application') { ensureDatabaseReady(); const { createListenerApplication } = await import('./routes/listener.ts'); return await createListenerApplication(req, res); }
@@ -161,6 +165,9 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && dispatchMatch) { requireCallerClosedBetaEnabled(); ensureTelephonyReady(); ensureSensitiveDataReady(); const { dispatchCall } = await import('./routes/call-dispatch.ts'); return await dispatchCall(req, res, dispatchMatch[1]); }
     const safetyExitMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/safety-exit$/);
     if (method === 'POST' && safetyExitMatch) { ensureSensitiveDataReady(); const { safetyExitCall } = await import('./routes/safety.ts'); return await safetyExitCall(req, res, safetyExitMatch[1]); }
+    const callFeedbackMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/feedback$/);
+    if (method === 'GET' && callFeedbackMatch) { ensureDatabaseReady(); const { getCallerFeedback } = await import('./routes/caller-feedback.ts'); return await getCallerFeedback(req, res, callFeedbackMatch[1]); }
+    if (method === 'POST' && callFeedbackMatch) { ensureDatabaseReady(); const { setCallerFeedback } = await import('./routes/caller-feedback.ts'); return await setCallerFeedback(req, res, callFeedbackMatch[1]); }
     const cancelMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/cancel$/);
     if (method === 'POST' && cancelMatch) { ensureDatabaseReady(); const { cancelCall } = await import('./routes/calls.ts'); return await cancelCall(req, res, cancelMatch[1]); }
     const callMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)$/);

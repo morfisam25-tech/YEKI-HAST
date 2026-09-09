@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import styles from '../../phase2.module.css';
 import type { FormEvent } from 'react';
 
 type Step = 'email' | 'code' | 'confirm' | 'completed' | 'requested';
@@ -113,7 +114,7 @@ export default function DeleteAccountPage() {
   }
 
   return (
-    <main>
+    <main className={styles.page}>
       <header className="site-header">
         <strong className="brand">یکی هست</strong>
         <a href="/">بازگشت به صفحه اصلی</a>
@@ -151,7 +152,7 @@ export default function DeleteAccountPage() {
                 type="email"
                 autoComplete="email"
                 inputMode="email"
-                placeholder="name@example.com"
+                placeholder="ایمیل حساب"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={busy}

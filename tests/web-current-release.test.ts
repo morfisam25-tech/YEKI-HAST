@@ -64,7 +64,8 @@ test('skip-domain behavior is verified against the real primary custom domain be
   assert.match(workflow, /new URL\(process\.env\.WEB_PRIMARY_DOMAIN\)\.host/);
   assert.match(workflow, /primary custom domain changed before verification despite --skip-domain/);
   assert.match(workflow, /--deployment "\$WEB_EXACT_DEPLOYMENT_URL"[\s\S]*--yes[\s\S]*--token "\$VERCEL_TOKEN"/);
-  assert.match(workflow, /\/privacy 'Web و اپ موبایل'/);
+  assert.match(workflow, /\/privacy 'نسخه فعلی وب و اپ'/);
+  assert.match(workflow, /waitFor\('\/privacy', \['حریم خصوصی', 'نسخه فعلی وب و اپ'\]/);
   assert.match(workflow, /\/account\/delete 'حذف واقعی حساب'/);
 });
 

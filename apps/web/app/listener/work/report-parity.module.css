@@ -1,0 +1,131 @@
+.section {
+  direction: rtl;
+  padding: 0 24px 48px;
+  background: #f7f7f4;
+  color: #171714;
+}
+
+.shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid rgba(23, 23, 20, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.headingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.headingRow h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.45;
+}
+
+.headingRow p {
+  margin: 0;
+  max-width: 760px;
+  line-height: 1.9;
+}
+
+.headingRow button,
+.card button {
+  min-height: 44px;
+  border: 1px solid rgba(23, 23, 20, 0.18);
+  border-radius: 12px;
+  padding: 8px 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.headingRow button:focus-visible,
+.card button:focus-visible,
+.card select:focus-visible,
+.card textarea:focus-visible,
+.card input:focus-visible,
+.card summary:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.kicker {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.card {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(23, 23, 20, 0.12);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.card details {
+  margin-top: 12px;
+}
+
+.card summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.card summary small {
+  font-weight: 400;
+}
+
+.card form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.card label {
+  display: grid;
+  gap: 7px;
+}
+
+.card select,
+.card textarea {
+  width: 100%;
+  border: 1px solid rgba(23, 23, 20, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.recentGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .section {
+    padding: 0 14px 32px;
+  }
+
+  .shell {
+    padding: 18px;
+  }
+
+  .headingRow {
+    display: grid;
+  }
+
+  .recentGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -580,7 +580,7 @@
 .submitButton:disabled { cursor: not-allowed; opacity: .48; }
 .textButton { min-height: 44px; border: 0; background: transparent; color: var(--coral); font-weight: 900; cursor: pointer; }
 .error { margin: 0; padding: 11px 13px; border-right: 3px solid var(--coral); border-radius: 11px; background: #fff0ec; color: #9a3f36; font-size: .8rem; line-height: 1.8; }
-.privacyNote { margin: 1px 0 0; padding-top: 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; line-height: 1.9; }
+.privacyNote { margin: 1px 0 0; padding-top: 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.9; }
 .privacyNote a { color: var(--coral); font-weight: 900; }
 .verifiedNotice { padding: 15px 16px; border-right: 3px solid var(--orange); border-radius: 13px; background: var(--cream); color: var(--ink-soft); font-size: .82rem; line-height: 1.9; }
 .verifiedNotice p { margin: 0; }

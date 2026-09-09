@@ -84,16 +84,19 @@ jobs:
           }
 
           for (const line of source.split(/\r?\n/)) {
-            const match = /^([A-Z0-9_]+)=(?:"((?:\\.|[^"])*)"|'((?:\\.|[^'])*)'|([^\\r\\n]*))$/.exec(line);
+            const match = /^([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
             if (!match) continue;
-            const value = match[2] !== undefined
-              ? decodeEnvValue(match[2])
-              : match[3] !== undefined
-                ? match[3].replace(/\\'/g, "'")
-                : match[4].trim();
-            process.env[match[1]] = value;
+            const key = match[1];
+            let value = match[2].trim();
+            if (value.startsWith('"') && value.endsWith('"')) {
+              value = decodeEnvValue(value.slice(1, -1));
+            } else if (value.startsWith("'") && value.endsWith("'")) {
+              value = value.slice(1, -1).replace(/\\'/g, "'");
+            } else {
+              value = value.replace(/\s+#.*$/, '').trim();
+            }
+            process.env[key] = value;
           }
-
           function mask(value) {
             if (value) process.stdout.write('::add-mask::' + value + '\n');
           }

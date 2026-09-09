@@ -109,7 +109,7 @@ export default function Page() {
         </div>
         <div className={styles.heroContent}>
           <p className={styles.eyebrowLight}>گفت‌وگو با یک شنوندهٔ انسانی</p>
-          <h1 id="hero-title">گاهی فقط لازم است یکی واقعاً گوش بدهد.</h1>
+          <h1 id="hero-title">گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه</h1>
           <p className={styles.heroLead}>هرجای حرف که هستی، از همان‌جا شروع کن. بدون قضاوت، بدون عجله.</p>
           <div className={styles.heroActions}>
             <a className={styles.primaryButton} href="#login">با ایمیل وارد شو</a>

@@ -9,9 +9,10 @@ const verifyProxy = await readFile(new URL('../apps/web/app/api/auth/verify/rout
 const logoutProxy = await readFile(new URL('../apps/web/app/api/auth/logout/route.ts', import.meta.url), 'utf8');
 
 test('web landing states the current email-first scope and closed caller gate in Persian', () => {
-  assert.match(page, /گفت‌وگوی عمومی با شنونده و رزرو تماس هنوز برای استفاده همگانی باز نشده/);
+  assert.match(page, /گفت‌وگوی عمومی فعلاً بسته است/);
+  assert.match(page, /ورود و مسیر شنونده‌شدن در دسترس است/);
   assert.match(page, /ورود با ایمیل/);
-  assert.match(page, /یک کد ۶ رقمی برای ورود به همین ایمیل می‌فرستیم/);
+  assert.match(page, /کد ورود فقط برای همین ایمیل ارسال می‌شود/);
   assert.match(page, /href="\/listener"/);
   assert.match(page, /شنونده‌شدن/);
   assert.doesNotMatch(page, /href="\/talk"/);

@@ -1,4 +1,5 @@
-.page { --ink: #f8f1e9; --paper: #f5efe8; --muted: #b8ada2; --line: rgba(255,255,255,.14); --accent: #e99c58; --deep: #0e1117; direction: rtl; color: var(--ink); background: var(--deep); overflow: hidden; }
+.page { --ink: #f8f1e9; --paper: #f5efe8; --muted: #b8ada2; --line: rgba(255,255,255,.14); --accent: #e99c58; --deep: #0e1117; width: 100%; max-width: none; min-height: 100vh; margin: 0; padding: 0; direction: rtl; color: var(--ink); background: var(--deep); overflow: hidden; }
+.page .brand::before { content: none; display: none; }
 .page a { color: inherit; text-decoration: none; }
 .header { position: absolute; z-index: 10; inset: 0 0 auto; width: min(1240px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; }

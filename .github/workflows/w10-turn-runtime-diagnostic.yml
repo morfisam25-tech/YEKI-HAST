@@ -84,8 +84,10 @@ jobs:
           }
 
           for (const line of source.split(/\r?\n/)) {
-            const match = /^([A-Z0-9_]+)="((?:\\.|[^"])*)"$/.exec(line);
-            if (match) process.env[match[1]] = decodeEnvValue(match[2]);
+            const match = /^([A-Z0-9_]+)=(?:"((?:\\.|[^"])*)"|([^\\r\\n]*))$/.exec(line);
+            if (!match) continue;
+            const value = match[2] !== undefined ? decodeEnvValue(match[2]) : match[3].trim();
+            process.env[match[1]] = value;
           }
 
           function mask(value) {

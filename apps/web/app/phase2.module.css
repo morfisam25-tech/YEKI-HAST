@@ -390,3 +390,10 @@
     font-size: 39px;
   }
 }
+
+.page,
+.listenerPage {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}

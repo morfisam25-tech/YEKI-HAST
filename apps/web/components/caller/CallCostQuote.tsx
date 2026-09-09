@@ -2,37 +2,40 @@
 
 import { useEffect, useState } from 'react';
 
-type Bootstrap = {
+export type CallQuoteBinding = {
+  pricingPlanId: string;
+  marketCode: string;
+  enough: boolean;
+  reservedAlready: boolean;
+};
+
+type QuoteResponse = {
+  market: { code: string; countryCode: string; timezone: string };
   pricing: {
+    pricingPlanId: string;
     currencyCode: string;
     callerRatePerMinuteMinor: number;
-    billingIncrementSeconds: number;
+    billingIncrementSeconds: number | null;
     displayUnit: 'toman' | 'currency';
     displayDivisor: number;
   };
-};
-
-type WalletResponse = {
-  wallets: Array<{
+  listenerBase: {
+    currencyCode: string;
+    ratePerMinuteMinor: number;
+    callerCountryIndependent: true;
+  };
+  session: {
+    maxBillableSeconds: number;
+    authorizedMinor: string;
+    reservedAlready: boolean;
+  };
+  wallet: {
     currencyCode: string;
     balanceMinor: string;
     reservedMinor: string;
     availableMinor: string;
-  }>;
-};
-
-type BookingResponse = {
-  bookings: Array<{
-    id: string;
-    maxBillableSeconds: number;
-  }>;
-};
-
-type CallResponse = {
-  callId: string;
-  currencyCode: string;
-  authorizedMinor: string;
-  maxBillableSeconds: number | null;
+    enough: boolean;
+  };
 };
 
 type Props = {
@@ -41,38 +44,10 @@ type Props = {
   callId?: string;
   deferred?: boolean;
   className?: string;
+  onQuoteChange?: (quote: CallQuoteBinding | null) => void;
 };
 
-type Quote = {
-  rateText: string;
-  holdText: string;
-  availableText: string;
-  enough: boolean;
-  seconds: number;
-  reservedAlready: boolean;
-};
-
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`/api/caller/${path}`, { cache: 'no-store' });
-  const payload = await response.json().catch(() => null) as (T & { error?: string }) | null;
-  if (!response.ok || !payload) throw new Error(payload?.error || `http_${response.status}`);
-  return payload;
-}
-
-function displayPricingForCurrency(
-  pricing: Bootstrap['pricing'],
-  currencyCode: string,
-): Bootstrap['pricing'] {
-  if (pricing.currencyCode === currencyCode) return pricing;
-  return {
-    ...pricing,
-    currencyCode,
-    displayUnit: currencyCode === 'IRR' ? 'toman' : 'currency',
-    displayDivisor: currencyCode === 'IRR' ? 10 : 1,
-  };
-}
-
-function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string {
+function formatMinor(amountMinor: bigint, pricing: QuoteResponse['pricing']): string {
   if (pricing.displayUnit === 'toman') {
     const divisor = BigInt(Math.max(1, Math.trunc(pricing.displayDivisor || 10)));
     const whole = amountMinor / divisor;
@@ -80,7 +55,6 @@ function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string
     const value = Number(whole) + Number(remainder) / Number(divisor);
     return `${new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 1 }).format(value)} تومان`;
   }
-
   try {
     const formatter = new Intl.NumberFormat('fa-IR', {
       style: 'currency',
@@ -88,8 +62,7 @@ function formatMinor(amountMinor: bigint, pricing: Bootstrap['pricing']): string
       currencyDisplay: 'code',
     });
     const digits = formatter.resolvedOptions().maximumFractionDigits;
-    const divisor = 10 ** digits;
-    return formatter.format(Number(amountMinor) / divisor);
+    return formatter.format(Number(amountMinor) / 10 ** digits);
   } catch {
     return `${amountMinor.toString()} ${pricing.currencyCode}`;
   }
@@ -101,8 +74,9 @@ export default function CallCostQuote({
   callId = '',
   deferred = false,
   className,
+  onQuoteChange,
 }: Props) {
-  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
 
@@ -112,53 +86,30 @@ export default function CallCostQuote({
     async function load() {
       setLoading(true);
       setUnavailable(false);
+      onQuoteChange?.(null);
       try {
-        const [bootstrap, walletResponse, bookingResponse, callResponse] = await Promise.all([
-          getJson<Bootstrap>('bootstrap'),
-          getJson<WalletResponse>('wallet'),
-          maxSeconds === null && bookingId
-            ? getJson<BookingResponse>('bookings')
-            : Promise.resolve<BookingResponse>({ bookings: [] }),
-          maxSeconds === null && callId
-            ? getJson<CallResponse>(`calls/${callId}`)
-            : Promise.resolve<CallResponse | null>(null),
-        ]);
+        const params = new URLSearchParams();
+        if (maxSeconds !== null) params.set('maxSeconds', String(maxSeconds));
+        else if (bookingId) params.set('bookingId', bookingId);
+        else if (callId) params.set('callId', callId);
+        else throw new Error('quote_target_missing');
+
+        const response = await fetch(`/api/caller/caller/quote?${params.toString()}`, { cache: 'no-store' });
+        const payload = await response.json().catch(() => null) as (QuoteResponse & { error?: string }) | null;
+        if (!response.ok || !payload) throw new Error(payload?.error || `http_${response.status}`);
         if (!active) return;
-
-        const seconds = maxSeconds
-          ?? callResponse?.maxBillableSeconds
-          ?? bookingResponse.bookings.find((item) => item.id === bookingId)?.maxBillableSeconds
-          ?? 0;
-        if (!Number.isInteger(seconds) || seconds <= 0) {
-          setQuote(null);
-          setUnavailable(true);
-          return;
-        }
-
-        const reservedAlready = Boolean(callResponse);
-        const currencyCode = callResponse?.currencyCode ?? bootstrap.pricing.currencyCode;
-        const pricing = displayPricingForCurrency(bootstrap.pricing, currencyCode);
-        const hold = callResponse
-          ? BigInt(callResponse.authorizedMinor)
-          : (BigInt(bootstrap.pricing.callerRatePerMinuteMinor) * BigInt(seconds) + BigInt(59)) / BigInt(60);
-        const rate = callResponse
-          ? (hold * BigInt(60)) / BigInt(seconds)
-          : BigInt(bootstrap.pricing.callerRatePerMinuteMinor);
-        const wallet = walletResponse.wallets.find((item) => item.currencyCode === currencyCode);
-        const available = BigInt(wallet?.availableMinor ?? '0');
-
-        setQuote({
-          rateText: formatMinor(rate, pricing),
-          holdText: formatMinor(hold, pricing),
-          availableText: formatMinor(available, pricing),
-          enough: reservedAlready || available >= hold,
-          seconds,
-          reservedAlready,
+        setQuote(payload);
+        onQuoteChange?.({
+          pricingPlanId: payload.pricing.pricingPlanId,
+          marketCode: payload.market.code,
+          enough: payload.wallet.enough,
+          reservedAlready: payload.session.reservedAlready,
         });
       } catch {
         if (active) {
           setQuote(null);
           setUnavailable(true);
+          onQuoteChange?.(null);
         }
       } finally {
         if (active) setLoading(false);
@@ -167,34 +118,42 @@ export default function CallCostQuote({
 
     void load();
     return () => { active = false; };
-  }, [bookingId, callId, maxSeconds]);
+  }, [bookingId, callId, maxSeconds, onQuoteChange]);
+
+  const pricing = quote?.pricing;
+  const seconds = quote?.session.maxBillableSeconds ?? 0;
+  const rateText = quote && pricing ? formatMinor(BigInt(pricing.callerRatePerMinuteMinor), pricing) : '';
+  const holdText = quote && pricing ? formatMinor(BigInt(quote.session.authorizedMinor), pricing) : '';
+  const availableText = quote && pricing ? formatMinor(BigInt(quote.wallet.availableMinor), pricing) : '';
 
   return (
     <div className={className} role="status" aria-live="polite" aria-atomic="true">
       {loading && <span>در حال بررسی نرخ و اعتبار…</span>}
-      {!loading && quote && (
+      {!loading && quote && pricing && (
         <>
-          <strong>نرخ این گفت‌وگو: {quote.rateText} برای هر دقیقه اتصال واقعی.</strong>
-          {quote.reservedAlready ? (
+          <strong>نرخ این گفت‌وگو: {rateText} برای هر دقیقه اتصال واقعی.</strong>
+          {quote.session.reservedAlready ? (
             <span>
-              این تماس قبلاً ایجاد شده و تا {quote.holdText} برای سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه رزرو شده است. مبلغ نهایی فقط بر اساس زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
+              این تماس قبلاً ایجاد شده و تا {holdText} برای سقف {new Intl.NumberFormat('fa-IR').format(seconds / 60)} دقیقه رزرو شده است. مبلغ نهایی فقط بر اساس زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
             </span>
           ) : deferred ? (
             <span>
-              با نرخ فعلی، سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه به حداکثر {quote.holdText} اعتبار نیاز دارد. ثبت رزرو الآن مبلغی نگه نمی‌دارد؛ نرخ و موجودی هنگام شروع تماس دوباره روی سرور بررسی می‌شود.
+              با نرخ فعلی، سقف {new Intl.NumberFormat('fa-IR').format(seconds / 60)} دقیقه به حداکثر {holdText} اعتبار نیاز دارد. ثبت رزرو الآن مبلغی نگه نمی‌دارد؛ نرخ و موجودی هنگام شروع تماس دوباره روی سرور بررسی می‌شود.
             </span>
           ) : (
             <span>
-              برای سقف {new Intl.NumberFormat('fa-IR').format(quote.seconds / 60)} دقیقه، تا {quote.holdText} از اعتبار هنگام شروع تماس رزرو می‌شود؛ فقط زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
+              برای سقف {new Intl.NumberFormat('fa-IR').format(seconds / 60)} دقیقه، تا {holdText} از اعتبار هنگام شروع تماس رزرو می‌شود؛ فقط زمان اتصال واقعی کم می‌شود و باقی اعتبار آزاد می‌شود.
             </span>
           )}
-          <span>اعتبار قابل استفاده الآن: {quote.availableText}.</span>
-          {!quote.enough && <span>اعتبار فعلی برای این سقف زمانی کافی نیست؛ سقف کوتاه‌تر انتخاب کن یا اعتبارت را افزایش بده.</span>}
-          {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ همین نرخ و موجودی با شروع تماس دوباره تأیید می‌شود.</span>}
+          <span>اعتبار قابل استفاده الآن: {availableText}.</span>
+          {!quote.wallet.enough && !quote.session.reservedAlready && (
+            <span>اعتبار فعلی برای این سقف زمانی کافی نیست؛ سقف کوتاه‌تر انتخاب کن یا اعتبارت را افزایش بده.</span>
+          )}
+          {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ همین بازار و نرخ هنگام شروع تماس دوباره روی سرور تأیید می‌شود.</span>}
         </>
       )}
       {!loading && unavailable && (
-        <span>برآورد هزینه فعلاً در دسترس نیست. شروع تماس بدون تأیید نرخ و اعتبار روی سرور انجام نمی‌شود.</span>
+        <span>برآورد هزینه فعلاً در دسترس نیست. تا بازار و نرخ معتبر روی سرور تأیید نشود، تماس شروع نمی‌شود.</span>
       )}
     </div>
   );

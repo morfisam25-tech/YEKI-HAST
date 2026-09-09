@@ -65,7 +65,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/account/call-phone') { ensureDatabaseReady(); const { getCallPhoneStatus } = await import('./routes/account-contact.ts'); return await getCallPhoneStatus(req, res); }
     if (method === 'POST' && url.pathname === '/v1/account/call-phone') { ensureSensitiveDataReady(); const { setCallPhone } = await import('./routes/account-contact.ts'); return await setCallPhone(req, res); }
     if (method === 'POST' && url.pathname === '/v1/account/deletion-request') { ensureDatabaseReady(); const { requestAccountDeletion } = await import('./routes/account-deletion.ts'); return await requestAccountDeletion(req, res); }
-    if (method === 'GET' && url.pathname === '/v1/wallet') { ensureDatabaseReady(); const { getWallet } = await import('./routes/payments.ts'); return await getWallet(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/wallet') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerWallet } = await import('./routes/caller-wallet.ts'); return await getCallerWallet(req, res); }
     if (method === 'GET' && url.pathname === '/v1/wallet/transactions') { ensureDatabaseReady(); const { getWalletTransactions } = await import('./routes/payments.ts'); return await getWalletTransactions(req, res); }
     if (method === 'POST' && url.pathname === '/v1/wallet/topups') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { createCallerWalletTopup } = await import('./routes/caller-payments.ts'); return await createCallerWalletTopup(req, res); }
 
@@ -80,8 +80,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && url.pathname === '/v1/caller/market') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { setCallerMarket } = await import('./routes/caller-market.ts'); return await setCallerMarket(req, res); }
     if (method === 'GET' && url.pathname === '/v1/caller/bootstrap') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerBootstrap } = await import('./routes/caller-market.ts'); return await getCallerBootstrap(req, res); }
     if (method === 'GET' && url.pathname === '/v1/caller/quote') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerQuote } = await import('./routes/caller-quote.ts'); return await getCallerQuote(req, res); }
-    if (method === 'GET' && url.pathname === '/v1/listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseListeners } = await import('./routes/marketplace.ts'); return await browseListeners(req, res); }
-    if (method === 'GET' && url.pathname === '/v1/bookable-listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseBookableListeners } = await import('./routes/booking-discovery.ts'); return await browseBookableListeners(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseCallerListeners } = await import('./routes/caller-discovery.ts'); return await browseCallerListeners(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/bookable-listeners') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { browseCallerBookableListeners } = await import('./routes/caller-discovery.ts'); return await browseCallerBookableListeners(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/application') { ensureDatabaseReady(); const { createListenerApplication } = await import('./routes/listener.ts'); return await createListenerApplication(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/application') { ensureDatabaseReady(); const { getListenerApplication } = await import('./routes/listener.ts'); return await getListenerApplication(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/earnings') { ensureDatabaseReady(); const { getListenerEarnings } = await import('./routes/listener-earnings.ts'); return await getListenerEarnings(req, res); }
@@ -98,20 +98,20 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/listener/calls/active') { ensureDatabaseReady(); const { getListenerActiveCall } = await import('./routes/listener-calls.ts'); return await getListenerActiveCall(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/calls/recent') { ensureDatabaseReady(); const { getListenerRecentCalls } = await import('./routes/listener-calls.ts'); return await getListenerRecentCalls(req, res); }
     if (method === 'GET' && url.pathname === '/v1/bookings') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerBookings } = await import('./routes/bookings.ts'); return await getCallerBookings(req, res); }
-    if (method === 'POST' && url.pathname === '/v1/bookings') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { createBooking } = await import('./routes/bookings.ts'); return await createBooking(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/bookings') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { createCallerBooking } = await import('./routes/caller-bookings.ts'); return await createCallerBooking(req, res); }
     if (method === 'GET' && url.pathname === '/v1/calls/active') { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getActiveCall } = await import('./routes/calls.ts'); return await getActiveCall(req, res); }
-    if (method === 'POST' && url.pathname === '/v1/calls/request') { requireCallerClosedBetaEnabled(); ensureCallReady(); const { requestCall } = await import('./routes/calls.ts'); return await requestCall(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/calls/request') { requireCallerClosedBetaEnabled(); ensureCallReady(); const { requestCallerCall } = await import('./routes/caller-call-request.ts'); return await requestCallerCall(req, res); }
     if (method === 'POST' && url.pathname === '/v1/safety/report') { ensureSensitiveDataReady(); const { reportCall } = await import('./routes/safety.ts'); return await reportCall(req, res); }
     if (method === 'POST' && url.pathname === '/v1/safety/block') { ensureDatabaseReady(); const { blockCallCounterparty } = await import('./routes/safety.ts'); return await blockCallCounterparty(req, res); }
 
     const listenerAvailabilityCancelMatch = url.pathname.match(/^\/v1\/listener\/availability\/([^/]+)\/cancel$/);
     if (method === 'POST' && listenerAvailabilityCancelMatch) { ensureDatabaseReady(); const { cancelListenerAvailability } = await import('./routes/bookings.ts'); return await cancelListenerAvailability(req, res, listenerAvailabilityCancelMatch[1]); }
     const listenerAvailabilityMatch = url.pathname.match(/^\/v1\/listeners\/([^/]+)\/availability$/);
-    if (method === 'GET' && listenerAvailabilityMatch) { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getListenerBookableAvailability } = await import('./routes/bookings.ts'); return await getListenerBookableAvailability(req, res, listenerAvailabilityMatch[1]); }
+    if (method === 'GET' && listenerAvailabilityMatch) { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { getCallerListenerAvailability } = await import('./routes/caller-discovery.ts'); return await getCallerListenerAvailability(req, res, listenerAvailabilityMatch[1]); }
     const bookingCancelMatch = url.pathname.match(/^\/v1\/bookings\/([^/]+)\/cancel$/);
     if (method === 'POST' && bookingCancelMatch) { requireCallerClosedBetaEnabled(); ensureDatabaseReady(); const { cancelBooking } = await import('./routes/bookings.ts'); return await cancelBooking(req, res, bookingCancelMatch[1]); }
     const bookingStartMatch = url.pathname.match(/^\/v1\/bookings\/([^/]+)\/start$/);
-    if (method === 'POST' && bookingStartMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { startBooking } = await import('./routes/bookings.ts'); return await startBooking(req, res, bookingStartMatch[1]); }
+    if (method === 'POST' && bookingStartMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { startCallerBooking } = await import('./routes/caller-bookings.ts'); return await startCallerBooking(req, res, bookingStartMatch[1]); }
 
     if (method === 'GET' && url.pathname === '/v1/admin/operations/summary') { ensureDatabaseReady(); const { getAdminOperationsSummary } = await import('./routes/admin.ts'); return await getAdminOperationsSummary(req, res); }
     if (method === 'GET' && url.pathname === '/v1/admin/integration-readiness') { ensureDatabaseReady(); const { getAdminIntegrationReadiness } = await import('./routes/admin-readiness.ts'); return await getAdminIntegrationReadiness(req, res); }

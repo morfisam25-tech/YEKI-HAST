@@ -20,11 +20,15 @@ test('provider payment identifiers remain private in admin monitoring', () => {
   assert.doesNotMatch(page, /providerPaymentReference/);
 });
 
-test('ambiguous initialization UI forbids manual credit and blind recreation', () => {
+test('ambiguous initialization UI forbids crediting that attempt or blindly recreating it', () => {
   assert.match(page, /INITIALIZATION AMBIGUOUS/);
   assert.match(page, /دستی credit نکن/);
   assert.match(page, /idempotency key/);
-  assert.doesNotMatch(page, /manual credit|creditWallet|forceSuccess/i);
+  assert.doesNotMatch(page, /forceSuccess/i);
+
+  const creditOperation = backend.slice(backend.indexOf('export async function createAdminWalletCreditWithDependencies'));
+  assert.match(creditOperation, /applyInternalBetaAdminCredit/);
+  assert.doesNotMatch(creditOperation, /paymentAttemptId|payment_attempt_id|verifyAndFinalizeAttempt/);
 });
 
 test('payment creation keeps ambiguous provider failures pending and only terminals explicit token rejection', () => {

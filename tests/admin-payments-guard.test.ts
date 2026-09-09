@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('../services/api/src/routes/admin-payments.ts', import.meta.url), 'utf8');
 
 test('admin payment monitoring requires admin authentication', () => {
-  assert.match(source, /await requireAdmin\(req\)/);
+  const list = source.slice(source.indexOf('export async function listAdminPaymentAttempts'), source.indexOf('type AdminCreditDependencies'));
+  assert.match(list, /await requireAdmin\(req\)/);
 });
 
 test('admin payment status filter is bounded', () => {
@@ -18,7 +19,8 @@ test('admin payment status filter is bounded', () => {
 });
 
 test('admin payment monitoring is read only and cannot credit wallets', () => {
-  assert.doesNotMatch(source, /UPDATE app\.wallets/);
-  assert.doesNotMatch(source, /INSERT INTO app\.wallet_transactions/);
-  assert.doesNotMatch(source, /verifyAndFinalizeAttempt/);
+  const list = source.slice(source.indexOf('export async function listAdminPaymentAttempts'), source.indexOf('type AdminCreditDependencies'));
+  assert.doesNotMatch(list, /UPDATE app\.wallets/);
+  assert.doesNotMatch(list, /INSERT INTO app\.wallet_transactions/);
+  assert.doesNotMatch(list, /verifyAndFinalizeAttempt/);
 });

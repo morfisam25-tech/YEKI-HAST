@@ -55,6 +55,22 @@ ALTER TABLE app.call_sessions
 CREATE INDEX IF NOT EXISTS call_sessions_caller_market_idx
   ON app.call_sessions(caller_user_id, caller_market_id, requested_at DESC);
 
+-- The original schema binds Listener earnings to the Call's Caller-charge currency. That is
+-- correct while both sides use IRR, but would reject a foreign Caller whose Listener still
+-- earns the shared marketplace base payout in IRR. Preserve participant identity while binding
+-- the earning currency to the explicit Listener payout-currency snapshot instead.
+CREATE UNIQUE INDEX IF NOT EXISTS call_sessions_id_listener_listener_currency_uidx
+  ON app.call_sessions(id, listener_user_id, listener_currency_code);
+
+ALTER TABLE app.listener_earnings
+  DROP CONSTRAINT IF EXISTS listener_earnings_call_session_id_listener_user_id_currenc_fkey;
+ALTER TABLE app.listener_earnings
+  DROP CONSTRAINT IF EXISTS listener_earnings_call_listener_payout_currency_fkey;
+ALTER TABLE app.listener_earnings
+  ADD CONSTRAINT listener_earnings_call_listener_payout_currency_fkey
+  FOREIGN KEY (call_session_id, listener_user_id, currency_code)
+  REFERENCES app.call_sessions(id, listener_user_id, listener_currency_code);
+
 CREATE TABLE IF NOT EXISTS app.call_ratings (
   call_session_id uuid PRIMARY KEY REFERENCES app.call_sessions(id) ON DELETE CASCADE,
   caller_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,

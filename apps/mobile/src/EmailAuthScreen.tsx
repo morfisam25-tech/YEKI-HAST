@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { getEmailAuthErrorCode, requestEmailOtp, verifyEmailOtp } from './email-auth-api';
 import type { SessionResponse } from './api';
+import { mobileRadius, mobileTheme } from './theme';
 
 type Props = {
   onAuthenticated: (session: SessionResponse) => Promise<void> | void;
@@ -57,9 +58,10 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
 
   return (
     <View style={styles.card}>
+      <Text style={styles.eyebrow}>ورود امن</Text>
       <Text style={styles.title}>ورود با ایمیل</Text>
       <Text style={styles.body}>
-        برای ورود یک کد یک‌بارمصرف به ایمیلت می‌فرستیم. شماره موبایل فقط جداگانه برای تماس واقعی استفاده می‌شود.
+        یک کد یک‌بارمصرف به ایمیلت می‌فرستیم. برای ورود رمز عبور یا شماره تلفن لازم نیست.
       </Text>
       <TextInput
         value={email}
@@ -70,10 +72,11 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
         textContentType="emailAddress"
         editable={!busy && !codeSent}
         placeholder="name@example.com"
+        placeholderTextColor="#9A8F85"
         style={styles.input}
       />
       {!codeSent ? (
-        <TouchableOpacity disabled={busy || email.trim().length < 3} style={styles.primary} onPress={sendCode}>
+        <TouchableOpacity disabled={busy || email.trim().length < 3} style={[styles.primary, (busy || email.trim().length < 3) && styles.disabled]} onPress={sendCode}>
           <Text style={styles.primaryText}>{busy ? 'در حال ارسال…' : 'ارسال کد ورود'}</Text>
         </TouchableOpacity>
       ) : (
@@ -84,11 +87,12 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
             keyboardType="number-pad"
             textContentType="oneTimeCode"
             placeholder="کد ۶ رقمی"
+            placeholderTextColor="#9A8F85"
             maxLength={6}
             editable={!busy}
             style={styles.input}
           />
-          <TouchableOpacity disabled={busy || code.length !== 6} style={styles.primary} onPress={verifyCode}>
+          <TouchableOpacity disabled={busy || code.length !== 6} style={[styles.primary, (busy || code.length !== 6) && styles.disabled]} onPress={verifyCode}>
             <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ورود'}</Text>
           </TouchableOpacity>
           <TouchableOpacity disabled={busy} onPress={() => { setCodeSent(false); setCode(''); setError(''); }}>
@@ -103,12 +107,14 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderColor: '#E7E2DA', borderRadius: 18, padding: 18, gap: 12 },
-  title: { fontSize: 22, fontWeight: '800', textAlign: 'right' },
-  body: { fontSize: 14, lineHeight: 22, textAlign: 'right' },
-  input: { borderWidth: 1, borderColor: '#D9D2C8', borderRadius: 12, padding: 13, textAlign: 'left' },
-  primary: { backgroundColor: '#171717', borderRadius: 12, padding: 14 },
-  primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
-  link: { textAlign: 'center', textDecorationLine: 'underline', paddingVertical: 7 },
-  error: { color: '#9E2525', textAlign: 'right', lineHeight: 21 },
+  card: { backgroundColor: mobileTheme.paper, borderRadius: mobileRadius.large, padding: 22, gap: 13 },
+  eyebrow: { color: '#9E572E', fontSize: 12, fontWeight: '900', textAlign: 'right' },
+  title: { color: mobileTheme.ink, fontSize: 24, fontWeight: '900', textAlign: 'right', letterSpacing: -0.5 },
+  body: { color: mobileTheme.mutedInk, fontSize: 14, lineHeight: 23, textAlign: 'right' },
+  input: { borderWidth: 1, borderColor: mobileTheme.lineLight, backgroundColor: mobileTheme.field, color: mobileTheme.ink, borderRadius: mobileRadius.medium, padding: 13, textAlign: 'left' },
+  primary: { backgroundColor: mobileTheme.inkStrong, borderRadius: mobileRadius.small, padding: 14 },
+  primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '800' },
+  link: { color: '#6F5E54', textAlign: 'center', textDecorationLine: 'underline', paddingVertical: 7 },
+  error: { color: mobileTheme.danger, backgroundColor: mobileTheme.dangerSurface, borderRadius: mobileRadius.medium, padding: 11, textAlign: 'right', lineHeight: 21 },
+  disabled: { opacity: 0.4 },
 });

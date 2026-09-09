@@ -6,6 +6,9 @@ import { resolveCallerMarketContext } from '../lib/caller-market.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const QUOTE_TTL_MINUTES = 15;
+
+type QuoteTarget = 'instant' | 'booking' | 'booking_start';
 
 function uuid(value: string | null, code: string): string | null {
   if (!value) return null;
@@ -24,6 +27,52 @@ function display(currencyCode: string) {
     displayUnit: currencyCode === 'IRR' ? 'toman' as const : 'currency' as const,
     displayDivisor: currencyCode === 'IRR' ? 10 : 1,
   };
+}
+
+function quoteTarget(raw: string | null, hasBookingId: boolean): QuoteTarget {
+  if (hasBookingId) return 'booking_start';
+  if (raw === null || raw === '' || raw === 'instant') return 'instant';
+  if (raw === 'booking') return 'booking';
+  throw new HttpError(400, 'invalid_quote_target');
+}
+
+async function persistBinding(input: {
+  userId: string;
+  callerMarketId: string;
+  pricingPlanId: string;
+  target: QuoteTarget;
+  maxBillableSeconds: number;
+  bookingId: string | null;
+  authorizedMinor: bigint;
+  currencyCode: string;
+}) {
+  await query(`
+    INSERT INTO app.caller_quote_bindings(
+      caller_user_id, caller_market_id, pricing_plan_id, quote_target,
+      max_billable_seconds, booking_id, authorized_minor, currency_code,
+      quoted_at, expires_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now()+make_interval(mins=>$9))
+    ON CONFLICT (caller_user_id) DO UPDATE SET
+      caller_market_id=EXCLUDED.caller_market_id,
+      pricing_plan_id=EXCLUDED.pricing_plan_id,
+      quote_target=EXCLUDED.quote_target,
+      max_billable_seconds=EXCLUDED.max_billable_seconds,
+      booking_id=EXCLUDED.booking_id,
+      authorized_minor=EXCLUDED.authorized_minor,
+      currency_code=EXCLUDED.currency_code,
+      quoted_at=now(),
+      expires_at=EXCLUDED.expires_at
+  `, [
+    input.userId,
+    input.callerMarketId,
+    input.pricingPlanId,
+    input.target,
+    input.maxBillableSeconds,
+    input.bookingId,
+    input.authorizedMinor.toString(),
+    input.currencyCode,
+    QUOTE_TTL_MINUTES,
+  ]);
 }
 
 export async function getCallerQuote(req: IncomingMessage, res: ServerResponse) {
@@ -133,6 +182,7 @@ export async function getCallerQuote(req: IncomingMessage, res: ServerResponse) 
   }
   if (quoteSeconds === null) throw new HttpError(400, 'invalid_quote_target');
 
+  const target = quoteTarget(url.searchParams.get('target'), Boolean(bookingId));
   const authorized = authorizationMinorForSeconds(context.pricing.callerRatePerMinuteMinor, quoteSeconds);
   const wallet = await query<{ balance_minor: string; reserved_minor: string }>(`
     SELECT balance_minor::text, reserved_minor::text
@@ -143,6 +193,19 @@ export async function getCallerQuote(req: IncomingMessage, res: ServerResponse) 
   const balance = BigInt(wallet.rows[0]?.balance_minor ?? '0');
   const reserved = BigInt(wallet.rows[0]?.reserved_minor ?? '0');
   const available = balance - reserved;
+
+  // Binding is stored server-side. The later Booking/Call request consumes this exact
+  // market+pricebook+cap snapshot and independently re-resolves the current active pricebook.
+  await persistBinding({
+    userId,
+    callerMarketId: context.market.id,
+    pricingPlanId: context.pricing.id,
+    target,
+    maxBillableSeconds: quoteSeconds,
+    bookingId,
+    authorizedMinor: authorized,
+    currencyCode: context.pricing.currencyCode,
+  });
 
   sendJson(res, 200, {
     market: context.market,

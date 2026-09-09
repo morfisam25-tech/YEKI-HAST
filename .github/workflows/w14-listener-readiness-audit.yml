@@ -1,0 +1,183 @@
+name: W14 Listener Readiness Audit
+
+on:
+  push:
+    branches:
+      - w14/listener-internal-beta-readiness-20260909
+    paths:
+      - .github/workflows/w14-listener-readiness-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Read production Listener lifecycle without identity output
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { Client } = require('pg');
+          const crypto = require('node:crypto');
+          const databaseUrl = process.env.DATABASE_URL?.trim();
+          if (!databaseUrl) throw new Error('PRODUCTION_DATABASE_URL missing');
+          const url = new URL(databaseUrl);
+          if (!url.hostname.endsWith('.us-east-1.aws.neon.tech')) throw new Error('unexpected database host');
+          const client = new Client({ connectionString: databaseUrl });
+          await client.connect();
+          try {
+            await client.query('BEGIN READ ONLY');
+            const result = await client.query(`
+              SELECT
+                la.user_id::text,
+                la.status::text application_status,
+                la.nickname IS NOT NULL AND length(trim(la.nickname)) >= 2 profile_complete,
+                count(tp.module_key)::int training_rows,
+                count(tp.module_key) FILTER (
+                  WHERE tp.status='completed' AND tp.progress_percent=100
+                )::int training_completed,
+                latest.result::text assessment_result,
+                k.status::text kyc_status,
+                lp.user_id IS NOT NULL listener_profile_exists,
+                COALESCE(lp.is_verified,false) listener_verified,
+                sp.listener_user_id IS NOT NULL service_profile_exists,
+                COALESCE(sp.is_public,false) service_profile_public,
+                COALESCE(pres.status::text,'offline') presence_status,
+                pres.last_heartbeat_at::text,
+                CASE
+                  WHEN pres.status='online' AND pres.last_heartbeat_at > now() - interval '90 seconds'
+                  THEN true ELSE false
+                END heartbeat_fresh,
+                EXISTS (
+                  SELECT 1 FROM app.listener_application_languages lal
+                  WHERE lal.application_id=la.id
+                ) application_has_language,
+                EXISTS (
+                  SELECT 1 FROM app.listener_languages ll
+                  WHERE ll.listener_user_id=la.user_id
+                ) profile_has_language,
+                EXISTS (
+                  SELECT 1 FROM app.call_sessions cs
+                  WHERE cs.listener_user_id=la.user_id
+                    AND cs.status::text = ANY(ARRAY[
+                      'requested','routing','calling_caller','caller_answered',
+                      'calling_listener','connected'
+                    ])
+                ) active_call
+              FROM app.listener_applications la
+              JOIN app.service_catalog svc
+                ON svc.id=la.service_id AND svc.code='human_listening'
+              LEFT JOIN app.listener_training_progress tp
+                ON tp.application_id=la.id
+              LEFT JOIN LATERAL (
+                SELECT a.result
+                FROM app.listener_assessment_attempts a
+                WHERE a.application_id=la.id
+                ORDER BY a.created_at DESC
+                LIMIT 1
+              ) latest ON true
+              LEFT JOIN private_data.listener_kyc k
+                ON k.user_id=la.user_id
+              LEFT JOIN app.listener_profiles lp
+                ON lp.user_id=la.user_id
+              LEFT JOIN app.listener_service_profiles sp
+                ON sp.listener_user_id=la.user_id AND sp.service_id=la.service_id
+              LEFT JOIN app.products product
+                ON product.code='yeki_hast'
+              LEFT JOIN app.markets market
+                ON market.code='ir'
+              LEFT JOIN app.listener_presence pres
+                ON pres.listener_user_id=la.user_id
+                AND pres.product_id=product.id
+                AND pres.service_id=la.service_id
+                AND pres.market_id=market.id
+              GROUP BY la.id, latest.result, k.status, lp.user_id, lp.is_verified,
+                       sp.listener_user_id, sp.is_public, pres.status, pres.last_heartbeat_at
+              ORDER BY la.created_at
+            `);
+            console.log('W14_APPLICATION_COUNT=' + result.rowCount);
+            result.rows.forEach((row, index) => {
+              const safe = {
+                account: index + 1,
+                profileComplete: row.profile_complete,
+                application: row.application_status,
+                training: row.training_completed + '/' + row.training_rows,
+                assessment: row.assessment_result ?? 'not_started',
+                kyc: row.kyc_status ?? 'not_started',
+                listenerProfileExists: row.listener_profile_exists,
+                listenerVerified: row.listener_verified,
+                serviceProfileExists: row.service_profile_exists,
+                serviceProfilePublic: row.service_profile_public,
+                presence: row.presence_status,
+                heartbeatFresh: row.heartbeat_fresh,
+                applicationHasLanguage: row.application_has_language,
+                profileHasLanguage: row.profile_has_language,
+                activeCall: row.active_call,
+              };
+              console.log('W14_ACCOUNT_STATE=' + JSON.stringify(safe));
+            });
+            const unsafeAvailable = await client.query(`
+              SELECT count(*)::int count
+              FROM app.listener_presence pres
+              JOIN app.listener_applications la ON la.user_id=pres.listener_user_id
+              LEFT JOIN app.listener_profiles lp ON lp.user_id=pres.listener_user_id
+              LEFT JOIN private_data.listener_kyc k ON k.user_id=pres.listener_user_id
+              WHERE pres.status='online'
+                AND (
+                  la.status NOT IN ('approved','active')
+                  OR COALESCE(lp.is_verified,false)=false
+                  OR COALESCE(k.status::text,'')<>'verified'
+                )
+            `);
+            console.log('W14_UNSAFE_ONLINE_COUNT=' + unsafeAvailable.rows[0].count);
+            await client.query('ROLLBACK');
+          } finally {
+            await client.end();
+          }
+          NODE
+
+      - name: Verify production KYC provider configuration without secret output
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token = process.env.VERCEL_TOKEN?.trim();
+          if (!token) throw new Error('VERCEL_TOKEN missing');
+          const url = new URL('https://api.vercel.com/v9/projects/' + process.env.VERCEL_PROJECT_ID + '/env');
+          url.searchParams.set('teamId', process.env.VERCEL_TEAM_ID);
+          url.searchParams.set('decrypt', 'true');
+          const response = await fetch(url, { headers: { authorization: 'Bearer ' + token } });
+          if (!response.ok) throw new Error('Vercel env read failed: ' + response.status);
+          const body = await response.json();
+          const envs = Array.isArray(body.envs) ? body.envs : [];
+          const prod = (key) => envs.find((entry) =>
+            entry.key === key && Array.isArray(entry.target) && entry.target.includes('production')
+          );
+          const provider = prod('KYC_INQUIRY_PROVIDER');
+          const inquiry = prod('NEXTPAY_INQUIRY_API');
+          const encryption = prod('KYC_ENCRYPTION_KEY');
+          const hash = prod('KYC_HASH_KEY');
+          const providerConfigured = provider?.value === 'nextpay';
+          const inquiryConfigured = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(inquiry?.value ?? '');
+          console.log('W14_KYC_PROVIDER_CONFIGURED=' + (providerConfigured && inquiryConfigured ? 'YES' : 'NO'));
+          console.log('W14_KYC_SECURITY_CONFIGURED=' + (Boolean(encryption?.value) && Boolean(hash?.value) ? 'YES' : 'NO'));
+          console.log('W14_KYC_EXECUTION_PATH_PRESENT=NO');
+          NODE

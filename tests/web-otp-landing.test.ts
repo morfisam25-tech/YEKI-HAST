@@ -41,5 +41,5 @@ test('web verified session is HttpOnly and logout revokes the backend session be
 
 test('web landing keeps RTL responsive layouts explicit', () => {
   assert.match(styles, /grid-template-columns/);
-  assert.match(styles, /@media \(max-width: 800px\)/);
+  assert.match(styles, /@media \(max-width: 820px\)/);
 });

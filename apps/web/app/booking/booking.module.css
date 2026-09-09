@@ -645,3 +645,5 @@
 .reportArea summary, .reportArea details > p { color: var(--muted); }
 .reportArea summary small, .reportArea form label small { color: #918889; }
 .page a:focus-visible, .listener:focus-visible, .control:focus-visible, .pill:focus-visible, .secondary:focus-visible, .primary:focus-visible, .primaryLink:focus-visible, .danger:focus-visible, .endButton:focus-visible, .safetyButton:focus-visible, .checkRow input:focus-visible, .reportArea summary:focus-visible, .reportArea button:focus-visible, .reportArea select:focus-visible, .reportArea textarea:focus-visible, .reportArea input:focus-visible { outline-color: var(--accent-dark); }
+
+.page { width: 100%; max-width: none; margin: 0; }

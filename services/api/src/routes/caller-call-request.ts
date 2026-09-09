@@ -68,12 +68,10 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
     mood?: unknown;
     topicCode?: unknown;
     maxSeconds?: unknown;
-    pricingPlanId?: unknown;
   }>(req);
 
   const clientRequestId = requireString(body.clientRequestId, 'clientRequestId', 8, 100);
   const listenerId = parseUuid(body.listenerId, 'invalid_listener', true);
-  const pricingPlanId = parseUuid(body.pricingPlanId, 'invalid_pricing_plan');
   const listenerGender = parseRequestedGender(body.listenerGender);
   const languageCode = parseLanguage(body.languageCode);
   const maxSeconds = parseMaxSeconds(body.maxSeconds);
@@ -123,7 +121,31 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
     if (active.rows[0]) throw new HttpError(409, 'caller_call_already_active');
 
     const context = await resolveCallerMarketContext(userId, client as unknown as SqlRunner);
-    if (pricingPlanId !== context.pricing.id) throw new HttpError(409, 'quote_stale');
+    const quote = await client.query<{
+      caller_market_id: string;
+      pricing_plan_id: string;
+      max_billable_seconds: number;
+      authorized_minor: string;
+      currency_code: string;
+    }>(`
+      SELECT caller_market_id::text, pricing_plan_id::text, max_billable_seconds,
+             authorized_minor::text, currency_code
+      FROM app.caller_quote_bindings
+      WHERE caller_user_id=$1
+        AND quote_target='instant'
+        AND max_billable_seconds=$2
+        AND expires_at>now()
+      FOR UPDATE
+    `, [userId, maxSeconds]);
+    const quoted = quote.rows[0];
+    if (!quoted) throw new HttpError(409, 'quote_required');
+    if (
+      quoted.caller_market_id !== context.market.id
+      || quoted.pricing_plan_id !== context.pricing.id
+      || quoted.currency_code !== context.pricing.currencyCode
+    ) {
+      throw new HttpError(409, 'quote_stale');
+    }
 
     const language = await client.query<{ id: string }>(`
       SELECT id::text
@@ -208,6 +230,12 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
       requestedMaxSeconds: maxSeconds,
     });
     if (!authorization) throw new HttpError(402, 'insufficient_balance');
+    if (
+      authorization.maxBillableSeconds !== quoted.max_billable_seconds
+      || authorization.authorizedMinor !== BigInt(quoted.authorized_minor)
+    ) {
+      throw new HttpError(409, 'quote_stale');
+    }
 
     const inserted = await client.query<{
       id: string;
@@ -262,6 +290,7 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
     `, [walletRow.id, authorization.authorizedMinor.toString()]);
     if (!walletUpdate.rowCount) throw new HttpError(409, 'wallet_reservation_conflict');
 
+    await client.query('DELETE FROM app.caller_quote_bindings WHERE caller_user_id=$1', [userId]);
     await client.query(`
       INSERT INTO app.call_events(call_session_id, status, source, metadata)
       VALUES ($1,'routing','api',$2::jsonb)
@@ -270,6 +299,7 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
       callerMarketId: context.market.id,
       callerMarketCode: context.market.code,
       pricingPlanId: context.pricing.id,
+      quoteBound: true,
       listenerBaseCurrencyCode: context.listenerBase.currencyCode,
       listenerBaseRatePerMinuteMinor: context.listenerBase.ratePerMinuteMinor.toString(),
     })]);

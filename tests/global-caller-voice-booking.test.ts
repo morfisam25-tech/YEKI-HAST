@@ -117,7 +117,8 @@ test('consumer rendering keeps human language, real trust signals, timezone and 
   assert.match(talk, /هویت تأیید شده/);
   assert.match(talk, /این معرفی را خود شنونده نوشته است/);
   assert.match(talk, /هزینه فقط از زمان اتصال واقعی محاسبه می‌شود/);
-  assert.match(talk, /مبلغی از اعتبار کم نشده است/);
+  assert.match(talk, /مبلغی از اعتبارت کم نشده/);
+  assert.match(talk, /یک شنونده دیگه انتخاب کنی/);
   assert.match(booking, /resolvedOptions\(\)\.timeZone/);
   assert.match(booking, /برنامه‌ریزی‌شده/);
   assert.match(booking, /تماس شروع شده/);

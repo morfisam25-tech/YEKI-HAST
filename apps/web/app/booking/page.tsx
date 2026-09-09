@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import CallCostQuote from '../../components/caller/CallCostQuote';
 import styles from './booking.module.css';
 
 type Language = { code: string; nameFa: string; nameEn?: string | null; proficiency: string };
@@ -326,7 +327,12 @@ export default function BookingPage() {
                       : `امتیاز ${listener.ratingAverage.toFixed(1)} از ۵ · ${fa(listener.ratingCount)} نظر`}
                     {listener.completedCalls > 0 ? ` · ${fa(listener.completedCalls)} گفت‌وگوی انجام‌شده` : ''}
                   </span>
-                  {listener.listeningStyle && <span className={styles.styleText}>شیوه شنیدن: {listener.listeningStyle}</span>}
+                  {listener.listeningStyle && (
+                    <span className={styles.styleText}>
+                      شیوه شنیدن: {listener.listeningStyle}
+                      <small>این توضیح را خود شنونده نوشته و توسط یکی هست راستی‌آزمایی نشده است.</small>
+                    </span>
+                  )}
                   {listener.shortIntro && (
                     <span className={styles.intro}>
                       {listener.shortIntro}
@@ -407,10 +413,7 @@ export default function BookingPage() {
                   </div>
                 ) : null}
 
-                <div className={styles.trustNote}>
-                  <strong>ثبت رزرو به‌تنهایی مبلغی از اعتبار کم نمی‌کند.</strong>
-                  <span>هزینه فقط از زمان اتصال واقعی محاسبه می‌شود. اگر شنونده پاسخ ندهد، مبلغی از اعتبار کم نمی‌شود.</span>
-                </div>
+                <CallCostQuote maxSeconds={maxSeconds} deferred className={styles.trustNote} />
 
                 <div className={styles.bookingConsent}>
                   <p>این رزرو برای یک گفت‌وگوی محترمانه با شنونده است. سرویس جای اورژانس یا خدمات تخصصی پزشکی، روان‌شناسی و حقوقی نیست و اطلاعات تماس شخصی نباید ردوبدل شود.</p>

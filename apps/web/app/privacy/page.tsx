@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import styles from '../phase2.module.css';
 
 export const metadata: Metadata = {
   title: 'حریم خصوصی | یکی هست',
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main>
+    <main className={styles.page}>
       <header className="site-header">
         <strong className="brand">یکی هست</strong>
         <a href="/">بازگشت به صفحه اصلی</a>

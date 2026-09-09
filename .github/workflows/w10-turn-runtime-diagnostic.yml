@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
       VERCEL_TEAM_SLUG: unique-6ff0
@@ -43,7 +43,7 @@ jobs:
 
       - name: Pull production env and run direct TURN plus relay diagnostic
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           printf '%s\n' "::add-mask::$VERCEL_TOKEN"

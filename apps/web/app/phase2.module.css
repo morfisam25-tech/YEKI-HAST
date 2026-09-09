@@ -1,0 +1,392 @@
+
+.page,
+.listenerPage {
+  --p2-bg: #0e1117;
+  --p2-surface: #171a20;
+  --p2-surface-2: #20232a;
+  --p2-surface-warm: #272126;
+  --p2-text: #f8f2eb;
+  --p2-muted: #b9b0b0;
+  --p2-soft: #d8c9c0;
+  --p2-line: rgba(255,255,255,.11);
+  --p2-line-strong: rgba(255,255,255,.22);
+  --p2-accent: #e8a15f;
+  --p2-coral: #d77e68;
+  --p2-danger: #ed9b8d;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(215,126,104,.12), transparent 28rem),
+    radial-gradient(circle at 8% 5%, rgba(232,161,95,.10), transparent 25rem),
+    var(--p2-bg);
+  color: var(--p2-text);
+  color-scheme: dark;
+}
+
+.page :global(.site-header),
+.listenerPage :global(.site-header) {
+  width: min(1160px, calc(100% - 48px));
+  min-height: 78px;
+  margin: 0 auto;
+  border-bottom: 1px solid var(--p2-line);
+  color: var(--p2-muted);
+}
+
+.page :global(.brand),
+.listenerPage :global(.brand) {
+  color: var(--p2-text);
+  font-size: 19px;
+  letter-spacing: -.04em;
+}
+
+.page :global(.brand)::before,
+.listenerPage :global(.brand)::before {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,.24);
+  background-color: rgba(232,161,95,.08);
+  box-shadow: 0 10px 24px rgba(0,0,0,.22);
+}
+
+.page :global(.site-header) a,
+.listenerPage :global(.site-header) a,
+.page :global(.public-links) a,
+.listenerPage :global(.public-links) a {
+  color: var(--p2-accent);
+}
+
+.page :global(.intro) {
+  min-height: 590px;
+  padding: 72px 0 54px;
+}
+
+.page :global(.intro-copy) {
+  max-width: 630px;
+}
+
+.page :global(.kicker),
+.page :global(.form-eyebrow) {
+  background: rgba(232,161,95,.12);
+  border: 1px solid rgba(232,161,95,.20);
+  color: var(--p2-accent);
+}
+
+.page :global(h1),
+.page :global(h2),
+.page :global(h3),
+.listenerPage :global(h1),
+.listenerPage :global(h2),
+.listenerPage :global(h3) {
+  color: var(--p2-text);
+}
+
+.page :global(h1) {
+  font-size: clamp(42px, 6vw, 70px);
+  line-height: 1.18;
+  letter-spacing: -.05em;
+}
+
+.page :global(h2),
+.listenerPage :global(h2) {
+  font-size: clamp(22px, 3vw, 31px);
+  line-height: 1.45;
+}
+
+.page :global(.lead),
+.page :global(.helper),
+.page :global(.after-login p),
+.page :global(.privacy),
+.listenerPage :global(.helper),
+.listenerPage :global(.listener-onboarding-hero > p) {
+  color: var(--p2-muted);
+  line-height: 2;
+}
+
+.page :global(.lead) {
+  font-size: 18px;
+}
+
+.page :global(.after-login) {
+  border-color: var(--p2-line);
+}
+
+.page :global(.login-panel),
+.page :global(.call-setup),
+.page :global(.onboarding-card),
+.listenerPage :global(.call-setup),
+.listenerPage :global(.onboarding-card) {
+  border-color: var(--p2-line);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(232,161,95,.10), transparent 16rem),
+    var(--p2-surface);
+  box-shadow: 0 24px 70px rgba(0,0,0,.22);
+}
+
+.page :global(.login-panel) {
+  min-height: 470px;
+}
+
+.page :global(label),
+.page :global(.field-label),
+.listenerPage :global(label),
+.listenerPage :global(.field-label) {
+  color: var(--p2-soft);
+}
+
+.page :global(input),
+.page :global(textarea),
+.page :global(select),
+.listenerPage :global(input),
+.listenerPage :global(textarea),
+.listenerPage :global(select) {
+  border-color: var(--p2-line-strong);
+  background: #11151b;
+  color: var(--p2-text);
+}
+
+.page :global(input)::placeholder,
+.page :global(textarea)::placeholder,
+.listenerPage :global(input)::placeholder,
+.listenerPage :global(textarea)::placeholder {
+  color: #8e8788;
+}
+
+.page :global(button),
+.page :global(.primary-link),
+.listenerPage :global(button) {
+  border-color: rgba(232,161,95,.42);
+  background: linear-gradient(135deg, #30252a, #4b2d2d);
+  color: #fff8f0;
+  box-shadow: 0 14px 32px rgba(0,0,0,.20);
+}
+
+.page :global(.text-button),
+.listenerPage :global(.text-button) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--p2-accent);
+  box-shadow: none;
+}
+
+.page :global(.privacy) {
+  border-color: rgba(232,161,95,.20);
+  background: rgba(232,161,95,.10);
+}
+
+.page :global(.error),
+.listenerPage :global(.error) {
+  border-color: rgba(237,155,141,.28);
+  background: rgba(122,48,48,.22);
+  color: #ffc0b5;
+}
+
+.page :global(.public-links),
+.listenerPage :global(.public-links) {
+  border-color: var(--p2-line);
+}
+
+.listenerPage {
+  padding-bottom: 46px;
+}
+
+.listenerPage :global(.listener-onboarding-hero) {
+  padding: 76px 0 42px;
+  border-color: var(--p2-line);
+}
+
+.listenerPage :global(.listener-onboarding-hero h1) {
+  font-size: clamp(38px, 5vw, 62px);
+  letter-spacing: -.045em;
+}
+
+.listenerPage :global(.training-card),
+.listenerPage :global(.scenario-card),
+.listenerPage :global(.question-card),
+.listenerPage :global(.summary-card) {
+  border-color: var(--p2-line);
+  background: var(--p2-surface-2);
+}
+
+.listenerPage :global(.training-card-done),
+.listenerPage :global(.ready-card) {
+  border-color: rgba(232,161,95,.28);
+  background: rgba(232,161,95,.10);
+}
+
+.listenerPage :global(.training-card p),
+.listenerPage :global(.scenario-card > p),
+.listenerPage :global(.summary-card span),
+.listenerPage :global(.recent-row span),
+.listenerPage :global(.question-card),
+.listenerPage :global(.status-notice span) {
+  color: var(--p2-muted);
+}
+
+.listenerPage :global(.scenario-block),
+.listenerPage :global(.answer-choice),
+.listenerPage :global(.status-notice) {
+  border-color: var(--p2-line);
+  background: rgba(255,255,255,.045);
+}
+
+.listenerPage :global(.presence-pill) {
+  border-color: var(--p2-line-strong);
+  background: rgba(255,255,255,.06);
+  color: var(--p2-soft);
+}
+
+.listenerPage :global(.presence-pill[data-status='online']) {
+  border-color: rgba(232,161,95,.34);
+  background: rgba(232,161,95,.13);
+  color: #ffd5a5;
+}
+
+.listenerPage :global(.presence-pill[data-status='paused']) {
+  border-color: rgba(232,191,121,.34);
+  background: rgba(232,191,121,.12);
+  color: #f3d497;
+}
+
+.listenerPage :global(.language-button),
+.listenerPage :global(.duration-options button) {
+  background: #11151b;
+  color: var(--p2-soft);
+  border-color: var(--p2-line-strong);
+}
+
+.listenerPage :global(.language-button.selected),
+.listenerPage :global(.duration-options button.selected) {
+  border-color: var(--p2-accent);
+  background: rgba(232,161,95,.14);
+  color: #ffe0b5;
+}
+
+.listenerPage :global(.kyc-form),
+.listenerPage :global(.assessment-panel) {
+  border-color: var(--p2-line);
+}
+
+.page :global(.legal-page) {
+  width: min(900px, 100%);
+  padding: 70px 0 90px;
+}
+
+.page :global(.legal-page)::before {
+  width: 78px;
+  height: 6px;
+  background: linear-gradient(90deg, var(--p2-coral), var(--p2-accent));
+  box-shadow: none;
+}
+
+.page :global(.legal-lead) {
+  color: var(--p2-muted);
+  font-size: 18px;
+  line-height: 2;
+}
+
+.page :global(.legal-section) {
+  border-color: var(--p2-line);
+}
+
+.page :global(.legal-section h2),
+.page :global(.legal-section h3) {
+  color: var(--p2-text);
+}
+
+.page :global(.legal-section p),
+.page :global(.legal-section li) {
+  color: var(--p2-muted);
+  font-size: 16px;
+  line-height: 2.05;
+}
+
+.page :global(.legal-section strong) {
+  color: var(--p2-soft);
+}
+
+.page :global(.legal-section a) {
+  color: var(--p2-accent);
+}
+
+.page :global(.legal-section details) {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid var(--p2-line);
+  border-radius: 16px;
+  background: rgba(255,255,255,.035);
+}
+
+.page :global(.legal-section summary) {
+  color: var(--p2-soft);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.page :global(code) {
+  color: #ffd7a5;
+}
+
+.page :global(.site-header) a:focus-visible,
+.page :global(.legal-section) a:focus-visible,
+.page :global(button):focus-visible,
+.page :global(input):focus-visible,
+.page :global(textarea):focus-visible,
+.page :global(select):focus-visible,
+.listenerPage :global(a):focus-visible,
+.listenerPage :global(button):focus-visible,
+.listenerPage :global(input):focus-visible,
+.listenerPage :global(textarea):focus-visible,
+.listenerPage :global(select):focus-visible {
+  outline: 3px solid var(--p2-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 820px) {
+  .page :global(.intro) {
+    min-height: auto;
+    padding-top: 48px;
+  }
+
+  .page :global(.legal-page) {
+    padding-top: 48px;
+  }
+
+  .listenerPage :global(.listener-onboarding-hero) {
+    padding-top: 50px;
+  }
+}
+
+@media (max-width: 560px) {
+  .page :global(.site-header),
+  .listenerPage :global(.site-header) {
+    width: min(100% - 30px, 1160px);
+    min-height: 68px;
+  }
+
+  .page :global(.intro),
+  .page :global(.legal-page),
+  .listenerPage :global(.listener-onboarding-page) {
+    padding-inline: 15px;
+  }
+
+  .page :global(.intro) {
+    grid-template-columns: 1fr;
+  }
+
+  .page :global(h1) {
+    font-size: 43px;
+  }
+
+  .page :global(.legal-section p),
+  .page :global(.legal-section li),
+  .listenerPage :global(.helper),
+  .listenerPage :global(.listener-onboarding-hero > p) {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 360px) {
+  .page :global(h1) {
+    font-size: 39px;
+  }
+}

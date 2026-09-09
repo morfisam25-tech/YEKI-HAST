@@ -58,7 +58,7 @@ test('home explicitly surfaces trust, safety and FAQ routes without opening Call
 test('home-scoped visual system keeps focus, RTL, mobile layout and readable trust-critical text', () => {
   assert.match(styles, /\.home :focus-visible/);
   assert.match(styles, /direction: rtl/);
-  assert.match(styles, /@media \(max-width: 360px\)/);
+  assert.match(styles, /@media \(max-width:\s*360px\)/);
   assert.match(styles, /min-height: 5[024]px/);
   assert.match(styles, /grid-template-columns/);
   assert.match(styles, /\.privacyNote[\s\S]*font-size: 13px/);

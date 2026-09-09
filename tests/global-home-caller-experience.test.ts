@@ -7,7 +7,7 @@ const styles = await readFile(new URL('../apps/web/app/home.module.css', import.
 const globalStyles = await readFile(new URL('../apps/web/app/styles.css', import.meta.url), 'utf8');
 
 const closedNotice = 'گفت‌وگوی عمومی فعلاً بسته است.';
-const heroStart = page.indexOf('<section className={styles.hero}');
+const heroStart = page.indexOf('<section id="top" className={styles.hero}');
 const heroEnd = page.indexOf('</section>', heroStart);
 const hero = page.slice(heroStart, heroEnd);
 
@@ -41,7 +41,7 @@ test('public home uses clear consumer language while keeping implementation jarg
   assert.match(page, /\/api\/auth\/verify/);
   assert.match(page, /\/api\/auth\/logout/);
   assert.match(page, /مسیر شنونده‌شدن/);
-  assert.doesNotMatch(page, />[^<]*(?:v1\.2|HOLD|feature gate|JavaScript|cookie)[^<]*</i);
+  assert.doesNotMatch(page, /v1\.2|HOLD|feature gate|JavaScript|cookie/i);
 });
 
 test('home explicitly surfaces trust, safety and FAQ routes without opening Caller', () => {

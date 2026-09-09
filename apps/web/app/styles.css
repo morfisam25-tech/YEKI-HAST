@@ -3,9 +3,9 @@
   --ink: #2b1e1a;
   --ink-soft: #4a3932;
   --muted: #6f5d55;
-  --paper: #fff8ef;
+  --paper: #f8f4ee;
   --surface: #fffdf9;
-  --surface-warm: #fff4e8;
+  --surface-warm: #fff2df;
   --line: rgba(92, 57, 43, .17);
   --line-strong: rgba(92, 57, 43, .28);
   --accent: #8c3e24;
@@ -23,10 +23,7 @@ html { background: var(--paper); }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 9% 0%, rgba(255, 191, 102, .22), transparent 28rem),
-    radial-gradient(circle at 94% 12%, rgba(221, 107, 72, .11), transparent 24rem),
-    var(--paper);
+  background: var(--paper);
   color: var(--ink);
   font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Arial, sans-serif;
   text-rendering: optimizeLegibility;

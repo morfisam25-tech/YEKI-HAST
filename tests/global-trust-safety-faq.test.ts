@@ -94,7 +94,7 @@ test('focus-visible treatment is strong and the previous translucent focus color
   assertStrongLinkFocus(faqCss, 'FAQ');
   assert.match(
     faqCss,
-    /\.item summary:focus-visible\s*\{[^}]*outline:\s*[3-9]px\s+solid\s+#[0-9a-f]{6};[^}]*outline-offset:\s*[3-9]px;/is,
+    /\.item summary:focus-visible\s*\{[^}]*outline:\s*[3-9]px\s+solid\s+#[0-9a-f]{6};[^}]*outline-offset:\s*-[3-9]px;/is,
   );
   assert.ok(faqCss.indexOf('.item summary:focus-visible') < faqCss.indexOf('@media'), 'FAQ summary focus should survive responsive layouts');
   const joinedStyles = styles.join('\n');

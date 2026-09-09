@@ -1,0 +1,100 @@
+name: W11 Temporary Payment Diagnostic
+
+on:
+  push:
+    branches:
+      - payments/w11-internal-beta-closeout-20260909
+    paths:
+      - .github/workflows/w11-temporary-payment-diagnostic.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: w11-temporary-payment-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  sanitize-production-payment-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_PROJECT_ID: prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy
+      VERCEL_TEAM_SLUG: unique-6ff0
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
+    steps:
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Archive exact source for W11 implementation
+        shell: bash
+        run: git archive --format=tar.gz --output="${RUNNER_TEMP}/w11-source.tar.gz" "${GITHUB_SHA}"
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: w11-source-${{ github.sha }}
+          path: ${{ runner.temp }}/w11-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Setup exact Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install locked tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Pull API Production environment securely
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p "${RUNNER_TEMP}/w11-vercel/.vercel"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "${VERCEL_ORG_ID}" "${VERCEL_PROJECT_ID}" > "${RUNNER_TEMP}/w11-vercel/.vercel/project.json"
+          cd "${RUNNER_TEMP}/w11-vercel"
+          "${VERCEL_BIN}" pull --yes --environment=production --token "${VERCEL_TOKEN}" --scope "${VERCEL_TEAM_SLUG}" >/dev/null
+
+      - name: Validate sanitized payment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_FILE="${RUNNER_TEMP}/w11-vercel/.vercel/.env.production.local"
+          test -f "${ENV_FILE}"
+          set -a
+          source "${ENV_FILE}"
+          set +a
+          node --experimental-strip-types <<'NODE'
+          const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const exists = (name) => typeof process.env[name] === 'string' && process.env[name].trim().length > 0;
+          const results = {
+            PAYMENT_PROVIDER_EXISTS: exists('PAYMENT_PROVIDER'),
+            PAYMENT_PROVIDER_NEXT_PAY: process.env.PAYMENT_PROVIDER?.trim() === 'nextpay',
+            NEXTPAY_API_KEY_EXISTS: exists('NEXTPAY_API_KEY'),
+            NEXTPAY_API_KEY_UUID_SHAPE: uuid.test(process.env.NEXTPAY_API_KEY?.trim() ?? ''),
+            PAYMENT_CALLBACK_BASE_URL_EXISTS: exists('PAYMENT_CALLBACK_BASE_URL'),
+            PAYMENT_CALLBACK_BASE_URL_HTTPS: false,
+            VALIDATE_PAYMENT_PROVIDER_ENV: false,
+          };
+          try {
+            results.PAYMENT_CALLBACK_BASE_URL_HTTPS =
+              new URL(process.env.PAYMENT_CALLBACK_BASE_URL?.trim() ?? '').protocol === 'https:';
+          } catch {}
+          process.env.NODE_ENV = 'production';
+          try {
+            const module = await import(new URL('./services/api/src/providers/payment.ts', `file://${process.env.GITHUB_WORKSPACE}/`));
+            module.validatePaymentProviderEnv();
+            results.VALIDATE_PAYMENT_PROVIDER_ENV = true;
+          } catch {}
+          for (const [name, passed] of Object.entries(results)) {
+            console.log(`${name}=${passed ? 'PASS' : 'FAIL'}`);
+          }
+          if (Object.values(results).some((passed) => !passed)) process.exitCode = 1;
+          NODE

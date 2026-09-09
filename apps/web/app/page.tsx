@@ -236,7 +236,7 @@ export default function Page() {
               <h3>کد ورود را کجا بفرستیم؟</h3>
               <p className={styles.formHelp}>ایمیلی که همیشه به آن دسترسی داری وارد کن.</p>
               <label className={styles.fieldLabel} htmlFor="email">ایمیل</label>
-              <input id="email" className={styles.field} type="email" dir="ltr" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+              <input id="email" className={styles.field} type="email" dir="ltr" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
               {error && <p className={styles.error} role="alert">{error}</p>}
               <button className={styles.submitButton} type="submit" disabled={busy}>{busy ? 'در حال ارسال…' : 'فرستادن کد ورود'}</button>
               <p className={styles.privacyNote}>با ادامه، <a href="/privacy">حریم خصوصی</a> و <a href="/terms">قوانین استفاده</a> را می‌پذیری.</p>
@@ -249,7 +249,7 @@ export default function Page() {
               <h3>کد ۶ رقمی را وارد کن.</h3>
               <p className={styles.formHelp}>کد را به <strong dir="ltr">{verifiedEmail}</strong> فرستادیم.</p>
               <label className={styles.fieldLabel} htmlFor="code">کد ورود</label>
-              <input id="code" className={styles.field + ' ' + styles.codeField} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="۰۰۰۰۰۰" />
+              <input id="code" className={styles.field + ' ' + styles.codeField} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} />
               {error && <p className={styles.error} role="alert">{error}</p>}
               <button className={styles.submitButton} type="submit" disabled={busy}>{busy ? 'در حال بررسی…' : 'تأیید و ورود'}</button>
               <button className={styles.textButton} type="button" onClick={editEmail}>ویرایش ایمیل</button>

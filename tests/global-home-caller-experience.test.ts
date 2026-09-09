@@ -50,7 +50,7 @@ test('home explicitly surfaces trust, safety and FAQ routes without opening Call
   assert.match(page, /href="\/safety"/);
   assert.match(page, /href="\/faq"/);
   assert.match(page, /مرکز اعتماد/);
-  assert.match(page, /ایمنی و گزارش|>ایمنی</);
+  assert.match(page, /ایمنی و گزارش/);
   assert.match(page, /پرسش‌های رایج/);
   assert.doesNotMatch(page, /href="\/talk"/);
 });

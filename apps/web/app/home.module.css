@@ -23,6 +23,7 @@
 .home *::after { box-sizing: border-box; }
 
 .home a { color: inherit; }
+.home :focus-visible { outline: 3px solid var(--orange); outline-offset: 4px; }
 .home a:focus-visible,
 .home button:focus-visible,
 .home input:focus-visible { outline: 3px solid var(--orange); outline-offset: 4px; }

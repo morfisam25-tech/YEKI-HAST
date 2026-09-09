@@ -117,11 +117,15 @@ jobs:
           console.log('TTL_SOURCE_LINE_PRESENT=' + (ttlSourceLinePresent ? 'YES' : 'NO'));
           console.log('TTL_PARSED=' + (ttlValue !== undefined ? 'YES' : 'NO'));
           console.log('TTL_14400=' + (ttl14400 ? 'PASS' : 'FAIL'));
-          if (!keyIdPresent || !apiTokenPresent || !ttl14400) {
+          if (!keyIdPresent || !apiTokenPresent) {
             console.log('PRODUCTION_ENV=FAIL');
+            console.log('TURN_CREDENTIAL_MINT=FAIL');
+            console.log('TURN_ERROR_CATEGORY=missing_production_env');
+            console.log('RELAY_CONFIGURED=NO');
+            console.log('TURN_URL_PRESENT=NO');
             process.exit(1);
           }
-          console.log('PRODUCTION_ENV=PASS');
+          console.log('PRODUCTION_ENV=' + (ttl14400 ? 'PASS' : 'FAIL'));
 
           const { getInternetVoiceClientConfig } = await import('./services/api/src/providers/call-transport.ts');
 

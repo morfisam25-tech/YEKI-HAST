@@ -158,6 +158,8 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
+          const { Client } = await import('pg');
+          const { createHmac } = await import('node:crypto');
           const token = process.env.VERCEL_TOKEN?.trim();
           if (!token) throw new Error('VERCEL_TOKEN missing');
           const url = new URL('https://api.vercel.com/v9/projects/' + process.env.VERCEL_PROJECT_ID + '/env');
@@ -180,4 +182,41 @@ jobs:
           console.log('W14_KYC_PROVIDER_CONFIGURED=' + (providerConfigured && inquiryConfigured ? 'YES' : 'NO'));
           console.log('W14_KYC_SECURITY_CONFIGURED=' + (Boolean(activeKeyId?.value) && Boolean(encryptionKeys?.value) && Boolean(hash?.value) ? 'YES' : 'NO'));
           console.log('W14_KYC_EXECUTION_PATH_PRESENT=NO');
+
+          const emailPepper = prod('EMAIL_HASH_PEPPER')?.value;
+          if (typeof emailPepper === 'string' && emailPepper.length > 0) {
+            const knownEmails = [
+              'morfisam25@gmail.com',
+              'saeedfmine@gmail.com',
+              'sales@uniqueholding.com.tr',
+              'farahmand@uniqueholding.com.tr',
+            ];
+            const hashes = knownEmails.map((email) => createHmac('sha256', emailPepper).update(email).digest('hex'));
+            const db = new Client({ connectionString: process.env.DATABASE_URL });
+            await db.connect();
+            try {
+              const rows = await db.query(`
+                SELECT la.status::text application_status, ue.email_hash
+                FROM app.listener_applications la
+                JOIN app.service_catalog svc ON svc.id=la.service_id AND svc.code='human_listening'
+                JOIN private_data.user_emails ue ON ue.user_id=la.user_id
+                ORDER BY la.created_at
+              `);
+              rows.rows.forEach((row, index) => {
+                const emailIndex = hashes.indexOf(row.email_hash);
+                if (emailIndex >= 0) {
+                  const email = knownEmails[emailIndex];
+                  const [local, domain] = email.split('@');
+                  const masked = local.slice(0, 1) + '***@' + domain;
+                  console.log('W14_ACCOUNT_EMAIL_HINT=' + JSON.stringify({
+                    account: index + 1,
+                    application: row.application_status,
+                    maskedEmail: masked,
+                  }));
+                }
+              });
+            } finally {
+              await db.end();
+            }
+          }
           NODE

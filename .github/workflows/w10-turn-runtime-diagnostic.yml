@@ -84,7 +84,7 @@ jobs:
           }
 
           for (const line of source.split(/\r?\n/)) {
-            const match = /^([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+            const match = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
             if (!match) continue;
             const key = match[1];
             let value = match[2].trim();
@@ -106,10 +106,16 @@ jobs:
 
           const keyIdPresent = Boolean(process.env.CLOUDFLARE_TURN_KEY_ID?.trim());
           const apiTokenPresent = Boolean(process.env.CLOUDFLARE_TURN_API_TOKEN?.trim());
-          const ttl14400 = process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim() === '14400';
+          const ttlValue = process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim();
+          const ttl14400 = ttlValue === '14400';
+          const ttlSourceLinePresent = source.split(/\r?\n/).some((line) =>
+            /^\s*(?:export\s+)?CLOUDFLARE_TURN_TTL_SECONDS\s*=/.test(line)
+          );
 
           console.log('TURN_KEY_ID_PRESENT=' + (keyIdPresent ? 'YES' : 'NO'));
           console.log('TURN_API_TOKEN_PRESENT=' + (apiTokenPresent ? 'YES' : 'NO'));
+          console.log('TTL_SOURCE_LINE_PRESENT=' + (ttlSourceLinePresent ? 'YES' : 'NO'));
+          console.log('TTL_PARSED=' + (ttlValue !== undefined ? 'YES' : 'NO'));
           console.log('TTL_14400=' + (ttl14400 ? 'PASS' : 'FAIL'));
           if (!keyIdPresent || !apiTokenPresent || !ttl14400) {
             console.log('PRODUCTION_ENV=FAIL');

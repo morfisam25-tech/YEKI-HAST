@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import CallerMarketGate from './CallerMarketGate';
 
 export type CallQuoteBinding = {
   pricingPlanId: string;
@@ -78,14 +79,14 @@ export default function CallCostQuote({
 }: Props) {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  const [errorCode, setErrorCode] = useState('');
 
   useEffect(() => {
     let active = true;
 
     async function load() {
       setLoading(true);
-      setUnavailable(false);
+      setErrorCode('');
       onQuoteChange?.(null);
       try {
         const params = new URLSearchParams();
@@ -105,10 +106,10 @@ export default function CallCostQuote({
           enough: payload.wallet.enough,
           reservedAlready: payload.session.reservedAlready,
         });
-      } catch {
+      } catch (cause) {
         if (active) {
           setQuote(null);
-          setUnavailable(true);
+          setErrorCode(cause instanceof Error ? cause.message : 'quote_unavailable');
           onQuoteChange?.(null);
         }
       } finally {
@@ -125,6 +126,9 @@ export default function CallCostQuote({
   const rateText = quote && pricing ? formatMinor(BigInt(pricing.callerRatePerMinuteMinor), pricing) : '';
   const holdText = quote && pricing ? formatMinor(BigInt(quote.session.authorizedMinor), pricing) : '';
   const availableText = quote && pricing ? formatMinor(BigInt(quote.wallet.availableMinor), pricing) : '';
+  const marketNeedsAction = errorCode === 'caller_market_required'
+    || errorCode === 'caller_market_pricebook_unavailable'
+    || errorCode === 'caller_market_unavailable';
 
   return (
     <div className={className} role="status" aria-live="polite" aria-atomic="true">
@@ -152,7 +156,8 @@ export default function CallCostQuote({
           {bookingId && <span>رزرو به‌تنهایی پولی نگه نمی‌دارد؛ همین بازار و نرخ هنگام شروع تماس دوباره روی سرور تأیید می‌شود.</span>}
         </>
       )}
-      {!loading && unavailable && (
+      {!loading && marketNeedsAction && <CallerMarketGate />}
+      {!loading && errorCode && !marketNeedsAction && (
         <span>برآورد هزینه فعلاً در دسترس نیست. تا بازار و نرخ معتبر روی سرور تأیید نشود، تماس شروع نمی‌شود.</span>
       )}
     </div>

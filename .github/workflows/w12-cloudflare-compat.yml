@@ -1,0 +1,46 @@
+name: W12 Cloudflare compatibility proof
+
+on:
+  push:
+    branches:
+      - w12/cloudflare-compat-proof-20260909
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked repository dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Check Next.js 16 application with vinext
+        id: web
+        continue-on-error: true
+        working-directory: apps/web
+        run: npx --yes vinext@latest check
+
+      - name: Dry-bundle existing API for Workers
+        id: api
+        continue-on-error: true
+        run: npx --yes wrangler@latest deploy --dry-run --config proofs/cloudflare/wrangler.api.jsonc --outdir .w12-cloudflare-api
+
+      - name: Report compatibility result
+        env:
+          WEB_OUTCOME: ${{ steps.web.outcome }}
+          API_OUTCOME: ${{ steps.api.outcome }}
+        run: |
+          echo "vinext_check=$WEB_OUTCOME"
+          echo "api_worker_bundle=$API_OUTCOME"
+          test "$WEB_OUTCOME" = "success"
+          test "$API_OUTCOME" = "success"

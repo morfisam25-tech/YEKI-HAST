@@ -19,6 +19,7 @@ jobs:
           node-version: '22.23.1'
           package-manager-cache: false
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.55.0 && npx --no-install playwright install --with-deps chromium
       - name: Isolated Vercel remote build and cleanup
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -29,6 +30,11 @@ jobs:
           import {join} from 'node:path';
           import {spawnSync} from 'node:child_process';
           import {build} from 'esbuild';
+          import {generateKeyPairSync,randomBytes,privateDecrypt,createDecipheriv} from 'node:crypto';
+          import {chromium} from 'playwright';
+          const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+          const resultFile=randomBytes(16).toString('hex')+'.json';
+          const pub=publicKey.export({type:'spki',format:'pem'});
           const team='team_GmseY3ibD05FWemVhLElL3hI', project='prj_ijhc8kDsH24eQK5TfhFOqW8RVSxy';
           const token=process.env.VERCEL_TOKEN, marker='w10-'+process.env.GITHUB_RUN_ID;
           const headers={Authorization:'Bearer '+token};
@@ -41,24 +47,85 @@ jobs:
           let ids=[];
           try{
           await build({entryPoints:['services/api/src/providers/call-transport.ts'],outfile:join(dir,'helper.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',logLevel:'silent'});
-          writeFileSync(join(dir,'diagnostic.mjs'),"\nimport {mkdirSync,writeFileSync} from 'node:fs';\nimport {chromium as pw} from 'playwright-core';\nimport chromium from '@sparticuz/chromium';\nconst output=process.stdout.write.bind(process.stdout);\nfor(const n of ['log','warn','error','info','debug','trace']) console[n]=()=>{};\nconst rows={PRODUCTION_ENV:'FAIL',KEY_ID_FORMAT:'FAIL',TTL_14400:'FAIL',TURN_CREDENTIAL_MINT:'FAIL',CLOUDFLARE_HTTP:'NOT_REACHED',RELAY_CONFIGURED:'NO',TURN_URL_PRESENT:'NO',SELECTED_ICE:'NOT_TESTED',RELAY_PACKET_DATA:'NOT_TESTED'};\nlet browser,stage='env';\ntry {\nconst key=process.env.CLOUDFLARE_TURN_KEY_ID||'',token=process.env.CLOUDFLARE_TURN_API_TOKEN||'';\nrows.PRODUCTION_ENV=key.trim()&&token.trim()?'PASS':'FAIL';\nrows.KEY_ID_FORMAT=/^[A-Za-z0-9_-]{8,128}$/.test(key)?'PASS':'FAIL';\nrows.TTL_14400=process.env.CLOUDFLARE_TURN_TTL_SECONDS==='14400'?'PASS':'FAIL';\nrows.KEY_TRIMMED_FORMAT=/^[A-Za-z0-9_-]{8,128}$/.test(key.trim());\nrows.KEY_HAS_NON_ASCII=/[^\\x00-\\x7F]/.test(key);\nrows.KEY_HAS_WHITESPACE=/\\s/.test(key);\nrows.KEY_HAS_QUOTES=/[\"']/.test(key);\nrows.TTL_TRIMMED_MATCH=process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim()==='14400';\nconst nativeFetch=globalThis.fetch;\nglobalThis.fetch=async(...args)=>{const res=await nativeFetch(...args);if(String(args[0]).startsWith('https://rtc.live.cloudflare.com/v1/turn/keys/'))rows.CLOUDFLARE_HTTP=String(res.status);return res;};\nstage='mint';\nconst {getInternetVoiceClientConfig}=await import('./helper.mjs');\nconst config=await getInternetVoiceClientConfig();\nrows.RELAY_CONFIGURED=config.relayConfigured?'YES':'NO';\nrows.TURN_URL_PRESENT=config.iceServers.some(s=>[s.urls].flat().some(u=>/^turns?:/.test(u)))?'YES':'NO';\nconst creds=config.iceServers.some(s=>s.username&&s.credential&&[s.urls].flat().some(u=>/^turns?:/.test(u)));\nif(rows.CLOUDFLARE_HTTP!=='201'||!creds||!config.relayConfigured)throw new Error('mint_validation');\nrows.TURN_CREDENTIAL_MINT='PASS';\nstage='chromium';\nconst browserEnv={PATH:process.env.PATH,HOME:'/tmp',TMPDIR:'/tmp'};\nbrowser=await pw.launch({headless:true,args:chromium.args,executablePath:await chromium.executablePath(),env:browserEnv});\nconst page=await browser.newPage();\nconst result=await page.evaluate(async (iceServers)=>{\n    const a=new RTCPeerConnection({iceServers,iceTransportPolicy:'relay'});\n    const b=new RTCPeerConnection({iceServers,iceTransportPolicy:'relay'});\n    const wait=async(fn)=>{\n      const until=Date.now()+60000;\n      while(!fn()){if(Date.now()>until) throw new Error('relay_timeout'); await new Promise(r=>setTimeout(r,100));}\n    };\n    let aReceived=false,bReceived=false,bChannel;\n    const payloadA='W10-A-'+ 'a'.repeat(16384),payloadB='W10-B-'+ 'b'.repeat(16384);\n    try {\n      b.ondatachannel=e=>{\n        bChannel=e.channel;\n        bChannel.onmessage=e=>{bReceived=e.data===payloadA;};\n      };\n      const aChannel=a.createDataChannel('w10-relay');\n      aChannel.onmessage=e=>{aReceived=e.data===payloadB;};\n      await a.setLocalDescription(await a.createOffer());\n      await wait(()=>a.iceGatheringState==='complete');\n      await b.setRemoteDescription(a.localDescription);\n      await b.setLocalDescription(await b.createAnswer());\n      await wait(()=>b.iceGatheringState==='complete');\n      await a.setRemoteDescription(b.localDescription);\n      await wait(()=>a.connectionState==='connected' && b.connectionState==='connected' && aChannel.readyState==='open' && bChannel?.readyState==='open');\n      aChannel.send(payloadA); bChannel.send(payloadB);\n      await wait(()=>aReceived && bReceived);\n      async function inspect(pc){\n        const stats=await pc.getStats();\n        const transport=[...stats.values()].find(s=>s.type==='transport' && s.selectedCandidatePairId);\n        const pair=transport && stats.get(transport.selectedCandidatePairId);\n        const relay=pair?.state==='succeeded' && stats.get(pair.localCandidateId)?.candidateType==='relay' && stats.get(pair.remoteCandidateId)?.candidateType==='relay';\n        return {relay,packets:relay && pair.bytesSent>0 && pair.bytesReceived>0};\n      }\n      let checks;\n      const deadline=Date.now()+10000;\n      do {\n        checks=await Promise.all([inspect(a),inspect(b)]);\n        if(checks.every(c=>c.packets)) break;\n        await new Promise(r=>setTimeout(r,200));\n      } while(Date.now()<deadline);\n      return {relay:checks.every(c=>c.relay),packets:aReceived && bReceived && checks.every(c=>c.packets)};\n    } finally {a.close();b.close();}\n  },config.iceServers);\n  \nrows.SELECTED_ICE=result.relay?'RELAY':'FAIL';\nrows.RELAY_PACKET_DATA=result.packets?'PASS':'FAIL';\n} catch(e) {\nconst allowed=['invalid_cloudflare_turn_config','invalid_cloudflare_turn_ttl','cloudflare_turn_credentials_unavailable','invalid_internet_voice_ice_servers'];\nrows.ERROR_CATEGORY=allowed.includes(e?.message)?e.message:stage+'_error'; rows.BROWSER_MISSING_LIB=String(e?.message).match(/lib[A-Za-z0-9_.-]+\\\\.so[.0-9]*/)?.[0]||'NONE'; rows.BROWSER_ERROR_TYPE=String(e?.message).includes('Target page, context or browser has been closed')?'PROCESS_CLOSED':String(e?.message).includes('Executable')?'EXECUTABLE':String(e?.message).includes('timeout')?'TIMEOUT':'OTHER';\n} finally {\nif(browser) await browser.close().catch(()=>{});\nfor(const [k,v] of Object.entries(rows)) output('W10_'+k+'='+v+'\\n');\nmkdirSync('public',{recursive:true});writeFileSync('public/index.html','Diagnostic complete. No credentials stored.');\n}\n");
-          writeFileSync(join(dir,'package.json'),JSON.stringify({private:true,type:'module',dependencies:{'playwright-core':'1.55.0','@sparticuz/chromium':'138.0.2'},engines:{node:'22.x'}}));
+          writeFileSync(join(dir,'diagnostic.mjs'),"\nimport {mkdirSync,writeFileSync} from 'node:fs';\nimport {randomBytes,publicEncrypt,createCipheriv} from 'node:crypto';\nconst output=process.stdout.write.bind(process.stdout);\nfor(const n of ['log','warn','error','info','debug','trace']) console[n]=()=>{};\nconst rows={PRODUCTION_ENV:'FAIL',KEY_ID_FORMAT:'FAIL',TTL_14400:'FAIL',TURN_CREDENTIAL_MINT:'FAIL',CLOUDFLARE_HTTP:'NOT_REACHED',RELAY_CONFIGURED:'NO',TURN_URL_PRESENT:'NO',SELECTED_ICE:'NOT_TESTED',RELAY_PACKET_DATA:'NOT_TESTED'};\nlet browser,stage='env';\ntry {\nconst key=process.env.CLOUDFLARE_TURN_KEY_ID||'',token=process.env.CLOUDFLARE_TURN_API_TOKEN||'';\nrows.PRODUCTION_ENV=key.trim()&&token.trim()?'PASS':'FAIL';\nrows.KEY_ID_FORMAT=/^[A-Za-z0-9_-]{8,128}$/.test(key)?'PASS':'FAIL';\nrows.TTL_14400=process.env.CLOUDFLARE_TURN_TTL_SECONDS==='14400'?'PASS':'FAIL';\nrows.KEY_TRIMMED_FORMAT=/^[A-Za-z0-9_-]{8,128}$/.test(key.trim());\nrows.KEY_HAS_NON_ASCII=/[^\\x00-\\x7F]/.test(key);\nrows.KEY_HAS_WHITESPACE=/\\s/.test(key);\nrows.KEY_HAS_QUOTES=/[\"']/.test(key);\nrows.TTL_TRIMMED_MATCH=process.env.CLOUDFLARE_TURN_TTL_SECONDS?.trim()==='14400';\nconst nativeFetch=globalThis.fetch;\nglobalThis.fetch=async(...args)=>{const res=await nativeFetch(...args);if(String(args[0]).startsWith('https://rtc.live.cloudflare.com/v1/turn/keys/'))rows.CLOUDFLARE_HTTP=String(res.status);return res;};\nstage='mint';\nconst {getInternetVoiceClientConfig}=await import('./helper.mjs');\nconst config=await getInternetVoiceClientConfig();\nrows.RELAY_CONFIGURED=config.relayConfigured?'YES':'NO';\nrows.TURN_URL_PRESENT=config.iceServers.some(s=>[s.urls].flat().some(u=>/^turns?:/.test(u)))?'YES':'NO';\nconst creds=config.iceServers.some(s=>s.username&&s.credential&&[s.urls].flat().some(u=>/^turns?:/.test(u)));\nif(rows.CLOUDFLARE_HTTP!=='201'||!creds||!config.relayConfigured)throw new Error('mint_validation');\nrows.TURN_CREDENTIAL_MINT='PASS';\n\nconst keyBytes=randomBytes(32),iv=randomBytes(12);\nconst cipher=createCipheriv('aes-256-gcm',keyBytes,iv);\nconst data=Buffer.concat([cipher.update(JSON.stringify(config),'utf8'),cipher.final()]);\nconst sealed={key:publicEncrypt('__PUBLIC_KEY__',keyBytes).toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:data.toString('base64')};\nglobalThis.w10sealed=sealed;\n} catch(e) {\nconst allowed=['invalid_cloudflare_turn_config','invalid_cloudflare_turn_ttl','cloudflare_turn_credentials_unavailable','invalid_internet_voice_ice_servers'];\nrows.ERROR_CATEGORY=allowed.includes(e?.message)?e.message:stage+'_error';\n} finally {\nif(browser) await browser.close().catch(()=>{});\nfor(const [k,v] of Object.entries(rows)) output('W10_'+k+'='+v+'\\n');\nmkdirSync('public',{recursive:true});writeFileSync('public/__RESULT_FILE__',JSON.stringify({rows,sealed:globalThis.w10sealed}));\n}\n".replace("'__PUBLIC_KEY__'",JSON.stringify(pub)).replace('__RESULT_FILE__',resultFile));
+          writeFileSync(join(dir,'package.json'),JSON.stringify({private:true,type:'module',dependencies:{},engines:{node:'22.x'}}));
           writeFileSync(join(dir,'vercel.json'),JSON.stringify({framework:null,installCommand:'npm install --ignore-scripts --no-audit --no-fund',buildCommand:'node diagnostic.mjs',outputDirectory:'public',git:{deploymentEnabled:false}}));
           const env={...process.env,VERCEL_ORG_ID:team,VERCEL_PROJECT_ID:project};
-          const p=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['deploy','--prod','--skip-domain','--logs','--yes','--force','--scope','unique-6ff0','--token',token,'--meta','w10Diagnostic='+marker],{cwd:dir,env,encoding:'utf8',timeout:600000,maxBuffer:10*1024*1024});
+          const p=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['deploy','--prod','--skip-domain','--yes','--force','--scope','unique-6ff0','--token',token,'--meta','w10Diagnostic='+marker],{cwd:dir,env,encoding:'utf8',timeout:600000,maxBuffer:10*1024*1024});
           console.log('DEPLOY_COMMAND_EXIT='+p.status);
-          for(const line of (p.stdout+'\n'+p.stderr).split('\n')) {
-          if(/Running |Build Completed|Skipping|Installing|Error:|Detected|WARN!|WARN |build command/i.test(line))console.log('BUILD_TRACE='+line.replaceAll(token,'[MASKED]').replace(/https?:\/\/\S+/g,'[URL]').slice(0,400));
-          }
           const listed=await api('/v6/deployments?projectId='+project+'&limit=20');
           ids=(listed.deployments||[]).filter(d=>d.meta?.w10Diagnostic===marker).map(d=>d.uid||d.id);
           if(!ids.length){console.log('DIAGNOSTIC_ERROR=deployment_not_created');throw new Error('deployment_not_created');}
           for(const id of ids){
           console.log('DIAGNOSTIC_DEPLOYMENT='+id);
-          const events=await api('/v3/deployments/'+id+'/events?builds=1&direction=forward&limit=1000');
-          const lines=(JSON.stringify(events)+'\n'+p.stdout+'\n'+p.stderr).match(/W10_[A-Z_0-9]+=(?:PASS|FAIL|YES|NO|NOT_TESTED|NOT_REACHED|RELAY|true|false|[0-9]{3}|[a-z_]+)(?=\\n|"|\\r|\s|$)/g)||[];
-          for(const line of [...new Set(lines)]) console.log(line);
-          if(!lines.length)console.log('DIAGNOSTIC_ERROR=no_sanitized_results');
+          
+          const detail=await api('/v13/deployments/'+id);
+          let payload;
+          const response=await fetch('https://'+detail.url+'/'+resultFile);
+          if(response.ok){payload=await response.json();}
+          else{
+          const fetched=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['curl','/'+resultFile,'--deployment',detail.url,'--scope','unique-6ff0','--token',token],{cwd:dir,env,encoding:'utf8',timeout:45000});
+          try{payload=JSON.parse(fetched.stdout);}catch{throw new Error('diagnostic_result_retrieval');}
+          }
+          for(const [k,v] of Object.entries(payload.rows||{}))if(/^[A-Z_0-9]+$/.test(k)&&/^(PASS|FAIL|YES|NO|NOT_TESTED|NOT_REACHED|RELAY|true|false|[0-9]{3}|[a-z_]+)$/.test(String(v)))console.log(k+'='+v);
+          if(payload.sealed){
+          const sealed=payload.sealed;
+          const aes=privateDecrypt(privateKey,Buffer.from(sealed.key,'base64'));
+          const decipher=createDecipheriv('aes-256-gcm',aes,Buffer.from(sealed.iv,'base64'));decipher.setAuthTag(Buffer.from(sealed.tag,'base64'));
+          const config=JSON.parse(Buffer.concat([decipher.update(Buffer.from(sealed.data,'base64')),decipher.final()]).toString());
+          const browser=await chromium.launch({headless:true,env:{PATH:process.env.PATH,HOME:process.env.HOME}});
+          try{
+          const page=await browser.newPage();
+          const result=await page.evaluate(async (iceServers)=>{
+              const a=new RTCPeerConnection({iceServers,iceTransportPolicy:'relay'});
+              const b=new RTCPeerConnection({iceServers,iceTransportPolicy:'relay'});
+              const wait=async(fn)=>{
+                const until=Date.now()+60000;
+                while(!fn()){if(Date.now()>until) throw new Error('relay_timeout'); await new Promise(r=>setTimeout(r,100));}
+              };
+              let aReceived=false,bReceived=false,bChannel;
+              const payloadA='W10-A-'+ 'a'.repeat(16384),payloadB='W10-B-'+ 'b'.repeat(16384);
+              try {
+                b.ondatachannel=e=>{
+                  bChannel=e.channel;
+                  bChannel.onmessage=e=>{bReceived=e.data===payloadA;};
+                };
+                const aChannel=a.createDataChannel('w10-relay');
+                aChannel.onmessage=e=>{aReceived=e.data===payloadB;};
+                await a.setLocalDescription(await a.createOffer());
+                await wait(()=>a.iceGatheringState==='complete');
+                await b.setRemoteDescription(a.localDescription);
+                await b.setLocalDescription(await b.createAnswer());
+                await wait(()=>b.iceGatheringState==='complete');
+                await a.setRemoteDescription(b.localDescription);
+                await wait(()=>a.connectionState==='connected' && b.connectionState==='connected' && aChannel.readyState==='open' && bChannel?.readyState==='open');
+                aChannel.send(payloadA); bChannel.send(payloadB);
+                await wait(()=>aReceived && bReceived);
+                async function inspect(pc){
+                  const stats=await pc.getStats();
+                  const transport=[...stats.values()].find(s=>s.type==='transport' && s.selectedCandidatePairId);
+                  const pair=transport && stats.get(transport.selectedCandidatePairId);
+                  const relay=pair?.state==='succeeded' && stats.get(pair.localCandidateId)?.candidateType==='relay' && stats.get(pair.remoteCandidateId)?.candidateType==='relay';
+                  return {relay,packets:relay && pair.bytesSent>0 && pair.bytesReceived>0};
+                }
+                let checks;
+                const deadline=Date.now()+10000;
+                do {
+                  checks=await Promise.all([inspect(a),inspect(b)]);
+                  if(checks.every(c=>c.packets)) break;
+                  await new Promise(r=>setTimeout(r,200));
+                } while(Date.now()<deadline);
+                return {relay:checks.every(c=>c.relay),packets:aReceived && bReceived && checks.every(c=>c.packets)};
+              } finally {a.close();b.close();}
+            },config.iceServers);
+            
+          console.log('SELECTED_ICE='+ (result.relay?'RELAY':'FAIL'));
+          console.log('RELAY_PACKET_DATA='+ (result.packets?'PASS':'FAIL'));
+          if(result.relay&&result.packets)console.log('W10_TURN_INFRASTRUCTURE_READY');
+          }catch{console.log('RELAY_PACKET_DATA=FAIL');console.log('RELAY_ERROR=browser_or_connection');}
+          finally{await browser.close();}
+          }
+          
           }
           }finally{
           const listed=await api('/v6/deployments?projectId='+project+'&limit=20');

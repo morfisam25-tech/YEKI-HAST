@@ -67,6 +67,7 @@ jobs:
             "$schema": "https://openapi.vercel.sh/vercel.json",
             "framework": null,
             "regions": ["iad1"],
+            "buildCommand": "true",
             "installCommand": "cd .. && npm ci --ignore-scripts --no-audit --no-fund",
             "rewrites": [
               { "source": "/health", "destination": "/api/index" },

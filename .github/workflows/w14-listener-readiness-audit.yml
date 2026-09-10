@@ -49,6 +49,7 @@ jobs:
               SELECT
                 la.user_id::text,
                 la.status::text application_status,
+                la.created_at::text application_created_at,
                 la.nickname IS NOT NULL AND length(trim(la.nickname)) >= 2 profile_complete,
                 count(tp.module_key)::int training_rows,
                 count(tp.module_key) FILTER (
@@ -119,6 +120,7 @@ jobs:
                 account: index + 1,
                 profileComplete: row.profile_complete,
                 application: row.application_status,
+                applicationCreatedAt: row.application_created_at,
                 training: row.training_completed + '/' + row.training_rows,
                 assessment: row.assessment_result ?? 'not_started',
                 kyc: row.kyc_status ?? 'not_started',

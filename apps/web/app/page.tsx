@@ -132,11 +132,20 @@ export default function Page() {
       </section>
 
       <section className={styles.dualSection} aria-labelledby="distance-title">
-        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک مرد در شهر جدید و یک زن در خانه‌ای آشنا، در دو سوی یک تماس" />
+        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک زن و یک مرد در دو خانه در شیکاگو، در دو سوی یک تماس" />
         <div className={styles.dualCopy}>
           <p className={styles.sectionEyebrow}>فاصله همیشه روی نقشه نیست</p>
-          <h2 id="distance-title">از تهران تا تورنتو، بعضی شب‌ها شبیه هم‌اند.</h2>
-          <p>بعد از یک روز سخت، وقتی خانواده دور است یا دوستت در دسترس نیست، لازم نیست همه‌چیز را مرتب و کامل توضیح بدهی. می‌توانی با زبان خودت حرف بزنی؛ شنونده برای فهمیدن عجله نمی‌کند.</p>
+          <h2 id="distance-title">از تهران تا شیکاگو، همهٔ شب‌ها شبیه هم‌اند؛ ولی غربت این را نمی‌فهمد.</h2>
+          <p className={styles.diasporaPoem}>
+            <span>یکی هست بخواد بهت گوش بده اینجا</span>
+            <span>یکی هست، بدون هیچ قضاوتی، بشنوه تنهایی‌تو</span>
+            <span>یکی هست؛ نبینتت، نشناستت، بعدِ همهٔ غم‌ها و دردات</span>
+            <span>یکی هست همدرد لحظه‌های سختِ تنهاییت باشه</span>
+            <span>یکی هست فقط براش گریه کنی؛ فقط به اشکات گوش بده</span>
+            <span>یکی هست بهش بگی، بفهمه غربت چطوری غرورت رو شکست، تو شب‌ها</span>
+            <span>یکی هست حتی واسهٔ شنیدن سکوت سنگینت تو غم‌ها</span>
+            <span>مهم نیست چند سالته و کجایی؛ یکی هست اینجا واسهٔ تو که دردات سبک شه.</span>
+          </p>
           <a className={styles.textLink} href="#login">برای آشنایی، وارد شو <span aria-hidden="true">←</span></a>
         </div>
       </section>

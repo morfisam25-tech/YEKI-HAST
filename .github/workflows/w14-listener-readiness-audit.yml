@@ -220,3 +220,67 @@ jobs:
             }
           }
           NODE
+
+
+      - name: Resolve target Listener masked email from encrypted production record
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { Client } = await import('pg');
+          const { createDecipheriv } = await import('node:crypto');
+          const token = process.env.VERCEL_TOKEN?.trim();
+          if (!token) throw new Error('VERCEL_TOKEN missing');
+          const url = new URL('https://api.vercel.com/v9/projects/' + process.env.VERCEL_PROJECT_ID + '/env');
+          url.searchParams.set('teamId', process.env.VERCEL_TEAM_ID);
+          url.searchParams.set('decrypt', 'true');
+          const response = await fetch(url, { headers: { authorization: 'Bearer ' + token } });
+          if (!response.ok) throw new Error('Vercel env read failed: ' + response.status);
+          const body = await response.json();
+          const envs = Array.isArray(body.envs) ? body.envs : [];
+          const prod = (key) => envs.find((entry) =>
+            entry.key === key && Array.isArray(entry.target) && entry.target.includes('production')
+          )?.value;
+          const keyRing = JSON.parse(prod('DATA_ENCRYPTION_KEYS') ?? '{}');
+
+          function decrypt(payload, aad) {
+            const [version, keyId, ivText, tagText, dataText] = String(payload).split('.');
+            if (version !== 'v1' || !keyRing[keyId]) throw new Error('invalid encrypted email');
+            const key = Buffer.from(keyRing[keyId], 'base64');
+            const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivText, 'base64url'));
+            decipher.setAAD(Buffer.from(aad, 'utf8'));
+            decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
+            return Buffer.concat([
+              decipher.update(Buffer.from(dataText, 'base64url')),
+              decipher.final(),
+            ]).toString('utf8');
+          }
+
+          const db = new Client({ connectionString: process.env.DATABASE_URL });
+          await db.connect();
+          try {
+            const rows = await db.query(`
+              SELECT la.status::text application_status,
+                     ue.user_id::text user_id,
+                     ue.email_ciphertext
+              FROM app.listener_applications la
+              JOIN app.service_catalog svc ON svc.id=la.service_id AND svc.code='human_listening'
+              JOIN private_data.user_emails ue ON ue.user_id=la.user_id
+              ORDER BY la.created_at
+            `);
+            rows.rows.forEach((row, index) => {
+              const email = decrypt(row.email_ciphertext, 'user_emails:email:' + row.user_id);
+              const at = email.lastIndexOf('@');
+              const local = email.slice(0, at);
+              const domain = email.slice(at + 1);
+              const masked = local.slice(0, 1) + '***@' + domain;
+              console.log('W14_ACCOUNT_EMAIL_HINT=' + JSON.stringify({
+                account: index + 1,
+                application: row.application_status,
+                maskedEmail: masked,
+              }));
+            });
+          } finally {
+            await db.end();
+          }
+          NODE

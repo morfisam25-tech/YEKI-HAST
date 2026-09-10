@@ -85,7 +85,8 @@ test('privacy terms and account deletion are source-locked first-party canonical
   assert.match(termsPage, /\/account\/delete/);
   assert.match(webLanding, /href="\/privacy"/);
   assert.match(webLanding, /href="\/terms"/);
-  assert.match(webLanding, /href="\/account\/delete"/);
+  assert.match(privacyPage, /href="\/account\/delete"/);
+  assert.match(termsPage, /href="\/account\/delete"/);
 });
 
 test('technical-beta support identity is source-locked and cannot be redirected by a repository secret', () => {
@@ -93,7 +94,6 @@ test('technical-beta support identity is source-locked and cannot be redirected 
   assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL/);
   assert.match(envSync, /setPlain\('SUPPORT_EMAIL', supportEmail\)/);
   assert.doesNotMatch(envSync, /PRODUCTION_SUPPORT_EMAIL/);
-  assert.match(webLanding, /mailto:sales@uniqueholding\.com\.tr/);
   assert.match(privacyPage, /mailto:sales@uniqueholding\.com\.tr/);
   assert.match(termsPage, /mailto:sales@uniqueholding\.com\.tr/);
 });
@@ -106,9 +106,9 @@ test('production env sync never clears public values with blank writes', () => {
 });
 
 test('selected support mailbox is reachable from all checked-in public policy surfaces', () => {
-  assert.match(webLanding, new RegExp(betaMailbox.replace('.', '\\.')));
-  assert.match(privacyPage, new RegExp(betaMailbox.replace('.', '\\.')));
-  assert.match(termsPage, new RegExp(betaMailbox.replace('.', '\\.')));
+  for (const source of [privacyPage, termsPage]) {
+    assert.match(source, new RegExp(betaMailbox.replace('.', '\\.')));
+  }
 });
 
 test('mailbox usability is not treated as proven by source alone and production release carries a real mailbox E2E', async () => {

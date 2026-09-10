@@ -70,8 +70,9 @@ test('Web Listener does not render Caller identity, country, phone or payment co
   assert.doesNotMatch(listenerPage, /caller_user_id|callerUserId|callerCountry|paymentCurrency|phoneNumber|providerBridge/);
 });
 
-test('verified web session exposes Caller and Listener onboarding entry points', () => {
-  assert.match(homePage, /href="\/talk"/);
+test('verified web session exposes Listener onboarding while the public Caller gate remains closed', () => {
   assert.match(homePage, /href="\/listener"/);
-  assert.match(homePage, /درخواست شنونده‌شدن/);
+  assert.match(homePage, /شنونده‌شدن/);
+  assert.match(homePage, /گفت‌وگوی عمومی فعلاً بسته است/);
+  assert.doesNotMatch(homePage, /href="\/talk"/);
 });

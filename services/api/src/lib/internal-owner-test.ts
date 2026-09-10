@@ -14,6 +14,12 @@ function hydrateInternalBetaRuntime(): void {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name) || name.startsWith('VERCEL_') || name.startsWith('INTERNAL_BETA_')) continue;
     if (typeof value === 'string') process.env[name] = value;
   }
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const name of Object.keys(parsed)) {
+      const match = process.env[name]?.match(/^\$\{?([A-Z][A-Z0-9_]*)\}?$/);
+      if (match && process.env[match[1]]) process.env[name] = process.env[match[1]];
+    }
+  }
   runtimeHydrated = true;
 }
 

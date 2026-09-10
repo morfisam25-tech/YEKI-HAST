@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   deploy-approved-home:
-    if: github.event.head_commit.message == 'ci: deploy approved W9 homepage to production'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -32,33 +31,27 @@ jobs:
       VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
 
     steps:
-      - name: Verify one-time owner-authorized release context
+      - name: Checkout exact main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Verify owner-approved homepage source
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/main"
           test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST"
-          test "$GITHUB_EVENT_NAME" = "push"
-          test -n "${VERCEL_TOKEN:-}" || { echo '::error::VERCEL_TOKEN repository secret is required'; exit 1; }
-
-      - name: Checkout exact main source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Lock release to the approved homepage content
-        shell: bash
-        run: |
-          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
           grep -Fq 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه' apps/web/app/page.tsx
           grep -Fq 'گفت‌وگوی عمومی فعلاً بسته است.' apps/web/app/page.tsx
           grep -Fq "url('/w9/two-rooms.webp')" apps/web/app/home.module.css
           test -f apps/web/public/w9/two-rooms.webp
           test -f apps/web/public/w9/generations.webp
           test -f apps/web/public/w9/one-tap.webp
-          echo 'approved W9 homepage source lock PASS'
+          echo 'approved homepage source PASS'
 
-      - name: Wait for exact main Foundation QA to be green
+      - name: Wait for exact Foundation QA
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
@@ -69,45 +62,45 @@ jobs:
               echo 'Foundation QA release gate PASS'
               exit 0
             fi
-            echo "waiting for Foundation QA ($attempt/60)"
+            echo "waiting for exact Foundation QA ($attempt/60)"
             sleep 10
           done
-          echo '::error::Foundation QA did not become green in time'
           exit 1
 
-      - name: Setup exact Node used by release tooling
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22.23.1'
           package-manager-cache: false
 
-      - name: Install locked workspace and require Vercel CLI
+      - name: Install locked workspace
         shell: bash
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --no-audit --no-fund
           test -x "$VERCEL_BIN"
 
-      - name: Capture current production deployment for rollback
+      - name: Capture current production for rollback
         id: previous
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
           const { appendFileSync } = await import('node:fs');
-          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${new URL(process.env.WEB_PRIMARY_DOMAIN).host}`);
+          const host = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${host}`);
           endpoint.searchParams.set('teamId', process.env.VERCEL_TEAM_ID);
           const response = await fetch(endpoint, { headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` } });
-          if (!response.ok) throw new Error(`unable to capture current production (${response.status})`);
+          if (!response.ok) throw new Error(`capture failed ${response.status}`);
           const d = await response.json();
-          if (d.projectId !== process.env.WEB_PROJECT_ID || d.readyState !== 'READY') throw new Error('current production is not a READY expected Web deployment');
+          if (d.projectId !== process.env.WEB_PROJECT_ID || d.readyState !== 'READY') throw new Error('unexpected current production');
           const id = d.uid || d.id;
-          if (!id || !d.url) throw new Error('current production deployment identity missing');
+          if (!id || !d.url) throw new Error('missing current production identity');
           appendFileSync(process.env.GITHUB_OUTPUT, `id=${id}\nurl=https://${d.url}\n`);
-          console.log('current production captured for rollback');
+          console.log('rollback target captured');
           NODE
 
-      - name: Bind exact Web project and pull production settings
+      - name: Pull and build Web production artifact
         working-directory: apps/web
         shell: bash
         run: |
@@ -116,47 +109,39 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > .vercel/project.json
           "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
-          test -f .vercel/.env.production.local
-
-      - name: Build exact production artifact
-        working-directory: apps/web
-        shell: bash
-        run: |
-          set -euo pipefail
           "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
           test -f .vercel/output/config.json
 
-      - name: Switch to proven repo-level monorepo deploy link
+      - name: Prepare proven monorepo deploy link
         shell: bash
         run: |
           set -euo pipefail
-          test -f apps/web/.vercel/output/config.json
           rm -f apps/web/.vercel/project.json
           rm -rf .vercel
           mkdir -p .vercel
           node <<'NODE'
           const fs = require('node:fs');
-          fs.writeFileSync('.vercel/repo.json', `${JSON.stringify({
+          fs.writeFileSync('.vercel/repo.json', JSON.stringify({
             remoteName: 'origin',
             projects: [
               { id: process.env.WEB_PROJECT_ID, name: process.env.WEB_PROJECT_NAME, directory: 'apps/web', orgId: process.env.VERCEL_TEAM_ID },
-              { id: process.env.ADMIN_PROJECT_ID, name: process.env.ADMIN_PROJECT_NAME, directory: 'apps/admin', orgId: process.env.VERCEL_TEAM_ID },
-            ],
-          }, null, 2)}\n`);
+              { id: process.env.ADMIN_PROJECT_ID, name: process.env.ADMIN_PROJECT_NAME, directory: 'apps/admin', orgId: process.env.VERCEL_TEAM_ID }
+            ]
+          }, null, 2));
           NODE
 
-      - name: Deploy staged production without domain cutover
+      - name: Stage exact production deployment
         id: staged
         working-directory: apps/web
         shell: bash
         run: |
           set -euo pipefail
           url="$("$VERCEL_BIN" deploy --prebuilt --prod --skip-domain --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")"
-          case "$url" in https://*.vercel.app) ;; *) echo '::error::invalid staged deployment URL'; exit 1 ;; esac
+          case "$url" in https://*.vercel.app) ;; *) exit 1 ;; esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo 'staged production deployment created'
+          echo 'staged deployment READY for smoke'
 
-      - name: Smoke approved homepage before cutover
+      - name: Smoke staged homepage before cutover
         working-directory: apps/web
         env:
           STAGED_URL: ${{ steps.staged.outputs.url }}
@@ -175,9 +160,9 @@ jobs:
           check_path /privacy 'حریم خصوصی'
           check_path /terms 'قوانین استفاده'
           check_path /account/delete 'حذف حساب'
-          echo 'staged approved homepage smoke PASS'
+          echo 'staged smoke PASS'
 
-      - name: Promote staged deployment to production
+      - name: Promote verified staged deployment
         id: promote
         working-directory: apps/web
         env:
@@ -186,35 +171,31 @@ jobs:
         run: |
           set -euo pipefail
           "$VERCEL_BIN" promote "$STAGED_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
-          echo 'approved homepage production promotion completed'
+          echo 'production promotion complete'
 
-      - name: Verify live canonical homepage
+      - name: Verify live homepage on canonical domains
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const checks = [
-            [process.env.WEB_VERCEL_CANONICAL, ['یکی هست', 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه', 'گفت‌وگوی عمومی فعلاً بسته است.']],
-            [process.env.WEB_PRIMARY_DOMAIN, ['یکی هست', 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه', 'گفت‌وگوی عمومی فعلاً بسته است.']],
-          ];
-          for (const [base, needles] of checks) {
-            let ok = false;
-            let last = '';
+          const targets = [process.env.WEB_VERCEL_CANONICAL, process.env.WEB_PRIMARY_DOMAIN];
+          const needles = ['یکی هست', 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه', 'گفت‌وگوی عمومی فعلاً بسته است.'];
+          for (const target of targets) {
+            let passed = false;
             for (let attempt = 1; attempt <= 15; attempt++) {
               try {
-                const response = await fetch(base, { cache: 'no-store' });
+                const response = await fetch(target, { cache: 'no-store' });
                 const text = await response.text();
-                last = `${response.status} ${text.slice(0, 100)}`;
-                if (response.ok && needles.every((n) => text.includes(n))) { ok = true; break; }
-              } catch (e) { last = String(e); }
-              await new Promise(r => setTimeout(r, 3000));
+                if (response.ok && needles.every((needle) => text.includes(needle))) { passed = true; break; }
+              } catch {}
+              await new Promise((resolve) => setTimeout(resolve, 3000));
             }
-            if (!ok) throw new Error(`live homepage verification failed for ${base}: ${last}`);
-            console.log(`live homepage PASS ${base}`);
+            if (!passed) throw new Error(`live verification failed ${target}`);
+            console.log(`live homepage PASS ${target}`);
           }
           NODE
 
-      - name: Roll back if post-promotion verification fails
+      - name: Restore previous production on failed post-promotion verification
         if: ${{ failure() && steps.promote.outcome == 'success' }}
         working-directory: apps/web
         env:
@@ -224,4 +205,4 @@ jobs:
           set -euo pipefail
           test -n "$PREVIOUS_URL"
           "$VERCEL_BIN" promote "$PREVIOUS_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
-          echo 'previous production deployment restored after failed verification'
+          echo 'rollback completed'

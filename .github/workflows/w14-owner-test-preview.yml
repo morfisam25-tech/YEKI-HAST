@@ -79,11 +79,13 @@ jobs:
 
       - name: Pull API production runtime configuration for isolated Preview
         working-directory: dist-api
-        run: "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+        run: |
+          "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
 
       - name: Build prebuilt Preview artifact
         working-directory: dist-api
-        run: "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+        run: |
+          "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
 
       - name: Deploy Preview only
         id: deploy

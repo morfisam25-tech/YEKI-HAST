@@ -22,20 +22,27 @@ function hydrateInternalBetaRuntime(): void {
     }
   }
   const databaseNames = ['DATABASE_URL', ...Object.keys(parsed).filter((name) => /(?:POSTGRES|NEON|DATABASE).*URL/.test(name))];
+  let selectedDatabase = 'none';
   for (const name of [...new Set(databaseNames)]) {
     let candidate = process.env[name]?.trim();
     if (!candidate) continue;
+    candidate = candidate.replace(/\\[nr]/g, '').trim();
     if ((candidate.startsWith('"') && candidate.endsWith('"')) || (candidate.startsWith("'") && candidate.endsWith("'"))) {
-      candidate = candidate.slice(1, -1);
+      candidate = candidate.slice(1, -1).trim();
     }
     try {
       const url = new URL(candidate);
       if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
         process.env.DATABASE_URL = candidate;
+        selectedDatabase = name;
         break;
       }
     } catch { /* try the next production database alias */ }
   }
+  console.info('internal_owner_test_runtime_hydrated', {
+    databaseSource: selectedDatabase,
+    databaseCandidates: [...new Set(databaseNames)].filter((name) => Boolean(process.env[name])).length,
+  });
   runtimeHydrated = true;
 }
 

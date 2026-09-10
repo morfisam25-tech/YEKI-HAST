@@ -41,7 +41,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$ESBUILD_BIN" api/index.ts +            --bundle +            --platform=node +            --target=node22 +            --format=esm +            --external:pg +            --alias:@yeki-hast/types=./packages/types/src/index.ts +            --minify +            --outfile=dist-api/index.mjs
+          "$ESBUILD_BIN" api/index.ts \
+            --bundle \
+            --platform=node \
+            --target=node22 \
+            --format=esm \
+            --external:pg \
+            --alias:@yeki-hast/types=./packages/types/src/index.ts \
+            --minify \
+            --outfile=dist-api/index.mjs
           node --check dist-api/index.mjs
           mkdir -p dist-api/api dist-api/.vercel
           mv dist-api/index.mjs dist-api/api/index.mjs
@@ -83,7 +91,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url=$("$VERCEL_BIN" deploy --prebuilt --yes +            --env INTERNAL_BETA_OWNER_TEST_MODE=1 +            --env INTERNAL_BETA_ENVIRONMENT=1 +            --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
+          url=$("$VERCEL_BIN" deploy --prebuilt --yes \
+            --env INTERNAL_BETA_OWNER_TEST_MODE=1 \
+            --env INTERNAL_BETA_ENVIRONMENT=1 \
+            --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
           case "$url" in
             https://*.vercel.app) ;;
             *) echo "Unexpected Preview URL" >&2; exit 1 ;;

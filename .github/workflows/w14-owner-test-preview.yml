@@ -96,12 +96,8 @@ jobs:
         run: |
           set -euo pipefail
           runtime_file=.vercel/.env.production.local
-          set -a
-          source "$runtime_file"
-          set +a
           deploy_args=(--prebuilt --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
-          runtime_names=$(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$runtime_file" | paste -sd, -)
-          runtime_env_b64=$(RUNTIME_NAMES="$runtime_names" node -e 'const names=process.env.RUNTIME_NAMES.split(",").filter(Boolean);const values=Object.fromEntries(names.filter(n=>!n.startsWith("VERCEL_")&&!n.startsWith("INTERNAL_BETA_")).map(n=>[n,process.env[n]??""]));process.stdout.write(Buffer.from(JSON.stringify(values)).toString("base64"))')
+          runtime_env_b64=$(RUNTIME_FILE="$runtime_file" node -e 'const fs=require("node:fs");const values={};for(const line of fs.readFileSync(process.env.RUNTIME_FILE,"utf8").split(/\r?\n/)){const match=line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);if(!match||match[1].startsWith("VERCEL_")||match[1].startsWith("INTERNAL_BETA_"))continue;let value=match[2];if(value.startsWith("\"")&&value.endsWith("\"")){try{value=JSON.parse(value)}catch{value=value.slice(1,-1)}}else if(value.startsWith("'" )&&value.endsWith("'")){value=value.slice(1,-1)}values[match[1]]=value}process.stdout.write(Buffer.from(JSON.stringify(values)).toString("base64"))')
           deploy_args+=(--env INTERNAL_BETA_OWNER_TEST_MODE=1 --env INTERNAL_BETA_ENVIRONMENT=1 --env "INTERNAL_BETA_RUNTIME_ENV_B64=$runtime_env_b64")
           url=$("$VERCEL_BIN" deploy "${deploy_args[@]}")
           case "$url" in

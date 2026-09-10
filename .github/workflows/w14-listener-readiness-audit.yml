@@ -226,22 +226,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p w14-env/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > w14-env/.vercel/project.json
+          npx vercel pull --yes --environment=production --token "$VERCEL_TOKEN" --scope unique-6ff0 --cwd w14-env >/dev/null
           node <<'NODE'
           const { Client } = await import('pg');
           const { createDecipheriv } = await import('node:crypto');
-          const token = process.env.VERCEL_TOKEN?.trim();
-          if (!token) throw new Error('VERCEL_TOKEN missing');
-          const url = new URL('https://api.vercel.com/v9/projects/' + process.env.VERCEL_PROJECT_ID + '/env');
-          url.searchParams.set('teamId', process.env.VERCEL_TEAM_ID);
-          url.searchParams.set('decrypt', 'true');
-          const response = await fetch(url, { headers: { authorization: 'Bearer ' + token } });
-          if (!response.ok) throw new Error('Vercel env read failed: ' + response.status);
-          const body = await response.json();
-          const envs = Array.isArray(body.envs) ? body.envs : [];
-          const prod = (key) => envs.find((entry) =>
-            entry.key === key && Array.isArray(entry.target) && entry.target.includes('production')
-          )?.value;
-          const keyRing = JSON.parse(prod('DATA_ENCRYPTION_KEYS') ?? '{}');
+          const { readFileSync } = await import('node:fs');
+
+          const envText = readFileSync('w14-env/.vercel/.env.production.local', 'utf8');
+          const pulled = new Map();
+          for (const rawLine of envText.split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith('#')) continue;
+            const equal = line.indexOf('=');
+            if (equal < 1) continue;
+            const key = line.slice(0, equal);
+            const raw = line.slice(equal + 1);
+            let value = raw;
+            if (raw.startsWith('"')) {
+              try { value = JSON.parse(raw); } catch {}
+            }
+            pulled.set(key, value);
+          }
+          const rawKeyRing = pulled.get('DATA_ENCRYPTION_KEYS');
+          if (!rawKeyRing) throw new Error('production encryption key ring unavailable');
+          const keyRing = JSON.parse(rawKeyRing);
 
           function decrypt(payload, aad) {
             const [version, keyId, ivText, tagText, dataText] = String(payload).split('.');

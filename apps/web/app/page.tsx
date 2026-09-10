@@ -182,9 +182,9 @@ export default function Page() {
         </div>
         <div className={styles.momentsImage} role="img" aria-label="دو نسل در دو خانه، در یک ارتباط گرم" />
         <div className={styles.momentList}>
-          <div><strong>وقتی دور از خانه‌ای</strong><span>هیچ‌کس امروزت را ندیده است.</span></div>
-          <div><strong>وقتی با خانواده حرف نمی‌شود</strong><span>گاهی شنیده‌شدن، قبل از توضیح‌دادن می‌آید.</span></div>
-          <div><strong>وقتی خوابت نمی‌برد</strong><span>می‌توانی از یک گفت‌وگوی ساده شروع کنی.</span></div>
+          <div><strong>وقتی بعضی حرف‌ها رو، حتی نمیتونی به خانواده بگی</strong><span>لازم نیست همه‌چیز را تنهایی نگه داری.</span></div>
+          <div><strong>وقتی دور از خونه‌ای</strong><span>گاهی فقط دلت یک صدای آشنا می‌خواد.</span></div>
+          <div><strong>وقتی خوابت نمی‌بره</strong><span>بعضی شب‌ها فقط حرف‌زدن آدم رو سبک‌تر می‌کنه.</span></div>
         </div>
       </section>
 

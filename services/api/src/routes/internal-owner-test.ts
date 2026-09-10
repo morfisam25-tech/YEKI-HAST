@@ -72,9 +72,9 @@ export async function bootstrapOwnerTest(req: IncomingMessage, res: ServerRespon
       JOIN app.markets m ON m.code=$3 AND m.is_active=true
       JOIN app.languages l ON l.code='fa' AND l.is_active=true
       JOIN app.pricing_plans pp ON pp.product_id=p.id AND pp.service_id=s.id AND pp.market_id=m.id
-        AND pp.effective_from<=now() AND (pp.effective_to IS NULL OR pp.effective_to>now())
+        AND pp.is_active=true
       WHERE p.code=$1
-      ORDER BY pp.effective_from DESC LIMIT 1
+      LIMIT 1
     `, [productCode, serviceCode, marketCode]);
     const ctx = context.rows[0];
     if (!ctx) throw new HttpError(503, 'internal_test_context_unavailable');

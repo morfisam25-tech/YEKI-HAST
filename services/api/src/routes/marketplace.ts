@@ -262,10 +262,12 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
 
     if (status === 'online' && !workSessionId) {
       const workSession = await client.query<{ id: string }>(`
-        INSERT INTO app.listener_work_sessions(listener_user_id, product_id, service_id, market_id)
-        VALUES ($1,$2,$3,$4)
+        INSERT INTO app.listener_work_sessions(
+          listener_user_id, product_id, service_id, market_id, accepts_male, accepts_female
+        )
+        VALUES ($1,$2,$3,$4,$5,$6)
         RETURNING id::text
-      `, [userId, ctx.product_id, ctx.service_id, ctx.market_id]);
+      `, [userId, ctx.product_id, ctx.service_id, ctx.market_id, acceptsMale, acceptsFemale]);
       workSessionId = workSession.rows[0].id;
     }
 
@@ -336,71 +338,3 @@ export async function heartbeatListenerPresence(req: IncomingMessage, res: Serve
     RETURNING pres.status::text
   `, [userId, productCode, serviceCode, marketCode]);
   if (!result.rows[0]) throw new HttpError(409, 'listener_not_online');
-  sendJson(res, 200, { ok: true, status: result.rows[0].status });
-}
-
-export async function getListenerPresence(req: IncomingMessage, res: ServerResponse) {
-  const { userId } = await requireAuth(req);
-  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
-  const result = await withTransaction(async (client) => {
-    const rowResult = await client.query<{
-      status: string;
-      accepts_male: boolean;
-      accepts_female: boolean;
-      online_since: string | null;
-      last_heartbeat_at: string | null;
-      current_work_session_id: string | null;
-    }>(`
-      SELECT pres.status::text, pres.accepts_male, pres.accepts_female,
-             pres.online_since::text, pres.last_heartbeat_at::text,
-             pres.current_work_session_id::text
-      FROM app.listener_presence pres
-      JOIN app.products p ON p.id=pres.product_id AND p.code=$2
-      JOIN app.service_catalog s ON s.id=pres.service_id AND s.code=$3
-      JOIN app.markets m ON m.id=pres.market_id AND m.code=$4
-      WHERE pres.listener_user_id=$1
-      FOR UPDATE OF pres
-    `, [userId, productCode, serviceCode, marketCode]);
-    const row = rowResult.rows[0];
-    if (!row) {
-      return { status: 'offline', acceptsMale: true, acceptsFemale: true, onlineSince: null, lastHeartbeatAt: null };
-    }
-
-    if (isStale(row.status, row.last_heartbeat_at)) {
-      if (row.current_work_session_id) {
-        await client.query(`
-          UPDATE app.listener_work_sessions
-          SET ended_at=COALESCE(ended_at, now()), ended_reason=COALESCE(ended_reason, 'heartbeat_timeout')
-          WHERE id=$1
-        `, [row.current_work_session_id]);
-      }
-      await client.query(`
-        UPDATE app.listener_presence pres
-        SET status='offline', current_work_session_id=NULL, online_since=NULL,
-            auto_offline_reason='heartbeat_timeout', updated_at=now()
-        FROM app.products p, app.service_catalog s, app.markets m
-        WHERE pres.listener_user_id=$1
-          AND pres.product_id=p.id AND p.code=$2
-          AND pres.service_id=s.id AND s.code=$3
-          AND pres.market_id=m.id AND m.code=$4
-      `, [userId, productCode, serviceCode, marketCode]);
-      return {
-        status: 'offline',
-        acceptsMale: row.accepts_male,
-        acceptsFemale: row.accepts_female,
-        onlineSince: null,
-        lastHeartbeatAt: row.last_heartbeat_at,
-      };
-    }
-
-    return {
-      status: row.status,
-      acceptsMale: row.accepts_male,
-      acceptsFemale: row.accepts_female,
-      onlineSince: row.online_since,
-      lastHeartbeatAt: row.last_heartbeat_at,
-    };
-  });
-
-  sendJson(res, 200, result);
-}

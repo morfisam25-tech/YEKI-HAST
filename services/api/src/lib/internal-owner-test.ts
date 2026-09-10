@@ -16,9 +16,25 @@ function hydrateInternalBetaRuntime(): void {
   }
   for (let pass = 0; pass < 3; pass += 1) {
     for (const name of Object.keys(parsed)) {
-      const match = process.env[name]?.match(/^\$\{?([A-Z][A-Z0-9_]*)\}?$/);
-      if (match && process.env[match[1]]) process.env[name] = process.env[match[1]];
+      const current = process.env[name];
+      if (!current) continue;
+      process.env[name] = current.replace(/\\?\$\{?([A-Z][A-Z0-9_]*)\}?/g, (whole, reference: string) => process.env[reference] ?? whole);
     }
+  }
+  const databaseNames = ['DATABASE_URL', ...Object.keys(parsed).filter((name) => /(?:POSTGRES|NEON|DATABASE).*URL/.test(name))];
+  for (const name of [...new Set(databaseNames)]) {
+    let candidate = process.env[name]?.trim();
+    if (!candidate) continue;
+    if ((candidate.startsWith('"') && candidate.endsWith('"')) || (candidate.startsWith("'") && candidate.endsWith("'"))) {
+      candidate = candidate.slice(1, -1);
+    }
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+        process.env.DATABASE_URL = candidate;
+        break;
+      }
+    } catch { /* try the next production database alias */ }
   }
   runtimeHydrated = true;
 }

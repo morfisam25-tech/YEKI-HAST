@@ -1,6 +1,7 @@
 import { query } from '../../../../packages/db/src/client.ts';
 import { HttpError } from './http.ts';
 import { getDefaultOperatingContextCodes } from './operating-context.ts';
+import { isInternalOwnerTestCaller } from './internal-owner-test.ts';
 
 type QueryResult = { rows: any[]; rowCount: number | null };
 export type SqlRunner = { query: (text: string, values?: any[]) => Promise<QueryResult> };
@@ -49,16 +50,23 @@ export async function resolveCallerMarketContext(
 ): Promise<CallerMarketContext> {
   const { productCode, serviceCode, marketCode: marketplaceMarketCode } = getDefaultOperatingContextCodes();
 
-  const profile = await runner.query(`
-    SELECT cp.market_id::text market_id,
-           m.code market_code,
-           m.country_code,
-           m.default_timezone
-    FROM app.caller_profiles cp
-    LEFT JOIN app.markets m ON m.id=cp.market_id
-    WHERE cp.user_id=$1
-    LIMIT 1
-  `, [userId]);
+  const profile = isInternalOwnerTestCaller(userId)
+    ? await runner.query(`
+        SELECT m.id::text market_id, m.code market_code, m.country_code, m.default_timezone
+        FROM app.markets m
+        WHERE m.code=$1 AND m.is_active=true
+        LIMIT 1
+      `, [marketplaceMarketCode])
+    : await runner.query(`
+        SELECT cp.market_id::text market_id,
+               m.code market_code,
+               m.country_code,
+               m.default_timezone
+        FROM app.caller_profiles cp
+        LEFT JOIN app.markets m ON m.id=cp.market_id
+        WHERE cp.user_id=$1
+        LIMIT 1
+      `, [userId]);
   const selected = profile.rows[0];
   if (!selected?.market_id) throw new HttpError(409, 'caller_market_required');
   if (!selected.market_code) throw new HttpError(503, 'caller_market_unavailable');

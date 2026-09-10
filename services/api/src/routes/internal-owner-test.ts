@@ -82,8 +82,8 @@ export async function bootstrapOwnerTest(req: IncomingMessage, res: ServerRespon
     await client.query(`INSERT INTO app.users(id,status) VALUES ($1,'active'),($2,'active')
       ON CONFLICT (id) DO UPDATE SET status='active', archived_at=NULL`, [INTERNAL_OWNER_TEST_LISTENER_ID, INTERNAL_OWNER_TEST_CALLER_ID]);
     await client.query(`INSERT INTO app.user_roles(user_id,role) VALUES ($1,'listener'),($2,'caller') ON CONFLICT DO NOTHING`, [INTERNAL_OWNER_TEST_LISTENER_ID, INTERNAL_OWNER_TEST_CALLER_ID]);
-    await client.query(`INSERT INTO app.caller_profiles(user_id,declared_gender,preferred_language_id,market_id)
-      VALUES ($1,'female',$2,$3) ON CONFLICT (user_id) DO UPDATE SET preferred_language_id=EXCLUDED.preferred_language_id,market_id=EXCLUDED.market_id`, [INTERNAL_OWNER_TEST_CALLER_ID, ctx.language_id, ctx.market_id]);
+    await client.query(`INSERT INTO app.caller_profiles(user_id,declared_gender,preferred_language_id)
+      VALUES ($1,'female',$2) ON CONFLICT (user_id) DO UPDATE SET preferred_language_id=EXCLUDED.preferred_language_id`, [INTERNAL_OWNER_TEST_CALLER_ID, ctx.language_id]);
     await client.query(`INSERT INTO app.caller_age_assertions(user_id,minimum_age,policy_version,assertion_method)
       VALUES ($1,18,'internal-owner-test-v1','internal_test') ON CONFLICT (user_id) DO UPDATE SET minimum_age=18,policy_version='internal-owner-test-v1',assertion_method='internal_test',asserted_at=now(),revoked_at=NULL`, [INTERNAL_OWNER_TEST_CALLER_ID]);
 

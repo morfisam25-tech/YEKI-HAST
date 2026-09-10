@@ -287,9 +287,9 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
         online_since, last_heartbeat_at, auto_offline_reason
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,
-        CASE WHEN $5='online' THEN now() ELSE NULL END,
-        CASE WHEN $5 IN ('online','paused') THEN now() ELSE NULL END,
+        $1,$2,$3,$4,$5::app.presence_status,$6,$7,$8,
+        CASE WHEN $5::text='online' THEN now() ELSE NULL END,
+        CASE WHEN $5::text IN ('online','paused') THEN now() ELSE NULL END,
         NULL
       )
       ON CONFLICT (listener_user_id, product_id, service_id, market_id) DO UPDATE SET

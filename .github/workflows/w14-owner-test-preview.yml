@@ -100,11 +100,9 @@ jobs:
           source "$runtime_file"
           set +a
           deploy_args=(--prebuilt --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
-          while IFS= read -r name; do
-            case "$name" in VERCEL_*|INTERNAL_BETA_*) continue ;; esac
-            deploy_args+=(--env "$name=${!name}")
-          done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$runtime_file")
-          deploy_args+=(--env INTERNAL_BETA_OWNER_TEST_MODE=1 --env INTERNAL_BETA_ENVIRONMENT=1)
+          runtime_names=$(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$runtime_file" | paste -sd, -)
+          runtime_env_b64=$(RUNTIME_NAMES="$runtime_names" node -e 'const names=process.env.RUNTIME_NAMES.split(",").filter(Boolean);const values=Object.fromEntries(names.filter(n=>!n.startsWith("VERCEL_")&&!n.startsWith("INTERNAL_BETA_")).map(n=>[n,process.env[n]??""]));process.stdout.write(Buffer.from(JSON.stringify(values)).toString("base64"))')
+          deploy_args+=(--env INTERNAL_BETA_OWNER_TEST_MODE=1 --env INTERNAL_BETA_ENVIRONMENT=1 --env "INTERNAL_BETA_RUNTIME_ENV_B64=$runtime_env_b64")
           url=$("$VERCEL_BIN" deploy "${deploy_args[@]}")
           case "$url" in
             https://*.vercel.app) ;;

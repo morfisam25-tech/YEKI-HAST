@@ -54,6 +54,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/') { sendJson(res, 200, { ok: true, service: 'yeki-hast-api', version: '0.0.8', endpoints: ['/health', '/ready', '/v1/bootstrap'] }); return; }
     if (method === 'GET' && url.pathname === '/health') { sendJson(res, 200, { ok: true, service: 'yeki-hast-api', version: '0.0.8' }); return; }
     if (method === 'GET' && url.pathname === '/ready') { ensureDatabaseReady(); await query('SELECT 1'); sendJson(res, 200, { ok: true, database: 'ready' }); return; }
+    if (method === 'GET' && url.pathname === '/v1/internal-beta/owner-test') { const { serveOwnerTestPage } = await import('./routes/internal-owner-test.ts'); return serveOwnerTestPage(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/internal-beta/owner-test/bootstrap') { const { requireInternalOwnerTestMode } = await import('./lib/internal-owner-test.ts'); requireInternalOwnerTestMode(); ensureDatabaseReady(); const { bootstrapOwnerTest } = await import('./routes/internal-owner-test.ts'); return await bootstrapOwnerTest(req, res); }
     if (method === 'GET' && url.pathname === '/v1/bootstrap') { ensureDatabaseReady(); const { bootstrap } = await import('./routes/bootstrap.ts'); return await bootstrap(res); }
     if (method === 'GET' && url.pathname === '/v1/payments/nextpay/callback') { ensureDatabaseReady(); const { nextPayCallback } = await import('./routes/payments.ts'); return await nextPayCallback(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/email/request') { ensureEmailAuthReady(); const { requestEmailOtp } = await import('./routes/auth-email.ts'); return await requestEmailOtp(req, res); }

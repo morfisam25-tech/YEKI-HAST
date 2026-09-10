@@ -3,6 +3,12 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
+import {
+  INTERNAL_OWNER_TEST_LISTENER_ID,
+  isInternalOwnerTestCaller,
+  isInternalOwnerTestListener,
+  isInternalOwnerTestMode,
+} from '../lib/internal-owner-test.ts';
 
 const PRESENCE_STALE_MS = 90_000;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
@@ -108,13 +114,15 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
     CROSS JOIN caller cp
     JOIN app.listener_profiles lp ON true
     JOIN app.listener_service_profiles sp
-      ON sp.listener_user_id=lp.user_id AND sp.service_id=c.service_id AND sp.is_public=true
+      ON sp.listener_user_id=lp.user_id AND sp.service_id=c.service_id
+      AND (sp.is_public=true OR ($10::boolean AND lp.user_id=$11::uuid))
     JOIN app.listener_applications la
-      ON la.user_id=lp.user_id AND la.service_id=c.service_id AND la.status IN ('approved','active')
+      ON la.user_id=lp.user_id AND la.service_id=c.service_id
+      AND (la.status IN ('approved','active') OR ($10::boolean AND lp.user_id=$11::uuid))
     LEFT JOIN app.listener_presence pres
       ON pres.listener_user_id=lp.user_id
       AND pres.product_id=c.product_id AND pres.service_id=c.service_id AND pres.market_id=c.market_id
-    WHERE lp.is_verified=true
+    WHERE (lp.is_verified=true OR ($10::boolean AND lp.user_id=$11::uuid))
       AND lp.user_id<>$6::uuid
       AND NOT EXISTS (
         SELECT 1 FROM app.blocks b
@@ -155,7 +163,8 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
       )
     ) DESC, sp.rating_average DESC NULLS LAST, lp.reliability_score DESC, lp.created_at
     LIMIT $4
-  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId, productCode, serviceCode, marketCode]);
+  `, [gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId, productCode, serviceCode, marketCode,
+    isInternalOwnerTestCaller(userId), INTERNAL_OWNER_TEST_LISTENER_ID]);
 
   sendJson(res, 200, {
     listeners: result.rows.map((row) => ({
@@ -192,6 +201,7 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
   if (status === 'online' && !acceptsMale && !acceptsFemale) throw new HttpError(400, 'no_callers_accepted');
 
   const result = await withTransaction(async (client) => {
+    const internalOwnerTest = isInternalOwnerTestListener(userId);
     const listener = await client.query<{
       application_status: string;
       is_verified: boolean;
@@ -207,8 +217,8 @@ export async function setListenerPresence(req: IncomingMessage, res: ServerRespo
     `, [userId, serviceCode]);
     const listenerRow = listener.rows[0];
     if (!listenerRow) throw new HttpError(403, 'listener_not_approved');
-    if (!listenerRow.is_verified || listenerRow.kyc_status !== 'verified') throw new HttpError(403, 'listener_verification_required');
-    if (!['approved', 'active'].includes(listenerRow.application_status)) throw new HttpError(403, 'listener_not_approved');
+    if (!internalOwnerTest && (!listenerRow.is_verified || listenerRow.kyc_status !== 'verified')) throw new HttpError(403, 'listener_verification_required');
+    if (!internalOwnerTest && !['approved', 'active'].includes(listenerRow.application_status)) throw new HttpError(403, 'listener_not_approved');
 
     const context = await client.query<{ product_id: string; service_id: string; market_id: string }>(`
       SELECT p.id::text product_id, s.id::text service_id, m.id::text market_id

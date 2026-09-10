@@ -82,11 +82,12 @@ jobs:
         working-directory: dist-api
         run: |
           "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          cp .vercel/.env.production.local .vercel/.env.preview.local
 
       - name: Build prebuilt Preview artifact
         working-directory: dist-api
         run: |
-          "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" build --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
 
       - name: Deploy Preview only
         id: deploy

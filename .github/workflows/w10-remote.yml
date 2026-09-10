@@ -47,6 +47,9 @@ jobs:
           const env={...process.env,VERCEL_ORG_ID:team,VERCEL_PROJECT_ID:project};
           const p=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['deploy','--prod','--skip-domain','--logs','--yes','--force','--scope','unique-6ff0','--token',token,'--meta','w10Diagnostic='+marker],{cwd:dir,env,encoding:'utf8',timeout:600000,maxBuffer:10*1024*1024});
           console.log('DEPLOY_COMMAND_EXIT='+p.status);
+          for(const line of (p.stdout+'\n'+p.stderr).split('\n')) {
+          if(/Running |Build Completed|Skipping|Installing|Error:|Detected|WARN!|WARN |build command/i.test(line))console.log('BUILD_TRACE='+line.replaceAll(token,'[MASKED]').replace(/https?:\/\/\S+/g,'[URL]').slice(0,400));
+          }
           const listed=await api('/v6/deployments?projectId='+project+'&limit=20');
           ids=(listed.deployments||[]).filter(d=>d.meta?.w10Diagnostic===marker).map(d=>d.uid||d.id);
           if(!ids.length){console.log('DIAGNOSTIC_ERROR=deployment_not_created');throw new Error('deployment_not_created');}

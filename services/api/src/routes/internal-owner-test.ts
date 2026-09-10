@@ -42,8 +42,7 @@ button.onclick=async()=>{button.disabled=true;steps.textContent='';try{
  await request('/v1/listener/presence',listener,'POST',{status:'online',acceptsMale:true,acceptsFemale:true});line('Listener روی Available Now قرار گرفت');
  await request('/v1/listener/presence/heartbeat',listener,'POST',{});line('Presence heartbeat ثبت شد');
  const market=await request('/v1/listeners?online=true&language=fa',caller);if(!market.listeners.some(x=>x.id===boot.listener.id))throw new Error('internal_listener_not_visible');line('Listener در marketplace داخلی دیده شد');
- const quote=await request('/v1/caller/quote?maxSeconds=600&target=instant',caller);if(!quote.wallet.enough)throw new Error('internal_test_credit_missing');line('اعتبار تست بدون پول واقعی آماده است');
- const call=await request('/v1/calls/request',caller,'POST',{clientRequestId:'owner-test-'+Date.now(),listenerId:boot.listener.id,listenerGender:'any',languageCode:'fa',mood:'just_talk',topicCode:'internal_owner_test',maxSeconds:600});line('Caller درخواست تماس را ارسال کرد');
+ const call=await request('/v1/internal-beta/owner-test/call',caller,'POST');line('Caller درخواست تماس داخلی بدون پول واقعی را ارسال کرد');
  await request('/v1/calls/'+call.callId+'/voice/start',caller,'POST',{});
  await request('/v1/calls/'+call.callId+'/voice/signals',caller,'POST',{kind:'offer',payload:{type:'offer',sdp:'internal-owner-test-offer'}});line('درخواست و offer به Listener رسید');
  const active=await request('/v1/listener/calls/active',listener);if(active.activeCall?.callId!==call.callId)throw new Error('listener_did_not_receive_call');line('Listener تماس فعال را دریافت کرد');
@@ -141,4 +140,47 @@ export async function assertOwnerTestActor(req: IncomingMessage, expected: 'call
   const expectedId = expected === 'caller' ? INTERNAL_OWNER_TEST_CALLER_ID : INTERNAL_OWNER_TEST_LISTENER_ID;
   if (userId !== expectedId) throw new HttpError(403, 'internal_test_actor_required');
   return userId;
+}
+
+export async function createOwnerTestCall(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  await assertOwnerTestActor(req, 'caller');
+  const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
+  const callId = await withTransaction(async (client) => {
+    const context = await client.query<{
+      product_id:string; service_id:string; market_id:string; language_id:string;
+      pricing_plan_id:string; currency_code:string; caller_rate:string; listener_rate:string;
+    }>(`
+      SELECT p.id::text product_id, s.id::text service_id, m.id::text market_id,
+             l.id::text language_id, pp.id::text pricing_plan_id, pp.currency_code,
+             pp.caller_rate_per_minute_minor::text caller_rate,
+             pp.listener_rate_per_minute_minor::text listener_rate
+      FROM app.products p
+      JOIN app.service_catalog s ON s.code=$2 AND s.status='active'
+      JOIN app.markets m ON m.code=$3 AND m.is_active=true
+      JOIN app.languages l ON l.code='fa' AND l.is_active=true
+      JOIN app.pricing_plans pp ON pp.product_id=p.id AND pp.service_id=s.id
+        AND pp.market_id=m.id AND pp.is_active=true
+      WHERE p.code=$1 LIMIT 1
+    `, [productCode, serviceCode, marketCode]);
+    const ctx = context.rows[0];
+    if (!ctx) throw new HttpError(503, 'internal_test_context_unavailable');
+    const created = await client.query<{id:string}>(`
+      INSERT INTO app.call_sessions(
+        product_id,service_id,market_id,caller_user_id,listener_user_id,
+        client_request_id,status,requested_listener_gender,requested_language_id,
+        caller_mood,topic_code,pricing_plan_id,currency_code,
+        caller_rate_per_minute_minor,listener_rate_per_minute_minor,
+        authorized_minor,max_billable_seconds,recording_mode
+      ) VALUES (
+        $1,$2,$3,$4,$5,'internal-owner-test:'||gen_random_uuid()::text,
+        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,0,600,'none'
+      ) RETURNING id::text
+    `, [ctx.product_id,ctx.service_id,ctx.market_id,INTERNAL_OWNER_TEST_CALLER_ID,
+      INTERNAL_OWNER_TEST_LISTENER_ID,ctx.language_id,ctx.pricing_plan_id,ctx.currency_code,
+      ctx.caller_rate,ctx.listener_rate]);
+    await client.query(`INSERT INTO app.call_events(call_session_id,status,source,metadata)
+      VALUES ($1,'routing','internal_owner_test',$2::jsonb)`, [created.rows[0].id, JSON.stringify({internalTestData:true,liveMoney:false})]);
+    return created.rows[0].id;
+  });
+  sendJson(res, 201, { ok:true, internalTestData:true, liveMoney:false, callId });
 }

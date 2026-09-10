@@ -146,13 +146,7 @@ jobs:
           const market = await json('/v1/listeners?online=true&language=fa',caller);
           if (!market.listeners.some((item)=>item.id===boot.listener.id)) throw new Error('marketplace_visibility_failed');
           console.log('MARKETPLACE_INTERNAL_VISIBLE=YES');
-          const quote = await json('/v1/caller/quote?maxSeconds=600&target=instant',caller);
-          if (!quote.wallet.enough) throw new Error('internal_credit_failed');
-          const call = await json('/v1/calls/request',caller,'POST',{
-            clientRequestId:'w14-proof-'+Date.now(),listenerId:boot.listener.id,
-            listenerGender:'any',languageCode:'fa',mood:'just_talk',
-            topicCode:'internal_owner_test',maxSeconds:600,
-          });
+          const call = await json('/v1/internal-beta/owner-test/call',caller,'POST');
           await json('/v1/calls/'+call.callId+'/voice/start',caller,'POST',{});
           await json('/v1/calls/'+call.callId+'/voice/signals',caller,'POST',{kind:'offer',payload:{type:'offer',sdp:'w14-preview-proof-offer'}});
           const active = await json('/v1/listener/calls/active',listener);

@@ -3,6 +3,7 @@ import { query } from '../../../packages/db/src/client.ts';
 import { validateDatabaseEnv, validateOtpEnv } from './lib/env.ts';
 import { validateEmailSecurityEnv, validateKycSecurityEnv, validateSecurityEnv } from './lib/security.ts';
 import { requireCallerClosedBetaEnabled } from './lib/caller-beta.ts';
+import { isInternalOwnerTestMode } from './lib/internal-owner-test.ts';
 import { validatePrimaryCallTransportEnv } from './providers/call-transport.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
 import { validateEmailProviderEnv } from './providers/email.ts';
@@ -37,6 +38,7 @@ function ensureKycReady(): void {
 }
 function ensureCallReady(): void {
   ensureDatabaseReady();
+  if (isInternalOwnerTestMode()) return;
   try { validatePrimaryCallTransportEnv(); }
   catch { throw new HttpError(503, 'call_transport_not_configured'); }
 }

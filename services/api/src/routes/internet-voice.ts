@@ -3,6 +3,7 @@ import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { getCallTransportReadiness, getInternetVoiceClientConfig } from '../providers/call-transport.ts';
+import { isInternalOwnerTestCaller, isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_STATUSES = ['routing', 'calling_listener', 'connected'] as const;
@@ -53,6 +54,9 @@ async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTra
 }
 
 async function getVoiceClientConfigOr503() {
+  if (isInternalOwnerTestMode()) {
+    return { signalingMode: 'http_polling' as const, iceServers: [], relayConfigured: false, iranDomesticPath: false };
+  }
   try {
     return await getInternetVoiceClientConfig();
   } catch {
@@ -63,7 +67,7 @@ async function getVoiceClientConfigOr503() {
 export async function startInternetVoiceCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
   const { userId } = await requireAuth(req);
-  const readiness = getCallTransportReadiness();
+  const readiness = isInternalOwnerTestCaller(userId) ? { primary: 'internet_voice' as const } : getCallTransportReadiness();
   if (readiness.primary !== 'internet_voice') throw new HttpError(409, 'internet_voice_not_primary');
   // Resolve short-lived TURN credentials before mutating call state. If the external TURN
   // control plane is unavailable, the call stays in routing rather than becoming half-started.

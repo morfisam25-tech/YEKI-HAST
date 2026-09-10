@@ -95,10 +95,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url=$("$VERCEL_BIN" deploy --prebuilt --yes \
-            --env INTERNAL_BETA_OWNER_TEST_MODE=1 \
-            --env INTERNAL_BETA_ENVIRONMENT=1 \
-            --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
+          runtime_file=.vercel/.env.production.local
+          set -a
+          source "$runtime_file"
+          set +a
+          deploy_args=(--prebuilt --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")
+          while IFS= read -r name; do
+            case "$name" in VERCEL_*|INTERNAL_BETA_*) continue ;; esac
+            deploy_args+=(--env "$name=${!name}")
+          done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$runtime_file")
+          deploy_args+=(--env INTERNAL_BETA_OWNER_TEST_MODE=1 --env INTERNAL_BETA_ENVIRONMENT=1)
+          url=$("$VERCEL_BIN" deploy "${deploy_args[@]}")
           case "$url" in
             https://*.vercel.app) ;;
             *) echo "Unexpected Preview URL" >&2; exit 1 ;;

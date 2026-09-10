@@ -228,7 +228,7 @@ jobs:
           }
           check_path / 'ورود با ایمیل'
           check_path / 'mailto:sales@uniqueholding.com.tr'
-          check_path /privacy 'Web و اپ موبایل'
+          check_path /privacy 'نسخه فعلی وب و اپ'
           check_path /terms 'قوانین استفاده'
           check_path /account/delete 'تأیید مالک حساب'
           check_path /account/delete 'حذف واقعی حساب'
@@ -333,7 +333,7 @@ jobs:
             throw new Error(`${label} failed: ${last}`);
           }
           await waitFor('/', ['یکی هست', 'ورود با ایمیل'], 'Web landing');
-          await waitFor('/privacy', ['حریم خصوصی', 'Web و اپ موبایل'], 'Web privacy');
+          await waitFor('/privacy', ['حریم خصوصی', 'نسخه فعلی وب و اپ'], 'Web privacy');
           await waitFor('/terms', ['قوانین استفاده'], 'Web terms');
           await waitFor('/account/delete', ['حذف حساب', 'تأیید مالک حساب', 'حذف واقعی حساب'], 'Web account deletion');
           console.log('public Vercel canonical Web verification PASS');

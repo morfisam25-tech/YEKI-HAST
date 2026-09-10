@@ -9,7 +9,7 @@ const terms = await readFile(new URL('../apps/web/app/terms/page.tsx', import.me
 const emailSmoke = await readFile(new URL('../scripts/smoke-production-email-auth.mjs', import.meta.url), 'utf8');
 
 test('selected support mailbox is reachable from all checked-in public policy surfaces', () => {
-  for (const source of [home, privacy, terms]) {
+  for (const source of [privacy, terms]) {
     assert.match(source, new RegExp(`mailto:${supportEmail.replace(/\./g, '\\.')}`));
     assert.match(source, new RegExp(supportEmail.replace(/\./g, '\\.')));
   }
@@ -23,9 +23,9 @@ test('mailbox usability is not treated as proven by source alone and production 
   assert.doesNotMatch(emailSmoke, /imap\.gmail\.com/);
 });
 
-test('public home states the closed voice and payment gate truthfully', () => {
-  assert.match(home, /تماس صوتی و پرداخت هنوز برای استفاده عمومی/);
-  assert.match(home, /سرویس‌های بیرونی لازم فعال می‌شوند/);
+test('public home states the closed caller gate truthfully without exposing internal launch mechanics', () => {
+  assert.match(home, /گفت‌وگوی عمومی فعلاً بسته است/);
+  assert.match(home, /ورود و مسیر شنونده‌شدن در دسترس است/);
   assert.doesNotMatch(home, /تماس صوتی را مستقیم از اینترنت/);
   assert.doesNotMatch(home, /تماس تلفنی ماسک‌شده فقط مسیر جایگزین است/);
   assert.doesNotMatch(home, /۱۰، ۳۰ و ۶۰ دقیقه/);

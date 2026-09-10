@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import './work.css';
 
 type PresenceStatus = 'online' | 'offline' | 'paused';
 
@@ -90,8 +91,54 @@ function faNumber(value: number): string {
 }
 
 function formatMoney(amountMinor: string, currencyCode: string): string {
-  if (currencyCode === 'IRR') return `${faNumber(Number(BigInt(amountMinor) / BigInt(10)))} تومان`;
-  return `${amountMinor} ${currencyCode}`;
+  const normalizedCurrency = currencyCode.trim().toUpperCase();
+  const fallbackCurrency = normalizedCurrency || 'ارز نامشخص';
+  let minor: bigint;
+
+  try {
+    minor = BigInt(amountMinor);
+  } catch {
+    return `${amountMinor} ${fallbackCurrency} · واحد خرد ثبت‌شده`;
+  }
+
+  if (normalizedCurrency === 'IRR') {
+    const toman = minor / BigInt(10);
+    return `${new Intl.NumberFormat('fa-IR').format(toman)} تومان`;
+  }
+
+  try {
+    const currencyFormatter = new Intl.NumberFormat('fa-IR', {
+      style: 'currency',
+      currency: normalizedCurrency,
+      currencyDisplay: 'code',
+    });
+    const fractionDigits = currencyFormatter.resolvedOptions().maximumFractionDigits ?? 0;
+    const scale = BigInt(10) ** BigInt(fractionDigits);
+    const negative = minor < BigInt(0);
+    const absoluteMinor = negative ? -minor : minor;
+    const major = absoluteMinor / scale;
+    const fraction = absoluteMinor % scale;
+    const majorFormatted = new Intl.NumberFormat('fa-IR', {
+      useGrouping: true,
+      maximumFractionDigits: 0,
+    }).format(major);
+    const fractionFormatted = fractionDigits === 0
+      ? ''
+      : `٫${fraction.toString().padStart(fractionDigits, '0').replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)])}`;
+    const exactNumber = `${majorFormatted}${fractionFormatted}`;
+    let insertedNumber = false;
+
+    return currencyFormatter.formatToParts(negative ? -1 : 1).map((part) => {
+      if (part.type === 'integer' || part.type === 'group' || part.type === 'decimal' || part.type === 'fraction') {
+        if (insertedNumber) return '';
+        insertedNumber = true;
+        return exactNumber;
+      }
+      return part.value;
+    }).join('');
+  } catch {
+    return `${amountMinor} ${fallbackCurrency} · واحد خرد ثبت‌شده`;
+  }
 }
 
 function formatClock(seconds: number | null): string {
@@ -102,54 +149,63 @@ function formatClock(seconds: number | null): string {
   return `${faNumber(minutes)}:${rest.toLocaleString('fa-IR', { minimumIntegerDigits: 2, useGrouping: false })}`;
 }
 
-function activeStatusLabel(status: ActiveCall['status']): string {
-  const labels: Record<ActiveCall['status'], string> = {
-    requested: 'درخواست تماس ثبت شده',
-    routing: 'در حال آماده‌سازی تماس',
-    calling_caller: 'در حال تماس با مخاطب',
-    caller_answered: 'مخاطب پاسخ داده',
-    calling_listener: 'تماس اینترنتی منتظر پاسخ توست',
-    connected: 'تماس اینترنتی وصل است',
+function presenceLabel(status: PresenceStatus): string {
+  const labels: Record<PresenceStatus, string> = {
+    online: 'آماده دریافت گفت‌وگو',
+    paused: 'استراحت',
+    offline: 'فعلاً در دسترس نیستم',
   };
   return labels[status];
 }
 
-function presenceLabel(status: PresenceStatus): string {
-  const labels: Record<PresenceStatus, string> = {
-    online: 'آنلاین',
-    paused: 'مکث',
-    offline: 'آفلاین',
+function activeStatusLabel(status: ActiveCall['status']): string {
+  const labels: Record<ActiveCall['status'], string> = {
+    requested: 'گفت‌وگوی تازه در راه است',
+    routing: 'در حال آماده‌سازی گفت‌وگو',
+    calling_caller: 'در حال وصل‌شدن به کاربر',
+    caller_answered: 'کاربر پاسخ داده؛ نوبت توست',
+    calling_listener: 'گفت‌وگوی تازه منتظر پاسخ توست',
+    connected: 'گفت‌وگو در جریان است',
   };
   return labels[status];
 }
 
 function recentStatusLabel(status: RecentCall['status']): string {
   const labels: Record<RecentCall['status'], string> = {
-    completed: 'پایان‌یافته',
+    completed: 'پایان عادی',
     missed: 'بی‌پاسخ',
     cancelled: 'لغوشده',
-    failed: 'ناموفق',
-    safety_terminated: 'پایان ایمن',
+    failed: 'وصل نشد',
+    safety_terminated: 'پایان برای ایمنی',
+  };
+  return labels[status];
+}
+
+function earningStatusLabel(status: EarningsSummary['status']): string {
+  const labels: Record<EarningsSummary['status'], string> = {
+    pending: 'ثبت‌شده',
+    available: 'ثبت‌شده',
+    paid: 'پرداخت‌شده',
   };
   return labels[status];
 }
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
-    authentication_required: 'برای ورود به حالت کاری ابتدا از صفحه اصلی وارد حساب شو.',
-    listener_not_approved: 'حساب شنونده هنوز برای کار فعال نشده است.',
-    listener_verification_required: 'احراز هویت شنونده هنوز کامل نشده است.',
-    listener_not_online: 'وضعیت آنلاین منقضی شده؛ دوباره آنلاین شو.',
-    no_callers_accepted: 'برای آنلاین شدن حداقل یک گروه مخاطب را فعال کن.',
-    listener_active_call_conflict: 'بیش از یک تماس فعال برای این حساب ثبت شده؛ کنترل‌های کار تا بررسی وضعیت قفل‌اند.',
-    call_not_internet_voice: 'این تماس از مسیر صوتی اینترنتی نیست.',
-    call_not_live: 'این تماس دیگر فعال نیست.',
-    call_not_found: 'این تماس دیگر در دسترس نیست.',
-    voice_relay_not_ready: 'مسیر واسط امن برای تماس واقعی آماده نیست.',
-    call_termination_in_progress: 'پایان تماس از مسیر دیگری شروع شده است.',
-    backend_unavailable: 'ارتباط با سرویس اصلی برقرار نشد.',
+    authentication_required: 'برای ورود به فضای شنونده، ابتدا وارد حساب خودت شو.',
+    listener_not_approved: 'حساب شنونده هنوز برای دریافت گفت‌وگو فعال نشده است.',
+    listener_verification_required: 'تأیید هویت شنونده هنوز کامل نشده است.',
+    listener_not_online: 'حالت آماده دریافت گفت‌وگو غیرفعال شده است. دوباره آماده شو.',
+    no_callers_accepted: 'برای آماده‌شدن، حداقل یکی از گروه‌های کاربران را انتخاب کن.',
+    listener_active_call_conflict: 'برای این حساب چند گفت‌وگوی هم‌زمان ثبت شده است. تا روشن‌شدن وضعیت، دریافت گفت‌وگوی تازه متوقف می‌ماند.',
+    call_not_internet_voice: 'این گفت‌وگو از این صفحه قابل پاسخ‌دادن نیست.',
+    call_not_live: 'این گفت‌وگو دیگر فعال نیست.',
+    call_not_found: 'این گفت‌وگو دیگر در دسترس نیست.',
+    voice_relay_not_ready: 'اتصال صوتی هنوز آماده نیست. کمی بعد دوباره تلاش کن.',
+    call_termination_in_progress: 'پایان این گفت‌وگو از جای دیگری شروع شده است.',
+    backend_unavailable: 'ارتباط با سرویس برقرار نشد. دوباره تلاش کن.',
   };
-  return messages[code] ?? 'عملیات انجام نشد. دوباره تلاش کن.';
+  return messages[code] ?? 'این کار انجام نشد. دوباره تلاش کن.';
 }
 
 export default function ListenerWorkPage() {
@@ -167,6 +223,7 @@ export default function ListenerWorkPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [attentionAnnouncement, setAttentionAnnouncement] = useState('');
 
   const presenceRef = useRef<Presence | null>(null);
   const activeCallIdRef = useRef<string | null>(null);
@@ -178,6 +235,7 @@ export default function ListenerWorkPage() {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const mediaConnectedSentRef = useRef(false);
   const rtcCallIdRef = useRef<string | null>(null);
+  const announcedAttentionRef = useRef<string | null>(null);
 
   const applyPresence = useCallback((value: Presence) => {
     presenceRef.current = value;
@@ -283,6 +341,19 @@ export default function ListenerWorkPage() {
   }, [refreshActive]);
 
   useEffect(() => {
+    if (!activeCall || (activeCall.status !== 'caller_answered' && activeCall.status !== 'calling_listener')) {
+      announcedAttentionRef.current = null;
+      setAttentionAnnouncement('');
+      return;
+    }
+
+    const announcementKey = `${activeCall.callId}:${activeCall.status}`;
+    if (announcedAttentionRef.current === announcementKey) return;
+    announcedAttentionRef.current = announcementKey;
+    setAttentionAnnouncement(activeStatusLabel(activeCall.status));
+  }, [activeCall?.callId, activeCall?.status]);
+
+  useEffect(() => {
     const current = presence?.status;
     if (current !== 'online' && current !== 'paused') return;
     const heartbeat = async () => {
@@ -351,7 +422,7 @@ export default function ListenerWorkPage() {
         setRemainingSeconds(result.timing.remainingSeconds);
         setWarning(result.timing.warning);
         if (result.terminal) {
-          setNotice(result.capReached ? 'سقف زمان تماس رسید و تماس پایان یافت.' : 'تماس پایان یافت.');
+          setNotice(result.capReached ? 'زمان این گفت‌وگو به سقف مجاز رسید و گفت‌وگو پایان یافت.' : 'گفت‌وگو پایان یافت.');
           cleanupRtc();
           await refreshActive().catch(() => undefined);
         }
@@ -392,10 +463,10 @@ export default function ListenerWorkPage() {
         lastHeartbeatAt: result.status === 'offline' ? null : new Date().toISOString(),
       });
       setNotice(result.status === 'online'
-        ? 'آنلاین شدی. تا وقتی این تب باز و فعال است درخواست تماس را می‌بینی.'
+        ? 'آماده دریافت گفت‌وگو هستی. برای دریافت درخواست تازه، این صفحه را باز و فعال نگه دار.'
         : result.status === 'paused'
-          ? 'دریافت تماس جدید موقتاً متوقف شد.'
-          : 'آفلاین شدی و تماس جدید برایت ارسال نمی‌شود.');
+          ? 'در حالت استراحتی. گفت‌وگوی تازه برایت ارسال نمی‌شود.'
+          : 'فعلاً در دسترس نیستی و گفت‌وگوی تازه برایت ارسال نمی‌شود.');
     } catch (cause) {
       setError(messageFor(cause instanceof Error ? cause.message : 'presence_failed'));
     } finally {
@@ -454,8 +525,8 @@ export default function ListenerWorkPage() {
       });
       setVoiceReady(true);
       setNotice(result.status === 'connected' || result.becameConnected
-        ? 'تماس وصل شد. محاسبه زمان از اتصال واقعی دو طرف شروع می‌شود.'
-        : 'صدای این سمت آماده است؛ در انتظار اتصال کامل مخاطب…');
+        ? 'گفت‌وگو وصل شد. زمان گفت‌وگو از همین لحظه محاسبه می‌شود.'
+        : 'صدای تو آماده است؛ در حال وصل‌شدن به کاربر…');
       await refreshActive().catch(() => undefined);
     } catch {
       mediaConnectedSentRef.current = false;
@@ -472,7 +543,7 @@ export default function ListenerWorkPage() {
         const result = await api<{ status: string; signals: VoiceSignal[] }>(`calls/${callId}/voice/signals`);
         for (const signal of result.signals) await consumeCallerSignal(callId, pc, signal);
         if (['completed', 'missed', 'cancelled', 'failed', 'safety_terminated'].includes(result.status)) {
-          setNotice('تماس پایان یافت.');
+          setNotice('گفت‌وگو پایان یافت.');
           cleanupRtc();
           await refreshActive().catch(() => undefined);
         }
@@ -490,7 +561,7 @@ export default function ListenerWorkPage() {
     if (!activeCall || activeCall.status !== 'calling_listener' || activeCall.transport !== 'internet_voice' || voiceBusy) return;
     setVoiceBusy(true);
     setError('');
-    setNotice('در حال آماده‌سازی میکروفن و اتصال امن…');
+    setNotice('در حال آماده‌سازی میکروفن…');
     let stream: MediaStream | null = null;
     try {
       const config = await api<VoiceConfig>(`calls/${activeCall.callId}/voice/config`);
@@ -532,8 +603,8 @@ export default function ListenerWorkPage() {
             body: JSON.stringify({ kind: 'reconnecting', payload: { source: 'peer_connection_state' } }),
           }).catch(() => undefined);
         }
-        if (pc.connectionState === 'disconnected') setNotice('اتصال ضعیف شده؛ در حال تلاش برای برگشت…');
-        if (pc.connectionState === 'failed') setError('اتصال صوتی قطع شد. پایان تماس را بزن و وضعیت را تازه کن.');
+        if (pc.connectionState === 'disconnected') setNotice('اتصال کمی ناپایدار شده؛ در حال بازیابی…');
+        if (pc.connectionState === 'failed') setError('اتصال صوتی قطع شد. گفت‌وگو را پایان بده و وضعیت را تازه کن.');
       };
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') void markMediaConnected(activeCall.callId);
@@ -562,7 +633,7 @@ export default function ListenerWorkPage() {
         body: JSON.stringify({ kind: 'answer', payload: { type: answer.type, sdp: answer.sdp } }),
       });
       setVoiceReady(true);
-      setNotice('پاسخ تماس ثبت شد؛ اتصال صوتی در حال تکمیل است.');
+      setNotice('پاسخ ثبت شد؛ در حال وصل‌شدن…');
       startSignalPolling(activeCall.callId, pc);
       await refreshActive().catch(() => undefined);
       stream = null;
@@ -570,10 +641,10 @@ export default function ListenerWorkPage() {
       const browserErrorName = typeof DOMException !== 'undefined' && cause instanceof DOMException ? cause.name : '';
       if (stream && localStreamRef.current !== stream) stream.getTracks().forEach((track) => track.stop());
       cleanupRtc();
-      if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای پاسخ تماس باید دسترسی میکروفن را فعال کنی.');
+      if (browserErrorName === 'NotAllowedError' || browserErrorName === 'SecurityError') setError('برای پاسخ به گفت‌وگو، دسترسی میکروفن را فعال کن.');
       else if (browserErrorName === 'NotFoundError') setError('میکروفن قابل استفاده پیدا نشد.');
-      else if (cause instanceof Error && cause.message === 'voice_offer_not_ready') setError('پیشنهاد صوتی مخاطب هنوز نرسیده است. وضعیت تماس را تازه کن و دوباره پاسخ بده.');
-      else if (cause instanceof Error && cause.message === 'invalid_voice_role') setError('نقش این نشست برای پاسخ Listener معتبر نیست.');
+      else if (cause instanceof Error && cause.message === 'voice_offer_not_ready') setError('اتصال صوتی هنوز آماده پاسخ نیست. وضعیت را تازه کن و دوباره پاسخ بده.');
+      else if (cause instanceof Error && cause.message === 'invalid_voice_role') setError('این گفت‌وگو در این صفحه قابل پاسخ‌دادن نیست.');
       else setError(messageFor(cause instanceof Error ? cause.message : 'voice_failed'));
     } finally {
       setVoiceBusy(false);
@@ -592,10 +663,10 @@ export default function ListenerWorkPage() {
           : { reason: 'web_listener_ended' }),
       });
       setNotice(kind === 'safety-exit'
-        ? 'تماس برای ایمنی پایان یافت و طرف مقابل بلاک شد.'
+        ? 'گفت‌وگو برای ایمنی پایان یافت و این کاربر مسدود شد.'
         : result.billableSeconds === undefined
-          ? 'پایان تماس ثبت شد.'
-          : `پایان تماس ثبت شد؛ ${faNumber(result.billableSeconds)} ثانیه قابل محاسبه ثبت شده است.`);
+          ? 'گفت‌وگو پایان یافت.'
+          : `گفت‌وگو پایان یافت؛ ${faNumber(result.billableSeconds)} ثانیه زمان قابل محاسبه ثبت شد.`);
       cleanupRtc();
       await Promise.all([refreshActive(), refreshRecentAndEarnings()]);
     } catch (cause) {
@@ -608,162 +679,260 @@ export default function ListenerWorkPage() {
   const isOnline = presence?.status === 'online';
   const isPaused = presence?.status === 'paused';
   const workControlsLocked = busy || activeCallConflict;
-  const incomeAvailable = earnings.find((item) => item.status === 'available');
 
   return (
     <main className="listener-work-page">
-      <header className="site-header">
-        <a className="brand" href="/">یکی هست</a>
-        <span>حالت کاری شنونده · وب</span>
+      <header className="listener-work-header">
+        <a className="listener-work-brand" href="/">یکی هست</a>
+        <span>فضای شنونده</span>
       </header>
 
-      <section className="listener-work-hero">
-        <div>
-          <p className="kicker">وضعیت کار</p>
-          <h1>{activeCallConflict ? 'قفل ایمنی' : isOnline ? 'آنلاین' : isPaused ? 'مکث' : 'آفلاین'}</h1>
+      <div className="listener-sr-only" aria-live="assertive" aria-atomic="true">
+        {attentionAnnouncement}
+      </div>
+
+      <section className="listener-work-hero" aria-labelledby="listener-work-title">
+        <div className="listener-work-hero-status">
+          <p className="listener-kicker">وضعیت تو</p>
+          <h1 id="listener-work-title">
+            {activeCallConflict
+              ? 'دریافت گفت‌وگوی تازه موقتاً متوقف است'
+              : presence
+                ? presenceLabel(presence.status)
+                : 'در حال بررسی وضعیت…'}
+          </h1>
         </div>
-        <div className="work-status-copy">
+        <div className="listener-work-status-copy">
           <p>
-            این نسخه هنوز اعلان پس‌زمینه را آماده اعلام نمی‌کند. برای دریافت تماس باید این تب باز و فعال بماند؛
-            با رفتن صفحه به پس‌زمینه، وضعیت به‌صورت ایمن روی آفلاین می‌رود تا مخاطب به شنونده‌ای که اعلان نمی‌گیرد وصل نشود.
+            برای دریافت گفت‌وگوی تازه، این صفحه باید باز و فعال بماند. اگر صفحه غیرفعال شود، وضعیت تو به‌طور خودکار از حالت آماده خارج می‌شود تا گفت‌وگوی بی‌پاسخ نماند.
           </p>
-          {incomeAvailable && <strong>درآمد قابل تسویه ثبت‌شده: {formatMoney(incomeAvailable.amountMinor, incomeAvailable.currencyCode)}</strong>}
         </div>
       </section>
 
-      {error && <p className="error" role="alert">{error}</p>}
-      {notice && <p className="helper" aria-live="polite">{notice}</p>}
-      {activeCallConflict && (
-        <p className="error">سرور بیش از یک تماس فعال برای این حساب گزارش کرده است. آنلاین‌شدن، مکث و تغییر گروه مخاطب قفل‌اند؛ آفلاین‌شدن همچنان مجاز است.</p>
-      )}
+      <div className="listener-feedback" aria-live="polite">
+        {error && <p className="listener-alert listener-alert-error" role="alert">{error}</p>}
+        {notice && <p className="listener-alert listener-alert-notice">{notice}</p>}
+        {activeCallConflict && (
+          <p className="listener-alert listener-alert-error">
+            تا زمانی که وضعیت گفت‌وگوهای هم‌زمان روشن شود، فقط می‌توانی خودت را از دسترس خارج کنی. دریافت گفت‌وگوی تازه و تغییر گروه کاربران موقتاً بسته است.
+          </p>
+        )}
+      </div>
 
-      <section className="work-grid">
-        <div className="call-setup">
-          <div>
-            <p className="kicker">دریافت تماس</p>
-            <h2>چه کسانی می‌توانند با تو تماس بگیرند؟</h2>
+      <section className="listener-work-grid">
+        <article className="listener-card listener-presence-card">
+          <div className="listener-card-heading">
+            <div>
+              <p className="listener-kicker">آمادگی</p>
+              <h2>چه کسانی می‌توانند با تو گفت‌وگو کنند؟</h2>
+            </div>
+            <div className="listener-presence-pill" data-status={presence?.status ?? 'loading'}>
+              {presence ? presenceLabel(presence.status) : 'در حال بررسی…'}
+            </div>
           </div>
-          <div className="presence-pill" data-status={presence?.status ?? 'loading'}>
-            {presence ? `${presence.status === 'online' ? '●' : presence.status === 'paused' ? '◐' : '○'} ${presenceLabel(presence.status)}` : 'در حال بررسی…'}
-          </div>
-          <div className="duration-options two-column">
+
+          <p className="listener-helper">گروه‌هایی را انتخاب کن که در حال حاضر با گفت‌وگو با آن‌ها راحتی.</p>
+
+          <div className="listener-choice-grid" aria-label="ترجیح کاربران">
             <button
               type="button"
-              className={acceptsFemale ? 'selected' : ''}
+              className={`listener-choice ${acceptsFemale ? 'is-selected' : ''}`}
+              aria-pressed={acceptsFemale}
               disabled={workControlsLocked}
               onClick={() => void toggleCallerPreference('female')}
             >
-              مخاطب زن {acceptsFemale ? '✓' : ''}
+              <span>کاربران زن</span>
+              <span aria-hidden="true">{acceptsFemale ? '✓' : ''}</span>
             </button>
             <button
               type="button"
-              className={acceptsMale ? 'selected' : ''}
+              className={`listener-choice ${acceptsMale ? 'is-selected' : ''}`}
+              aria-pressed={acceptsMale}
               disabled={workControlsLocked}
               onClick={() => void toggleCallerPreference('male')}
             >
-              مخاطب مرد {acceptsMale ? '✓' : ''}
+              <span>کاربران مرد</span>
+              <span aria-hidden="true">{acceptsMale ? '✓' : ''}</span>
             </button>
           </div>
-          {!isOnline && !isPaused && (
-            <button type="button" disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)} onClick={() => void changePresence('online')}>
-              {busy ? 'در حال ثبت…' : 'آنلاین — آماده‌ام'}
-            </button>
-          )}
-          {isOnline && (
-            <button type="button" className="secondary-action" disabled={workControlsLocked} onClick={() => void changePresence('paused')}>
-              مکث — تماس جدید نیاید
-            </button>
-          )}
-          {isPaused && (
-            <button type="button" disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)} onClick={() => void changePresence('online')}>
-              ادامه کار
-            </button>
-          )}
-          {(isOnline || isPaused) && (
-            <button type="button" className="secondary-action" disabled={busy} onClick={() => void changePresence('offline')}>
-              آفلاین و پایان شیفت
-            </button>
-          )}
-          <p className="helper">ضربان حضور فقط وقتی این تب فعال باشد، هر ۳۰ ثانیه ارسال می‌شود. دریافت تماس در پس‌زمینه تا زمان آماده‌شدن اعلان واقعی فعال نمی‌شود.</p>
-        </div>
 
-        <div className="call-setup">
-          <div>
-            <p className="kicker">تماس جاری</p>
-            <h2>{activeCall ? activeStatusLabel(activeCall.status) : 'تماس فعالی نداری'}</h2>
+          <div className="listener-presence-actions">
+            {!isOnline && !isPaused && (
+              <button
+                type="button"
+                className="listener-primary-action"
+                disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)}
+                onClick={() => void changePresence('online')}
+              >
+                {busy ? 'در حال ثبت…' : 'آماده دریافت گفت‌وگو'}
+              </button>
+            )}
+            {isOnline && (
+              <button
+                type="button"
+                className="listener-secondary-action"
+                disabled={workControlsLocked}
+                onClick={() => void changePresence('paused')}
+              >
+                استراحت
+              </button>
+            )}
+            {isPaused && (
+              <button
+                type="button"
+                className="listener-primary-action"
+                disabled={workControlsLocked || (!acceptsMale && !acceptsFemale)}
+                onClick={() => void changePresence('online')}
+              >
+                دوباره آماده‌ام
+              </button>
+            )}
+            {(isOnline || isPaused) && (
+              <button
+                type="button"
+                className="listener-quiet-action"
+                disabled={busy}
+                onClick={() => void changePresence('offline')}
+              >
+                فعلاً در دسترس نیستم
+              </button>
+            )}
           </div>
+
+          <p className="listener-self-care">اگر چند دقیقه فاصله لازم داری، «استراحت» را انتخاب کن. برگشتن هر وقت آماده بودی کافی است.</p>
+        </article>
+
+        <article className="listener-card listener-call-card">
+          <div className="listener-card-heading">
+            <div>
+              <p className="listener-kicker">گفت‌وگوی جاری</p>
+              <h2>{activeCall ? activeStatusLabel(activeCall.status) : 'فعلاً گفت‌وگوی فعالی نداری'}</h2>
+            </div>
+            {activeCall && <span className="listener-live-dot" aria-label="گفت‌وگوی فعال" />}
+          </div>
+
           {activeCall ? (
             <>
-              <p className="helper">
-                مسیر: {activeCall.transport === 'internet_voice' ? 'تماس صوتی اینترنتی' : activeCall.transport ?? 'ثبت نشده'}
-                {' · '}سقف: {activeCall.maxBillableSeconds ? `${faNumber(Math.floor(activeCall.maxBillableSeconds / 60))} دقیقه` : '—'}
-              </p>
+              {activeCall.maxBillableSeconds && (
+                <p className="listener-helper">
+                  حداکثر زمان این گفت‌وگو: {faNumber(Math.floor(activeCall.maxBillableSeconds / 60))} دقیقه
+                </p>
+              )}
+
               {activeCall.status === 'calling_listener' && activeCall.transport === 'internet_voice' && !voiceReady && (
-                <button type="button" disabled={voiceBusy} onClick={() => void answerInternetCall()}>
-                  {voiceBusy ? 'در حال اتصال…' : 'پاسخ تماس اینترنتی'}
+                <button
+                  type="button"
+                  className="listener-primary-action listener-answer-action"
+                  disabled={voiceBusy}
+                  onClick={() => void answerInternetCall()}
+                >
+                  {voiceBusy ? 'در حال آماده‌شدن…' : 'پاسخ به گفت‌وگو'}
                 </button>
               )}
+
               {activeCall.status === 'connected' && voiceReady && (
-                <p className={warning ? 'error' : 'helper'}>زمان باقی‌مانده: {formatClock(remainingSeconds)}{warning ? ` · هشدار ${warning}` : ''}</p>
-              )}
-              {activeCall.status === 'connected' && !voiceReady && (
-                <p className="error">سرور تماس را فعال می‌داند اما این تب اتصال صوتی زنده ندارد. این صفحه موفقیت جعلی نشان نمی‌دهد؛ برای جلوگیری از وضعیت مبهم، تماس را پایان بده و دوباره شروع کن.</p>
-              )}
-              {activeCall.transport === 'internet_voice' && (
-                <div className="duration-options two-column">
-                  <button type="button" className="secondary-action" disabled={voiceBusy} onClick={() => void finishCall('end')}>پایان تماس</button>
-                  <button type="button" className="danger-action" disabled={voiceBusy} onClick={() => void finishCall('safety-exit')}>خروج امن و مسدودکردن</button>
+                <div className={`listener-timer ${warning ? 'has-warning' : ''}`}>
+                  <span>زمان باقی‌مانده</span>
+                  <strong>{formatClock(remainingSeconds)}</strong>
+                  {warning && <small>زمان گفت‌وگو رو به پایان است.</small>}
                 </div>
+              )}
+
+              {activeCall.status === 'connected' && !voiceReady && (
+                <p className="listener-alert listener-alert-error">
+                  صدای زنده این گفت‌وگو در این صفحه در دسترس نیست. برای جلوگیری از وضعیت مبهم، گفت‌وگو را پایان بده و بعد وضعیت را تازه کن.
+                </p>
+              )}
+
+              {activeCall.transport === 'internet_voice' && (
+                <div className="listener-call-actions">
+                  <button
+                    type="button"
+                    className="listener-secondary-action"
+                    disabled={voiceBusy}
+                    onClick={() => void finishCall('end')}
+                  >
+                    پایان گفت‌وگو
+                  </button>
+                  <button
+                    type="button"
+                    className="listener-danger-action"
+                    disabled={voiceBusy}
+                    onClick={() => void finishCall('safety-exit')}
+                  >
+                    خروج برای ایمنی و مسدودکردن
+                  </button>
+                </div>
+              )}
+
+              {activeCall.transport === 'internet_voice' && (
+                <p className="listener-safety-note">
+                  «پایان گفت‌وگو» پایان عادی است. گزینه ایمنی گفت‌وگو را تمام می‌کند و همان کاربر را مسدود می‌کند.
+                </p>
               )}
             </>
           ) : (
-            <p className="helper">وقتی آنلاین باشی و مخاطب تماس را شروع کند، درخواست اینجا دیده می‌شود. هویت، کشور و اطلاعات پرداخت مخاطب قبل از پذیرش نمایش داده نمی‌شود.</p>
+            <p className="listener-helper listener-empty-copy">
+              وقتی آماده باشی، درخواست تازه همین‌جا ظاهر می‌شود.
+            </p>
           )}
-          <button type="button" className="text-button" onClick={() => void refreshAll()}>به‌روزرسانی وضعیت</button>
-          <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای مخاطب" />
-        </div>
+
+          <button type="button" className="listener-text-action" onClick={() => void refreshAll()}>
+            تازه‌کردن وضعیت
+          </button>
+          <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای کاربر" />
+        </article>
       </section>
 
-      <section className="call-setup wide-card" aria-labelledby="earnings-title">
-        <div className="section-heading compact-heading">
+      <section className="listener-card listener-wide-card" aria-labelledby="earnings-title">
+        <div className="listener-section-heading">
           <div>
-            <p className="kicker">درآمد</p>
-            <h2 id="earnings-title">خلاصه درآمد ثبت‌شده</h2>
+            <p className="listener-kicker">سوابق مالی</p>
+            <h2 id="earnings-title">مبالغ ثبت‌شده برای گفت‌وگوها</h2>
           </div>
-          <button type="button" className="text-button" onClick={() => void refreshRecentAndEarnings()}>تازه‌سازی</button>
+          <button type="button" className="listener-text-action" onClick={() => void refreshRecentAndEarnings()}>
+            تازه‌سازی
+          </button>
         </div>
-        <div className="summary-grid">
+        <p className="listener-helper listener-finance-note">
+          این بخش فقط رکوردهای مالی ثبت‌شده در سامانه را نشان می‌دهد. از این وضعیت‌ها نمی‌توان زمان پرداخت، امکان برداشت یا تسویه را نتیجه گرفت.
+        </p>
+        <div className="listener-summary-grid">
           {earnings.map((item) => (
-            <div className="summary-card" key={`${item.currencyCode}-${item.status}`}>
+            <div className="listener-summary-card" key={`${item.currencyCode}-${item.status}`}>
               <strong>{formatMoney(item.amountMinor, item.currencyCode)}</strong>
-              <span>{item.status === 'available' ? 'قابل تسویه' : item.status === 'paid' ? 'پرداخت‌شده' : 'در انتظار'} · {faNumber(item.earningCount)} رکورد</span>
+              <span>{earningStatusLabel(item.status)} · {faNumber(item.earningCount)} رکورد</span>
             </div>
           ))}
-          {!earnings.length && <p className="helper">هنوز درآمدی برای این حساب ثبت نشده است.</p>}
+          {!earnings.length && <p className="listener-helper">هنوز مبلغی برای این حساب ثبت نشده است.</p>}
         </div>
       </section>
 
-      <section className="call-setup wide-card" aria-labelledby="recent-title">
-        <p className="kicker">سابقه</p>
-        <h2 id="recent-title">تماس‌های اخیر</h2>
-        <div className="recent-list">
+      <section className="listener-card listener-wide-card" aria-labelledby="recent-title">
+        <div className="listener-section-heading">
+          <div>
+            <p className="listener-kicker">سابقه</p>
+            <h2 id="recent-title">گفت‌وگوهای اخیر</h2>
+          </div>
+        </div>
+        <div className="listener-recent-list">
           {recentCalls.map((call) => (
-            <div className="recent-row" key={call.callId}>
+            <div className="listener-recent-row" key={call.callId}>
               <div>
                 <strong>{recentStatusLabel(call.status)}</strong>
                 <span>{new Date(call.endedAt ?? call.requestedAt).toLocaleString('fa-IR')}</span>
               </div>
-              <div>
+              <div className="listener-recent-amount">
                 <strong>{formatMoney(call.listenerEarningMinor, call.currencyCode)}</strong>
-                <span>{faNumber(call.billableSeconds)} ثانیه قابل محاسبه</span>
+                <span>مبلغ ثبت‌شده · {faNumber(call.billableSeconds)} ثانیه زمان قابل محاسبه</span>
               </div>
             </div>
           ))}
-          {!recentCalls.length && <p className="helper">تماس پایان‌یافته‌ای ثبت نشده است.</p>}
+          {!recentCalls.length && <p className="listener-helper">هنوز گفت‌وگوی پایان‌یافته‌ای ثبت نشده است.</p>}
         </div>
       </section>
 
-      <nav className="public-links" aria-label="اطلاعات سرویس">
+      <nav className="listener-public-links" aria-label="اطلاعات سرویس">
         <a href="/">خانه</a>
         <a href="/privacy">حریم خصوصی</a>
         <a href="/terms">قوانین استفاده</a>

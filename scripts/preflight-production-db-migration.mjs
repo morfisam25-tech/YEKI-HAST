@@ -1,13 +1,7 @@
 import pg from 'pg';
+import { currentMigrationEntries } from './current-migration-manifest.mjs';
 
-const expectedMigrationEntries = [
-  ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
-  ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
-  ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
-  ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
-  ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
-  ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
-];
+const expectedMigrationEntries = await currentMigrationEntries();
 const expectedMigrations = new Map(expectedMigrationEntries);
 
 function normalizedDatabaseUrl(connectionString) {

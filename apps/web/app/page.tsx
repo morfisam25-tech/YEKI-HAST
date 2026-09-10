@@ -135,7 +135,7 @@ export default function Page() {
         <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک زن و یک مرد در دو خانه در شیکاگو، در دو سوی یک تماس" />
         <div className={styles.dualCopy}>
           <p className={styles.sectionEyebrow}>فاصله همیشه روی نقشه نیست</p>
-          <h2 id="distance-title">از تهران تا شیکاگو، همهٔ شب‌ها شبیه هم‌اند؛ ولی غربت این را نمی‌فهمد.</h2>
+          <h2 id="distance-title"><span>از تهران تا شیکاگو،</span><span>همهٔ شب‌ها شبیه هم‌اند؛</span><span>ولی غربت این را نمی‌فهمد.</span></h2>
           <p className={styles.diasporaPoem}>
             <span>یکی هست بخواد بهت گوش بده اینجا</span>
             <span>یکی هست بدون هیچ قضاوتی بشنوه تنها</span>
@@ -146,7 +146,7 @@ export default function Page() {
             <span>یکی هست حتی واسه، شنیدن سکوت سنگینت تو غمها</span>
             <span>مهم نیست چند سالته و کجایی. فقط کافیه بدونی یکی هست اینجا واسه تو سبک شه دردات</span>
           </p>
-          <a className={styles.textLink} href="#login">برای آشنایی، وارد شو <span aria-hidden="true">←</span></a>
+          <a className={styles.textLink} href="#login">برای صحبت وارد شو <span aria-hidden="true">←</span></a>
         </div>
       </section>
 

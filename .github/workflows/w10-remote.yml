@@ -45,15 +45,15 @@ jobs:
           writeFileSync(join(dir,'package.json'),JSON.stringify({private:true,type:'module',dependencies:{'playwright-core':'1.55.0','@sparticuz/chromium':'138.0.2'},engines:{node:'22.x'}}));
           writeFileSync(join(dir,'vercel.json'),JSON.stringify({framework:null,installCommand:'npm install --ignore-scripts --no-audit --no-fund',buildCommand:'node diagnostic.mjs',outputDirectory:'public',git:{deploymentEnabled:false}}));
           const env={...process.env,VERCEL_ORG_ID:team,VERCEL_PROJECT_ID:project};
-          const p=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['deploy','--prod','--skip-domain','--yes','--force','--scope','unique-6ff0','--token',token,'--meta','w10Diagnostic='+marker],{cwd:dir,env,encoding:'utf8',timeout:600000,maxBuffer:10*1024*1024});
+          const p=spawnSync(process.cwd()+'/node_modules/.bin/vercel',['deploy','--prod','--skip-domain','--logs','--yes','--force','--scope','unique-6ff0','--token',token,'--meta','w10Diagnostic='+marker],{cwd:dir,env,encoding:'utf8',timeout:600000,maxBuffer:10*1024*1024});
           console.log('DEPLOY_COMMAND_EXIT='+p.status);
           const listed=await api('/v6/deployments?projectId='+project+'&limit=20');
           ids=(listed.deployments||[]).filter(d=>d.meta?.w10Diagnostic===marker).map(d=>d.uid||d.id);
           if(!ids.length){console.log('DIAGNOSTIC_ERROR=deployment_not_created');throw new Error('deployment_not_created');}
           for(const id of ids){
           console.log('DIAGNOSTIC_DEPLOYMENT='+id);
-          const events=await api('/v3/deployments/'+id+'/events?direction=forward&limit=1000');
-          const lines=JSON.stringify(events).match(/W10_[A-Z_0-9]+=(?:PASS|FAIL|YES|NO|NOT_TESTED|NOT_REACHED|RELAY|true|false|[0-9]{3}|[a-z_]+)(?=\\n|"|\\r|\s|$)/g)||[];
+          const events=await api('/v3/deployments/'+id+'/events?builds=1&direction=forward&limit=1000');
+          const lines=(JSON.stringify(events)+'\n'+p.stdout+'\n'+p.stderr).match(/W10_[A-Z_0-9]+=(?:PASS|FAIL|YES|NO|NOT_TESTED|NOT_REACHED|RELAY|true|false|[0-9]{3}|[a-z_]+)(?=\\n|"|\\r|\s|$)/g)||[];
           for(const line of [...new Set(lines)]) console.log(line);
           if(!lines.length)console.log('DIAGNOSTIC_ERROR=no_sanitized_results');
           }

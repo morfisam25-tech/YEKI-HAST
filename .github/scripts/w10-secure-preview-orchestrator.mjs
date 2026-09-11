@@ -291,6 +291,17 @@ try {
       ];
       const category = categories.find(([needle]) => diagnosticText.includes(needle))?.[1] ?? 'product_audio_script_failed';
       emit('E2E_ERROR', category);
+      const rawErrorLine = diagnosticText.split(/\r?\n/).find((line) => /(?:Error|DOMException|page\.evaluate)/.test(line)) ?? '';
+      const safeError = rawErrorLine
+        .replace(/https?:\/\/\S+/gi, ' URL ')
+        .replace(/[A-Za-z0-9+/_=-]{24,}/g, ' REDACTED ')
+        .replace(/\b\d+(?:\.\d+){1,3}\b/g, ' IP ')
+        .replace(/\d+/g, ' N ')
+        .replace(/[^A-Za-z_ ]/g, ' ')
+        .trim()
+        .replace(/\s+/g, '_')
+        .slice(0, 140);
+      emit('E2E_SAFE_DETAIL', safeError || 'unavailable');
       throw new Error('product_audio_e2e_failed');
     }
     emit('W14_INTERNAL_HANDOFF', 'PASS');

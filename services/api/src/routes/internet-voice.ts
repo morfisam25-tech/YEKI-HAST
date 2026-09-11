@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
-import { getCallTransportReadiness, getInternetVoiceClientConfig } from '../providers/call-transport.ts';
+import { getCallTransportReadiness, getInternetVoiceClientConfig, parseIceServers } from '../providers/call-transport.ts';
 import { isInternalOwnerTestCaller, isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -55,7 +55,12 @@ async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTra
 
 async function getVoiceClientConfigOr503() {
   if (isInternalOwnerTestMode()) {
-    return { signalingMode: 'http_polling' as const, iceServers: [], relayConfigured: false, iranDomesticPath: false };
+    const iceServers = parseIceServers(process.env.INTERNET_VOICE_ICE_SERVERS_JSON);
+    const relayConfigured = iceServers.some((server) =>
+      (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url)),
+    );
+    if (!relayConfigured) throw new HttpError(503, 'internet_voice_turn_credentials_unavailable');
+    return { signalingMode: 'http_polling' as const, iceServers, relayConfigured, iranDomesticPath: false };
   }
   try {
     return await getInternetVoiceClientConfig();

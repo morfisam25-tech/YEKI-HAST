@@ -94,75 +94,21 @@ jobs:
           disk-size: 2048M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            set -eu
-            mkdir -p store-screenshots
-            adb shell wm size 1080x1920
-            adb shell wm density 420
-            adb install -r screenshot-apk/app-debug.apk
-            cd apps/mobile
-            (npx expo start --localhost --clear > /tmp/w13-metro.log 2>&1 &)
-            cd ../..
-            adb reverse tcp:8081 tcp:8081
-            sleep 8
-            adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
-            sleep 15
-
-            tap_text() {
-              NEEDLE="$1"
-              adb shell uiautomator dump /sdcard/w13-window.xml >/dev/null
-              adb exec-out cat /sdcard/w13-window.xml > /tmp/w13-window.xml
-              python3 - "$NEEDLE" <<'PY'
-            import re, subprocess, sys, xml.etree.ElementTree as ET
-            needle = sys.argv[1]
-            root = ET.parse('/tmp/w13-window.xml').getroot()
-            for node in root.iter('node'):
-                text = node.attrib.get('text', '')
-                desc = node.attrib.get('content-desc', '')
-                if needle in text or needle in desc:
-                    m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds',''))
-                    if not m:
-                        continue
-                    x1,y1,x2,y2 = map(int, m.groups())
-                    subprocess.check_call(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)])
-                    sys.exit(0)
-            print('Could not find UI text:', needle, file=sys.stderr)
-            print(open('/tmp/w13-window.xml', encoding='utf-8').read(), file=sys.stderr)
-            sys.exit(1)
-            PY
-              sleep 3
-            }
-
-            adb exec-out screencap -p > store-screenshots/01-home.png
-            tap_text 'وضعیت گفت‌وگو'
-            adb exec-out screencap -p > store-screenshots/02-caller-closed.png
-
-            adb shell am force-stop app.yekihast.mobile
-            adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
-            sleep 6
-            tap_text 'می‌خوام شنونده بشم'
-            adb exec-out screencap -p > store-screenshots/03-listener-intro.png
-            tap_text 'ادامه با ایمیل'
-            adb exec-out screencap -p > store-screenshots/04-email-auth.png
-
-            file store-screenshots/*.png
-            python3 - <<'PY'
-            from pathlib import Path
-            import struct
-            files = sorted(Path('store-screenshots').glob('*.png'))
-            assert len(files) == 4, files
-            for p in files:
-                data = p.read_bytes()
-                assert data[:8] == b'\x89PNG\r\n\x1a\n', p
-                width, height = struct.unpack('>II', data[16:24])
-                assert (width, height) == (1080, 1920), (p, width, height)
-                print(p, width, height)
-            PY
+          script: bash .github/scripts/w13-capture-screenshots.sh
 
       - name: Upload Store screenshots
         uses: actions/upload-artifact@v4
         with:
           name: w13-android-store-screenshots
-          path: store-screenshots/*.png
+          path: store-screenshots/0*.png
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload screenshot diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w13-android-screenshot-diagnostics
+          path: store-screenshots
+          if-no-files-found: ignore
+          retention-days: 2

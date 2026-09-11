@@ -10,6 +10,7 @@ import {
   ipHash,
   newOpaqueToken,
   normalizeE164,
+  normalizeIranMobile,
   otpHash,
   phoneHash,
   safeEqualHex,
@@ -70,7 +71,7 @@ async function maybeBootstrapFirstAdmin(
 export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   const body = await readJson<{ phone?: unknown }>(req);
   let phoneE164: string;
-  try { phoneE164 = normalizeE164(requireString(body.phone, 'phone', 8, 20)); }
+  try { phoneE164 = normalizeIranMobile(requireString(body.phone, 'phone', 8, 20)); }
   catch { throw new HttpError(400, 'invalid_phone'); }
 
   let smsProvider: ReturnType<typeof getSmsProvider>;
@@ -78,6 +79,7 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
   catch { throw new HttpError(503, 'sms_delivery_unavailable'); }
 
   const ttlSeconds = integerEnv('OTP_TTL_SECONDS', 300);
+  const resendCooldownSeconds = integerEnv('OTP_RESEND_COOLDOWN_SECONDS', 60);
   const phoneLimit = integerEnv('OTP_PHONE_LIMIT_PER_15M', 5);
   const ipLimit = integerEnv('OTP_IP_LIMIT_PER_15M', 20);
   const globalLimit = integerEnv('OTP_GLOBAL_LIMIT_PER_15M', 1000);
@@ -88,6 +90,18 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
 
   const challengeId = await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended('yeki_hast:otp_request_rate_limit', 0))");
+
+    const recentActive = await client.query(`
+      SELECT 1
+      FROM private_data.otp_challenges
+      WHERE phone_hash=$1
+        AND purpose=$2
+        AND consumed_at IS NULL
+        AND created_at > now() - ($3::text || ' seconds')::interval
+      LIMIT 1
+    `, [pHash, purpose, resendCooldownSeconds]);
+    if (recentActive.rowCount) throw new HttpError(429, 'otp_request_rate_limited');
+
     const counts = await client.query<{ phone_count: string; ip_count: string; global_count: string }>(`
       SELECT
         count(*) FILTER (WHERE phone_hash=$1 AND purpose=$2)::text AS phone_count,
@@ -137,7 +151,7 @@ type VerifyOutcome =
 export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
   const body = await readJson<{ phone?: unknown; code?: unknown }>(req);
   let phoneE164: string;
-  try { phoneE164 = normalizeE164(requireString(body.phone, 'phone', 8, 20)); }
+  try { phoneE164 = normalizeIranMobile(requireString(body.phone, 'phone', 8, 20)); }
   catch { throw new HttpError(400, 'invalid_phone'); }
   const code = requireString(body.code, 'code', 6, 6);
   if (!/^\d{6}$/.test(code)) throw new HttpError(400, 'invalid_otp');
@@ -204,7 +218,13 @@ export async function verifyOtp(req: IncomingMessage, res: ServerResponse) {
 
   if (outcome.kind === 'deletion_pending') throw new HttpError(409, 'account_deletion_pending');
   if (outcome.kind !== 'ok') throw new HttpError(400, 'invalid_otp');
-  sendJson(res, 200, { ok: true, userId: outcome.userId, token: rawSessionToken, expiresInHours: ttlHours });
+  sendJson(res, 200, {
+    ok: true,
+    userId: outcome.userId,
+    token: rawSessionToken,
+    expiresInHours: ttlHours,
+    authMethod: 'sms_otp',
+  });
 }
 
 export async function getCurrentSession(req: IncomingMessage, res: ServerResponse) {

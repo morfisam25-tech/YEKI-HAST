@@ -30,6 +30,7 @@ export function validateOtpEnv(): void {
   validateSecurityEnv();
   requireInteger('SESSION_TTL_HOURS', 720, 1, 8760);
   requireInteger('OTP_TTL_SECONDS', 300, 60, 1800);
+  requireInteger('OTP_RESEND_COOLDOWN_SECONDS', 60, 15, 300);
   requireInteger('OTP_PHONE_LIMIT_PER_15M', 5, 1, 100);
   requireInteger('OTP_IP_LIMIT_PER_15M', 20, 1, 1000);
   requireInteger('OTP_GLOBAL_LIMIT_PER_15M', 1000, 1, 1_000_000);

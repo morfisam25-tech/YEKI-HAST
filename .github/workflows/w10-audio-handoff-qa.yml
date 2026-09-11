@@ -1,0 +1,21 @@
+name: W10 audio handoff QA
+on:
+  push:
+    branches: [w10/product-audio-e2e-20260911]
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Foundation QA
+        run: npm run validate:foundation
+      - name: Voice and internal boundary tests
+        run: node --test --experimental-strip-types tests/internal-owner-test-mode.test.ts tests/internet-voice-transport.test.ts tests/internet-voice-liveness.test.ts tests/internet-voice-manual-end-liveness.test.ts tests/call-lifecycle-settlement.test.ts

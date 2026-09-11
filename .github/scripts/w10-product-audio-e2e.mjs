@@ -33,6 +33,7 @@ console.log('PRODUCT_FLOW=PASS');
 const browser=await chromium.launch({headless:true});
 try{
  const page=await browser.newPage();
+ await page.goto(base+'/health',{waitUntil:'domcontentloaded'});
  const result=await page.evaluate(async ({base,callId,caller,listener,callerIce,listenerIce})=>{
   async function api(path,token,method='GET',body){
    const r=await fetch(base+path,{method,headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});

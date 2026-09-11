@@ -20,55 +20,6 @@ function iranLocalMobile(phoneE164: string): string {
   return phoneE164;
 }
 
-function kavenegarReceptor(phoneE164: string): string {
-  // Kavenegar accepts Iranian mobile numbers in local 09... form.
-  if (phoneE164.startsWith('+98')) return `0${phoneE164.slice(3)}`;
-  // Their Lookup docs specify 00 + country code for international receptors.
-  return `00${phoneE164.slice(1)}`;
-}
-
-class KavenegarSmsProvider implements SmsProvider {
-  readonly #apiKey: string;
-  readonly #template: string;
-
-  constructor() {
-    this.#apiKey = required('KAVENEGAR_API_KEY');
-    this.#template = required('KAVENEGAR_OTP_TEMPLATE');
-  }
-
-  async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {
-    const endpoint = `https://api.kavenegar.com/v1/${encodeURIComponent(this.#apiKey)}/verify/lookup.json`;
-    const body = new URLSearchParams({
-      receptor: kavenegarReceptor(input.phoneE164),
-      token: input.code,
-      template: this.#template,
-      type: 'sms',
-    });
-
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body,
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch {
-      // Never bubble the URL because it contains the API key.
-      throw new Error('sms_delivery_failed');
-    }
-
-    if (!response.ok) throw new Error('sms_delivery_failed');
-
-    let payload: unknown;
-    try { payload = await response.json(); }
-    catch { throw new Error('sms_delivery_failed'); }
-
-    const status = (payload as { return?: { status?: unknown } } | null)?.return?.status;
-    if (status !== 200) throw new Error('sms_delivery_failed');
-  }
-}
-
 class IPPanelSmsProvider implements SmsProvider {
   readonly #apiKey: string;
   readonly #patternCode: string;
@@ -122,8 +73,7 @@ class SmsIrProvider implements SmsProvider {
     this.#parameterName = process.env.SMSIR_OTP_PARAMETER_NAME?.trim() || 'CODE';
     if (!/^[A-Za-z0-9_]{1,32}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
 
-    // SMS.ir can accept a template configuration before that template is approved for delivery.
-    // Production must require an explicit operator acknowledgement after the panel shows approval.
+    // Production delivery stays fail-closed until the template has been approved in SMS.ir.
     if (process.env.NODE_ENV === 'production' && process.env.SMSIR_OTP_TEMPLATE_APPROVED?.trim().toLowerCase() !== 'true') {
       throw new Error('sms_provider_not_configured');
     }
@@ -150,8 +100,7 @@ class SmsIrProvider implements SmsProvider {
       throw new Error('sms_delivery_failed');
     }
 
-    // The public docs page is JS-rendered and its response schema is not relied upon here.
-    // Fail closed on any non-2xx response; do not infer undocumented success fields.
+    // Provider details and response bodies never escape the server boundary.
     if (!response.ok) throw new Error('sms_delivery_failed');
   }
 }
@@ -162,8 +111,7 @@ export function getSmsProvider(): SmsProvider {
     if (process.env.NODE_ENV !== 'development') throw new Error('sms_provider_not_configured');
     return new DevSmsProvider();
   }
-  if (provider === 'kavenegar') return new KavenegarSmsProvider();
-  if (provider === 'ippanel') return new IPPanelSmsProvider();
   if (provider === 'smsir') return new SmsIrProvider();
+  if (provider === 'ippanel') return new IPPanelSmsProvider();
   throw new Error('sms_provider_not_configured');
 }

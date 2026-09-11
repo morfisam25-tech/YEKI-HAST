@@ -275,7 +275,22 @@ try {
       }
     }
     if (e2e.status !== 0 || !e2e.stdout.includes('W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY')) {
-      emit('E2E_ERROR', 'product_audio_script_failed');
+      const diagnosticText = `${e2e.stdout}\n${e2e.stderr}`;
+      const categories = [
+        ['TypeError: Failed to fetch', 'browser_fetch_failed'],
+        ['NotAllowedError', 'browser_media_not_allowed'],
+        ['InvalidAccessError', 'browser_invalid_access'],
+        ['InvalidStateError', 'browser_invalid_state'],
+        ['NotSupportedError', 'browser_not_supported'],
+        ['offer_missing', 'offer_missing'],
+        ['answer_missing', 'answer_missing'],
+        ['ice_signaling_missing', 'ice_signaling_missing'],
+        ['rtp_validation', 'rtp_validation'],
+        ['timeout', 'connection_timeout'],
+        ['page.goto', 'browser_navigation_failed'],
+      ];
+      const category = categories.find(([needle]) => diagnosticText.includes(needle))?.[1] ?? 'product_audio_script_failed';
+      emit('E2E_ERROR', category);
       throw new Error('product_audio_e2e_failed');
     }
     emit('W14_INTERNAL_HANDOFF', 'PASS');

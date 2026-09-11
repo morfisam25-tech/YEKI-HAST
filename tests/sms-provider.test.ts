@@ -107,3 +107,31 @@ test('SMS.ir Verify request uses documented endpoint and payload shape', async (
     }
   }
 });
+
+test('SMS.ir provider failure is sanitized and does not expose provider response details', async () => {
+  const envNames = ['NODE_ENV', 'SMS_PROVIDER', 'SMSIR_API_KEY', 'SMSIR_OTP_TEMPLATE_ID', 'SMSIR_OTP_PARAMETER_NAME', 'SMSIR_OTP_TEMPLATE_APPROVED'] as const;
+  const beforeEnv = new Map(envNames.map((name) => [name, process.env[name]]));
+  const beforeFetch = globalThis.fetch;
+
+  process.env.NODE_ENV = 'production';
+  process.env.SMS_PROVIDER = 'smsir';
+  process.env.SMSIR_API_KEY = 'test-key';
+  process.env.SMSIR_OTP_TEMPLATE_ID = '958161';
+  process.env.SMSIR_OTP_PARAMETER_NAME = 'CODE';
+  process.env.SMSIR_OTP_TEMPLATE_APPROVED = 'true';
+  globalThis.fetch = (async () => new Response('provider-internal-detail', { status: 401 })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '123456', ttlSeconds: 300 }),
+      (error: unknown) => error instanceof Error && error.message === 'sms_delivery_failed',
+    );
+  } finally {
+    globalThis.fetch = beforeFetch;
+    for (const name of envNames) {
+      const value = beforeEnv.get(name);
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});

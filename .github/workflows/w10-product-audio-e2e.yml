@@ -1,5 +1,5 @@
 name: W10 Product Audio E2E
-# Temporary branch-only verification; removed after evidence is captured.
+# Temporary branch-only verification; same-origin browser pass.
 
 on:
   push:

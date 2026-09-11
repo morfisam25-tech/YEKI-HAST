@@ -30,13 +30,8 @@ test('development can use dev SMS provider without credentials', () => {
   });
 });
 
-test('Kavenegar provider fails closed without credentials', () => {
-  withEnv({
-    NODE_ENV: 'production',
-    SMS_PROVIDER: 'kavenegar',
-    KAVENEGAR_API_KEY: undefined,
-    KAVENEGAR_OTP_TEMPLATE: undefined,
-  }, () => {
+test('unsupported SMS provider fails closed', () => {
+  withEnv({ NODE_ENV: 'production', SMS_PROVIDER: 'unsupported' }, () => {
     assert.throws(() => getSmsProvider(), /sms_provider_not_configured/);
   });
 });
@@ -80,7 +75,7 @@ test('SMS.ir Verify request uses documented endpoint and payload shape', async (
 
   process.env.NODE_ENV = 'production';
   process.env.SMS_PROVIDER = 'smsir';
-  process.env.SMSIR_API_KEY = 'secret-test-key';
+  process.env.SMSIR_API_KEY = 'test-key';
   process.env.SMSIR_OTP_TEMPLATE_ID = '958161';
   process.env.SMSIR_OTP_PARAMETER_NAME = 'CODE';
   process.env.SMSIR_OTP_TEMPLATE_APPROVED = 'true';
@@ -96,7 +91,7 @@ test('SMS.ir Verify request uses documented endpoint and payload shape', async (
     assert.equal(capturedUrl, 'https://api.sms.ir/v1/send/verify');
     assert.equal(capturedInit?.method, 'POST');
     const headers = new Headers(capturedInit?.headers);
-    assert.equal(headers.get('X-API-KEY'), 'secret-test-key');
+    assert.equal(headers.get('X-API-KEY'), 'test-key');
     assert.equal(headers.get('content-type'), 'application/json');
     assert.deepEqual(JSON.parse(String(capturedInit?.body)), {
       mobile: '09123456789',

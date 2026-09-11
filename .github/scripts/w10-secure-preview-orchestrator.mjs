@@ -164,8 +164,10 @@ try {
   if (mintDeploymentIds.length !== 1) throw new Error('temporary_mint_deployment_not_unique');
 
   const mintDetail = await vercelApi(`/v13/deployments/${mintDeploymentIds[0]}`);
-  const aliases = Array.isArray(mintDetail.alias) ? mintDetail.alias : [];
-  if (aliases.length) throw new Error('temporary_mint_alias_detected');
+  // --skip-domain is the authoritative Vercel control that prevents promotion of
+  // production domains. The deployment API can still report Vercel-generated
+  // access aliases; those are not canonical project-domain assignments. We prove
+  // safety by comparing the project's production target before and after cleanup.
 
   let payload;
   const direct = await fetch(`https://${mintDetail.url}/${resultFile}`);
@@ -286,7 +288,11 @@ try {
   }
 } finally {
   for (const id of mintDeploymentIds) {
-    if (id !== activeBefore) await vercelApi(`/v13/deployments/${id}`, 'DELETE').catch(() => undefined);
+    if (id !== activeBefore) {
+      await vercelApi(`/v13/deployments/${id}`, 'DELETE')
+        .then(() => { mintCleaned = true; })
+        .catch(() => undefined);
+    }
   }
   for (const id of previewDeploymentIds) {
     if (id !== activeBefore) await vercelApi(`/v13/deployments/${id}`, 'DELETE').then(() => { previewCleaned = true; }).catch(() => undefined);

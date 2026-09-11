@@ -1,0 +1,211 @@
+name: W13 Child Safety Public URL
+
+on:
+  push:
+    branches:
+      - w13/child-safety-public-url-20260911
+    paths:
+      - .w13-child-safety-deploy-trigger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeki-hast-production-frontends
+  cancel-in-progress: false
+
+jobs:
+  deploy-policy-route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
+      VERCEL_TEAM_SLUG: unique-6ff0
+      WEB_PROJECT_ID: prj_afhSiMYpsCfIAxuOmotLAWBvTMDg
+      WEB_PROJECT_NAME: web
+      WEB_VERCEL_CANONICAL: https://web-unique-6ff0.vercel.app
+      WEB_PRIMARY_DOMAIN: https://yekihast.app
+      VERCEL_BIN: ${{ github.workspace }}/node_modules/.bin/vercel
+      LOCKED_PRODUCTION_BASE: 7388817c68c5585b7b6b419050508284bd224929
+
+    steps:
+      - name: Checkout exact policy branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove surgical production delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/w13/child-safety-public-url-20260911"
+          test "$GITHUB_REPOSITORY" = "morfisam25-tech/YEKI-HAST"
+          test -n "${VERCEL_TOKEN:-}"
+          git cat-file -e "${LOCKED_PRODUCTION_BASE}^{commit}"
+          mapfile -t changed < <(git diff --name-only "$LOCKED_PRODUCTION_BASE"...HEAD)
+          printf 'changed: %s\n' "${changed[@]}"
+          for path in "${changed[@]}"; do
+            case "$path" in
+              apps/web/app/safety/children/page.tsx|.github/workflows/w13-child-safety-public-url.yml|.w13-child-safety-deploy-trigger) ;;
+              *) echo "unexpected production delta: $path" >&2; exit 1 ;;
+            esac
+          done
+          grep -Fq 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه' apps/web/app/page.tsx
+          grep -Fq 'سوءاستفاده و بهره‌کشی جنسی از کودکان' apps/web/app/safety/children/page.tsx
+          grep -Fq 'NCMEC' apps/web/app/safety/children/page.tsx
+          grep -Fq 'sales@uniqueholding.com.tr' apps/web/app/safety/children/page.tsx
+          echo 'surgical delta PASS'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install locked workspace and validate Web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --workspace @yeki-hast/web run typecheck
+          npm --workspace @yeki-hast/web run build
+          test -x "$VERCEL_BIN"
+
+      - name: Capture current production for rollback
+        id: previous
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { appendFileSync } = require('node:fs');
+          const host = new URL(process.env.WEB_PRIMARY_DOMAIN).host;
+          const endpoint = new URL(`https://api.vercel.com/v13/deployments/${host}`);
+          endpoint.searchParams.set('teamId', process.env.VERCEL_TEAM_ID);
+          (async () => {
+            const response = await fetch(endpoint, { headers: { authorization: `Bearer ${process.env.VERCEL_TOKEN}` } });
+            if (!response.ok) throw new Error(`capture failed ${response.status}`);
+            const d = await response.json();
+            if (d.projectId !== process.env.WEB_PROJECT_ID || d.readyState !== 'READY') throw new Error('unexpected current production');
+            const id = d.uid || d.id;
+            if (!id || !d.url) throw new Error('missing current production identity');
+            appendFileSync(process.env.GITHUB_OUTPUT, `id=${id}\nurl=https://${d.url}\n`);
+            console.log('rollback target captured');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Pull and build Web production artifact
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel ../../.vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$WEB_PROJECT_ID" > .vercel/project.json
+          "$VERCEL_BIN" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          "$VERCEL_BIN" build --prod --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          test -f .vercel/output/config.json
+
+      - name: Prepare monorepo deploy link
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f apps/web/.vercel/project.json
+          rm -rf .vercel
+          mkdir -p .vercel
+          node <<'NODE'
+          const fs = require('node:fs');
+          fs.writeFileSync('.vercel/repo.json', JSON.stringify({
+            remoteName: 'origin',
+            projects: [
+              { id: process.env.WEB_PROJECT_ID, name: process.env.WEB_PROJECT_NAME, directory: 'apps/web', orgId: process.env.VERCEL_TEAM_ID }
+            ]
+          }, null, 2));
+          NODE
+
+      - name: Stage production deployment without domain cutover
+        id: staged
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$("$VERCEL_BIN" deploy --prebuilt --prod --skip-domain --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG")"
+          case "$url" in https://*.vercel.app) ;; *) echo "unexpected staged url" >&2; exit 1 ;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke staged deployment
+        working-directory: apps/web
+        env:
+          STAGED_URL: ${{ steps.staged.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_path() {
+            local path="$1" needle="$2" tmp
+            tmp="$(mktemp)"
+            "$VERCEL_BIN" curl "$path" --deployment "$STAGED_URL" >"$tmp"
+            grep -Fq "$needle" "$tmp"
+            rm -f "$tmp"
+          }
+          check_path / 'گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه'
+          check_path /privacy 'حریم خصوصی'
+          check_path /terms 'قوانین استفاده'
+          check_path /account/delete 'حذف حساب'
+          check_path /safety/children 'سوءاستفاده و بهره‌کشی جنسی از کودکان'
+          check_path /safety/children 'NCMEC'
+          echo 'staged policy smoke PASS'
+
+      - name: Promote verified staged deployment
+        id: promote
+        working-directory: apps/web
+        env:
+          STAGED_URL: ${{ steps.staged.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VERCEL_BIN" promote "$STAGED_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'production promotion complete'
+
+      - name: Verify canonical policy URL and frozen homepage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const targets = [process.env.WEB_VERCEL_CANONICAL, process.env.WEB_PRIMARY_DOMAIN];
+          const checks = [
+            ['/', ['گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه', 'گفت‌وگوی عمومی فعلاً بسته است.']],
+            ['/safety/children', ['سوءاستفاده و بهره‌کشی جنسی از کودکان', 'NCMEC', 'sales@uniqueholding.com.tr']],
+            ['/privacy', ['حریم خصوصی']],
+            ['/terms', ['قوانین استفاده']],
+            ['/account/delete', ['حذف حساب']],
+          ];
+          (async () => {
+            for (const target of targets) {
+              for (const [path, needles] of checks) {
+                let passed = false;
+                for (let attempt = 1; attempt <= 15; attempt++) {
+                  try {
+                    const response = await fetch(`${target}${path}`, { cache: 'no-store' });
+                    const text = await response.text();
+                    if (response.ok && needles.every((needle) => text.includes(needle))) { passed = true; break; }
+                  } catch {}
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+                if (!passed) throw new Error(`live verification failed ${target}${path}`);
+              }
+            }
+            console.log('canonical policy verification PASS');
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Restore previous production on failed post-promotion verification
+        if: ${{ failure() && steps.promote.outcome == 'success' }}
+        working-directory: apps/web
+        env:
+          PREVIOUS_URL: ${{ steps.previous.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PREVIOUS_URL"
+          "$VERCEL_BIN" promote "$PREVIOUS_URL" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_TEAM_SLUG"
+          echo 'rollback completed'

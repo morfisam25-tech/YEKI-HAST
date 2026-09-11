@@ -1,0 +1,45 @@
+name: W10 Product Audio E2E
+
+on:
+  push:
+    branches:
+      - w10/product-audio-e2e-20260911
+    paths:
+      - .github/workflows/w10-product-audio-e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w10-product-audio-e2e
+  cancel-in-progress: false
+
+jobs:
+  product-audio-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: w10/product-audio-e2e-20260911
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.23.1
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install isolated Chromium runtime
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          npx --no-install playwright install --with-deps chromium
+
+      - name: Secure Production-scope mint and Preview product audio proof
+        run: node .github/scripts/w10-secure-preview-orchestrator.mjs

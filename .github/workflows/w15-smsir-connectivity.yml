@@ -2,6 +2,11 @@ name: W15 SMS.ir Reachability
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - w15/sms-auth-readiness-20260911
+    paths:
+      - .github/workflows/w15-smsir-connectivity.yml
 
 permissions:
   contents: read

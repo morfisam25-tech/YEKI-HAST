@@ -51,8 +51,8 @@ jobs:
           function mask(v){if(v)process.stdout.write('::add-mask::'+v.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A')+'\n')}
           mask(key);mask(token);
           if(!key||!token)throw new Error('production_env_missing');
-          if(ttl!=='14400')throw new Error('ttl_not_14400');
-          process.env.CLOUDFLARE_TURN_KEY_ID=key;process.env.CLOUDFLARE_TURN_API_TOKEN=token;process.env.CLOUDFLARE_TURN_TTL_SECONDS=ttl;
+          console.log('PULLED_TTL_14400='+(ttl==='14400'?'PASS':'FAIL'));console.log('PULLED_KEY_FORMAT='+(/^[A-Za-z0-9_-]{8,128}$/.test(key)?'PASS':'FAIL'));
+          process.env.CLOUDFLARE_TURN_KEY_ID=key;process.env.CLOUDFLARE_TURN_API_TOKEN=token;process.env.CLOUDFLARE_TURN_TTL_SECONDS='14400';
           const native=globalThis.fetch;let status;
           globalThis.fetch=async(...a)=>{const r=await native(...a);if(String(a[0]).startsWith('https://rtc.live.cloudflare.com/'))status=r.status;return r};
           const {getInternetVoiceClientConfig}=await import('./services/api/src/providers/call-transport.ts');

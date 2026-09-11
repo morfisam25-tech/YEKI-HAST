@@ -1,5 +1,5 @@
 name: W10 Product Audio E2E
-# Temporary branch-only verification; sanitized browser diagnosis.
+# Temporary branch-only verification; CSP-safe same-origin browser pass.
 
 on:
   push:

@@ -14,6 +14,21 @@ export function normalizeE164(input: string): string {
   return value;
 }
 
+export function normalizeIranMobile(input: string): string {
+  const compact = input.trim().replace(/[\s()-]/g, '');
+  let national: string;
+
+  if (/^09\d{9}$/.test(compact)) national = compact.slice(1);
+  else if (/^989\d{9}$/.test(compact)) national = compact.slice(2);
+  else if (/^\+989\d{9}$/.test(compact)) national = compact.slice(3);
+  else if (/^00989\d{9}$/.test(compact)) national = compact.slice(4);
+  else throw new Error('invalid_iran_mobile');
+
+  const normalized = `+98${national}`;
+  if (!/^\+989\d{9}$/.test(normalized)) throw new Error('invalid_iran_mobile');
+  return normalized;
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);

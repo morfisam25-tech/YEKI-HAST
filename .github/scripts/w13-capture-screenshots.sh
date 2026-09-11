@@ -1,29 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p store-screenshots
+mkdir -p store-screenshots /tmp/w13-api/v1
 
 on_error() {
   adb exec-out screencap -p > store-screenshots/failure.png 2>/dev/null || true
-  cp /tmp/w13-metro.log store-screenshots/metro.log 2>/dev/null || true
+  cp /tmp/w13-api-server.log store-screenshots/api-server.log 2>/dev/null || true
+  cp /tmp/w13-bootstrap.json store-screenshots/bootstrap.json 2>/dev/null || true
   adb shell uiautomator dump /sdcard/w13-window.xml >/dev/null 2>&1 || true
   adb exec-out cat /sdcard/w13-window.xml > store-screenshots/window.xml 2>/dev/null || true
 }
 trap on_error ERR
 
+# Snapshot the real current production bootstrap once, then serve that exact response
+# locally to the emulator. This avoids relying on emulator outbound networking while
+# preserving the real production feature gates used by the app.
+curl -fsS --retry 3 --retry-all-errors \
+  https://yeki-hast-unique-6ff0.vercel.app/v1/bootstrap \
+  -o /tmp/w13-bootstrap.json
+python3 - <<'PY'
+import json
+p = '/tmp/w13-bootstrap.json'
+data = json.load(open(p, encoding='utf-8'))
+assert data.get('brandName')
+features = data.get('features') or {}
+assert features.get('callerClosedBetaEnabled') is False, features
+print('production bootstrap verified: callerClosedBetaEnabled=false')
+PY
+cp /tmp/w13-bootstrap.json /tmp/w13-api/v1/bootstrap
+python3 -m http.server 8787 --bind 127.0.0.1 --directory /tmp/w13-api > /tmp/w13-api-server.log 2>&1 &
+API_PID=$!
+trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+
 adb shell wm size 1080x1920
 adb shell wm density 420
-adb install -r screenshot-apk/app-debug.apk
-
-(
-  cd apps/mobile
-  npx expo start --localhost --clear > /tmp/w13-metro.log 2>&1
-) &
-METRO_PID=$!
-trap 'kill "$METRO_PID" >/dev/null 2>&1 || true' EXIT
-
-adb reverse tcp:8081 tcp:8081
-sleep 8
+adb install -r screenshot-apk/app-release.apk
+adb reverse tcp:8787 tcp:8787
+sleep 2
 adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
 
 wait_text() {
@@ -40,7 +53,7 @@ wait_text() {
   done
   echo "UI text did not appear: $needle" >&2
   cat /tmp/w13-window.xml >&2 || true
-  tail -200 /tmp/w13-metro.log >&2 || true
+  cat /tmp/w13-api-server.log >&2 || true
   return 1
 }
 
@@ -66,15 +79,15 @@ print(f'Could not find UI text: {needle}', file=sys.stderr)
 print(open('/tmp/w13-window.xml', encoding='utf-8').read(), file=sys.stderr)
 sys.exit(1)
 PY
-  sleep 3
+  sleep 2
 }
 
-wait_text 'یکی هست' 40
-wait_text 'وضعیت گفت‌وگو' 10
+wait_text 'یکی هست' 30
+wait_text 'وضعیت گفت‌وگو' 20
 adb exec-out screencap -p > store-screenshots/01-home.png
 
 tap_text 'وضعیت گفت‌وگو'
-wait_text 'گفت‌وگوی عمومی هنوز باز نشده است' 10
+wait_text 'گفت‌وگوی عمومی هنوز باز نشده است' 15
 adb exec-out screencap -p > store-screenshots/02-caller-closed.png
 
 adb shell am force-stop app.yekihast.mobile
@@ -82,11 +95,11 @@ adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
 wait_text 'می‌خوام شنونده بشم' 20
 
 tap_text 'می‌خوام شنونده بشم'
-wait_text 'ادامه با ایمیل' 10
+wait_text 'ادامه با ایمیل' 15
 adb exec-out screencap -p > store-screenshots/03-listener-intro.png
 
 tap_text 'ادامه با ایمیل'
-wait_text 'ایمیل' 10
+wait_text 'ایمیل' 15
 adb exec-out screencap -p > store-screenshots/04-email-auth.png
 
 file store-screenshots/0*.png

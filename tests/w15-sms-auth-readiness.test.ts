@@ -7,7 +7,7 @@ const emailAuth = readFileSync(new URL('../services/api/src/routes/auth-email.ts
 const smsProvider = readFileSync(new URL('../services/api/src/providers/sms.ts', import.meta.url), 'utf8');
 const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 const phoneScreen = readFileSync(new URL('../apps/mobile/src/PhoneAuthScreen.tsx', import.meta.url), 'utf8');
-const authScreen = readFileSync(new URL('../apps/mobile/src/AuthScreen.tsx', import.meta.url), 'utf8');
+const emailScreen = readFileSync(new URL('../apps/mobile/src/EmailAuthScreen.tsx', import.meta.url), 'utf8');
 const emailApi = readFileSync(new URL('../apps/mobile/src/email-auth-api.ts', import.meta.url), 'utf8');
 
 test('W15 phone login is Iran-mobile-only and keeps secure OTP controls', () => {
@@ -31,12 +31,12 @@ test('W15 SMS provider stays server-side and production dev bypass fails closed'
   assert.match(smsProvider, /process\.env\.NODE_ENV !== 'development'/);
   assert.match(smsProvider, /throw new Error\('sms_provider_not_configured'\)/);
   assert.doesNotMatch(phoneScreen, /SMSIR_API_KEY|SMSIR_OTP_TEMPLATE_ID|X-API-KEY/);
-  assert.doesNotMatch(authScreen, /SMSIR_API_KEY|SMSIR_OTP_TEMPLATE_ID|X-API-KEY/);
+  assert.doesNotMatch(emailScreen, /SMSIR_API_KEY|SMSIR_OTP_TEMPLATE_ID|X-API-KEY/);
 });
 
 test('W15 exposes dual auth while preserving the existing email OTP client', () => {
-  assert.match(authScreen, /ورود با ایمیل/);
-  assert.match(authScreen, /ورود با شماره موبایل/);
+  assert.match(emailScreen, /ورود با ایمیل/);
+  assert.match(emailScreen, /ورود با شماره موبایل/);
   assert.match(emailApi, /\/v1\/auth\/email\/request/);
   assert.match(emailApi, /\/v1\/auth\/email\/verify/);
   assert.match(emailAuth, /purpose = 'login_email'/);

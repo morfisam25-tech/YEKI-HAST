@@ -109,8 +109,8 @@ export default function Page() {
         </div>
         <div className={styles.heroContent}>
           <p className={styles.eyebrowLight}>گفت‌وگو با یک شنوندهٔ انسانی</p>
-          <h1 id="hero-title">گاهی فقط لازم است یکی واقعاً گوش بدهد.</h1>
-          <p className={styles.heroLead}>هرجای حرف که هستی، از همان‌جا شروع کن. بدون قضاوت، بدون عجله.</p>
+          <h1 id="hero-title">گاهی فقط لازمه تو حرفات‌و بزنی؛ یکی باشه که فقط گوش کنه</h1>
+          <p className={styles.heroLead}>لازم نیست حرفات‌و مرتب کنی یا از اول تعریفش کنی. این‌جا یکی هست که بهت گوش می‌ده، حتی وقتی همهٔ حرفت سکوتِ.</p>
           <div className={styles.heroActions}>
             <a className={styles.primaryButton} href="#login">با ایمیل وارد شو</a>
             <a className={styles.ghostButton} href="#how">تجربه را ببین <span aria-hidden="true">←</span></a>
@@ -132,12 +132,21 @@ export default function Page() {
       </section>
 
       <section className={styles.dualSection} aria-labelledby="distance-title">
-        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک مرد در شهر جدید و یک زن در خانه‌ای آشنا، در دو سوی یک تماس" />
+        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک زن و یک مرد در دو خانه در شیکاگو، در دو سوی یک تماس" />
         <div className={styles.dualCopy}>
           <p className={styles.sectionEyebrow}>فاصله همیشه روی نقشه نیست</p>
-          <h2 id="distance-title">از تهران تا تورنتو، بعضی شب‌ها شبیه هم‌اند.</h2>
-          <p>بعد از یک روز سخت، وقتی خانواده دور است یا دوستت در دسترس نیست، لازم نیست همه‌چیز را مرتب و کامل توضیح بدهی. می‌توانی با زبان خودت حرف بزنی؛ شنونده برای فهمیدن عجله نمی‌کند.</p>
-          <a className={styles.textLink} href="#login">برای آشنایی، وارد شو <span aria-hidden="true">←</span></a>
+          <h2 id="distance-title"><span>از تهران تا شیکاگو،</span><span>همهٔ شب‌ها شبیه هم‌اند؛</span><span>ولی غربت این را نمی‌فهمد.</span></h2>
+          <p className={styles.diasporaPoem}>
+            <span>یکی هست بخواد بهت گوش بده اینجا</span>
+            <span>یکی هست بدون هیچ قضاوتی بشنوه تنها</span>
+            <span>یکی هست نبینتت، نشناستت، دیگه تو رو، بعد همه غم ها و دردات</span>
+            <span>یکی هست همدرد لحظه های سخت تنهاییت باشه</span>
+            <span>یکی هست فقط براش گریه کنی، گوش بده اون، فقط به اشکات</span>
+            <span>یکی هست بهش بگی بفهمه غربت، چطوری غرورت و شکست، تو شبها</span>
+            <span>یکی هست حتی واسه، شنیدن سکوت سنگینت تو غمها</span>
+            <span>مهم نیست چند سالته و کجایی. فقط کافیه بدونی یکی هست اینجا واسه تو سبک شه دردات</span>
+          </p>
+          <a className={styles.textLink} href="#login">برای صحبت وارد شو <span aria-hidden="true">←</span></a>
         </div>
       </section>
 
@@ -173,9 +182,9 @@ export default function Page() {
         </div>
         <div className={styles.momentsImage} role="img" aria-label="دو نسل در دو خانه، در یک ارتباط گرم" />
         <div className={styles.momentList}>
-          <div><strong>وقتی دور از خانه‌ای</strong><span>هیچ‌کس امروزت را ندیده است.</span></div>
-          <div><strong>وقتی با خانواده حرف نمی‌شود</strong><span>گاهی شنیده‌شدن، قبل از توضیح‌دادن می‌آید.</span></div>
-          <div><strong>وقتی خوابت نمی‌برد</strong><span>می‌توانی از یک گفت‌وگوی ساده شروع کنی.</span></div>
+          <div><strong>وقتی بعضی حرف‌ها رو، حتی نمیتونی به خانواده بگی</strong><span>لازم نیست همه‌چیز را تنهایی نگه داری.</span></div>
+          <div><strong>وقتی دور از خونه‌ای</strong><span>گاهی فقط دلت یک صدای آشنا می‌خواد.</span></div>
+          <div><strong>وقتی خوابت نمی‌بره</strong><span>بعضی شب‌ها فقط حرف‌زدن آدم رو سبک‌تر می‌کنه.</span></div>
         </div>
       </section>
 

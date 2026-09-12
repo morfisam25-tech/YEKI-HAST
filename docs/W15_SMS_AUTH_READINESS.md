@@ -1,6 +1,6 @@
 # W15 SMS authentication readiness
 
-Date: 2026-09-11
+Date: 2026-09-12
 Branch: `w15/sms-auth-readiness-20260911`
 Draft PR: `#64` — QA only, do not merge
 
@@ -59,36 +59,42 @@ Operational state supplied by Central PM:
 
 ## FarazSMS / IranPayamak adapter
 
-The FarazSMS account uses the current IPPanel Edge API contract.
+The adapter is aligned to the current official FarazSMS / IranPayamak Pattern endpoint documented at `docs.iranpayamak.com`.
 
 Current contract used by the adapter:
 
-- endpoint: `POST https://edge.ippanel.com/v1/api/send`
-- auth header: `Authorization: <API key/token>`
-- body `sending_type`: `pattern`
-- sender: `from_number` in E.164
+- endpoint: `POST https://api.iranpayamak.com/ws/v1/sms/pattern`
+- auth header: `Api-Key: <API key>`
 - pattern identifier: `code`
-- recipient: a one-item `recipients` array in E.164
-- pattern parameters: `params` object whose keys match the approved pattern placeholders
-- successful send APIs use the common `data` / `meta` envelope; when `message_outbox_ids` or another documented reference field is returned, W15 normalizes the first reference into `providerReferenceId`
-- Pattern documentation may omit a response body, so an HTTP 2xx empty response is accepted without inventing a reference ID
+- pattern attributes: JSON object `attributes`, keyed by approved placeholder names
+- recipient: Iranian national mobile form `09xxxxxxxxx`
+- sender/service line: `line_number` exactly as assigned/available to the account; it is not forced to E.164
+- number format: `number_format: "english"` following the endpoint-specific current request example
+- optional scheduling is not used by W15
+- documented success: HTTP `201` with `{ "status": "success", "data": <number>, "messages": ... }`
+
+The endpoint-specific Pattern page does not currently publish a complete Pattern-specific error-body catalog. W15 therefore does not depend on provider error-body text. It safely maps HTTP 401/403 to `authentication_failed`, 429 to `rate_limited`, 408/425/5xx and network failures to `temporary_unavailable`, and other non-2xx failures to `request_rejected`. A 2xx response whose parsed envelope does not declare `status: "success"` is treated as `request_rejected` without exposing its body.
 
 Production additionally requires `FARAZSMS_OTP_PATTERN_APPROVED=true` and all of:
 
 - `FARAZSMS_API_KEY`
 - `FARAZSMS_PATTERN_CODE`
-- `FARAZSMS_FROM_NUMBER`
+- `FARAZSMS_LINE_NUMBER`
+
+`FARAZSMS_FROM_NUMBER` remains temporarily supported only as a backward-compatible fallback for the line value so existing non-production configuration does not break unexpectedly. New configuration must use `FARAZSMS_LINE_NUMBER`.
 
 Operational state supplied by Central PM:
 
-- fallback account/profile exists
-- initial panel payment is complete
-- identity documents were uploaded
-- approval is pending
-- no API key has been created yet
-- no dedicated line, extra package or unrelated commitment form should be purchased/uploaded unless the provider explicitly proves it is required for OTP
+- account/profile exists
+- identity documents are approved
+- no additional identity/legal document is required for this code-alignment task
+- account-level API-key availability still needs confirmation
+- an ACTIVE OTP Pattern still needs confirmation
+- an accessible shared/service sender line still needs confirmation
+- account-level IP policy still needs confirmation
+- no dedicated line, recharge, extra package or unrelated commitment form should be purchased/uploaded unless the provider explicitly proves it is required
 
-The adapter does not assume that a dedicated line is mandatory. It requires a configured sender number only when the provider makes an approved Pattern sender available for the account.
+The adapter does not assume a dedicated line is mandatory; it requires only a configured `line_number` that the provider makes available to the account.
 
 ## Security and observability
 
@@ -116,73 +122,47 @@ After a provider accepts a send, server logs may record only:
 - template/pattern identifier
 - provider reference ID when returned
 
-This is sufficient for the one-message Preview/internal-beta live E2E audit without logging the OTP or phone number.
-
 ## Tests
 
-Provider unit/contract tests cover both adapters:
+Provider unit/contract tests cover both adapters. Faraz-specific contract tests prove:
 
-- documented endpoint and auth header
-- payload shape and phone format
-- provider reference normalization
-- production configuration guard
-- approval guard
-- retryable provider failure
-- provider rate limiting
-- permanent provider failure
-- response-body sanitization
+- current official endpoint and POST method
+- `Api-Key` authentication header
+- API key absent from request body
+- `+989...` to `09...` recipient conversion
+- `line_number`
+- Pattern `code`
+- configured OTP placeholder mapped into `attributes`
+- `number_format: "english"`
+- canonical `FARAZSMS_LINE_NUMBER` plus temporary `FARAZSMS_FROM_NUMBER` fallback
+- HTTP 401/403 authentication classification
+- HTTP 429 rate-limit classification
+- HTTP 5xx and network temporary-failure classification
+- provider-declared rejection classification
+- valid provider success normalization
+- no API-key/OTP/phone/provider-body leakage in thrown errors
 
-A dual-provider mocked OTP contract harness covers, for both `smsir` and `farazsms`:
-
-- request accepted
-- correct OTP verification
-- wrong OTP
-- OTP replay rejection
-- expiry
-- resend cooldown / duplicate request
-- excessive verification attempts
-- per-phone request limiting
-- temporary provider failure
-- hard provider failure
-- safe retry after a failed delivery challenge is consumed
+SMS.ir contract tests remain unchanged and continue to run in the same provider test file.
 
 The production route invariants separately assert the real SQL-backed TTL, cooldown, attempt, phone/IP/global rate-limit and single-use conditions.
 
-## Foreign-cloud connectivity
+## Live E2E gate
 
-The W15 GitHub Actions reachability workflow performs credential-free checks from a GitHub-hosted Ubuntu runner for:
+No real SMS is sent as part of adapter alignment. Controlled Preview/internal-beta E2E remains blocked until all provider-side account facts are confirmed:
 
-- `api.sms.ir:443` and `https://api.sms.ir/v1/send/verify`
-- `edge.ippanel.com:443` and `https://edge.ippanel.com/v1/api/send`
+1. API key exists and is active.
+2. OTP Pattern is ACTIVE.
+3. An accessible shared/service sender line exists.
+4. Account-level IP policy is known.
 
-The check records DNS resolution, TLS handshake and a non-`000` HTTPS response. It sends no API credential, OTP, SMS or transaction.
-
-## Minimum live E2E after one provider is approved
-
-Preview/internal-beta only:
-
-1. Put exactly one provider credential and its approved template/pattern configuration into the isolated Preview/internal-beta environment.
-2. Keep Production unchanged.
-3. Set `SMS_PROVIDER` to that provider; do not configure automatic fallback.
-4. Use one controlled Iranian mobile number.
-5. Request exactly one OTP.
-6. Confirm server audit contains provider name and provider reference when returned, with no phone/OTP in logs.
-7. Enter the received OTP once and verify a normal application session is issued.
-8. Confirm replay fails.
-9. Remove the Preview provider secret/config after the controlled test if it is not needed for continued internal beta.
-
-No Production enablement or merge is part of this live test.
+After those are confirmed, one controlled Iranian number can be tested in Preview/internal-beta only. Production remains unchanged and there is no automatic provider fallback.
 
 ## Current provider classification
 
-SMS.ir: `WAITING PROVIDER` — account/API key are operational, but the OTP template remains rejected.
+SMS.ir remains PRIMARY and `WAITING PROVIDER` because its account/API key are operational but its OTP template remains rejected.
 
-FarazSMS: `WAITING PROVIDER` — account and documents exist, but identity/account approval and API/Pattern availability are pending.
-
-Current preference remains SMS.ir as PRIMARY because the real account and API key already exist, the Verify API is purpose-built for service/OTP delivery, and foreign-cloud reachability was previously proven. FarazSMS is the FALLBACK because its current Edge API is suitable and the adapter is ready, but account/API/Pattern activation has not yet been granted.
-
-If FarazSMS becomes fully approved first while SMS.ir continues to reject the production OTP template, Central PM can temporarily choose `SMS_PROVIDER=farazsms` for the controlled Preview E2E without changing the provider-neutral authentication state machine.
+FarazSMS remains SECONDARY/FALLBACK and `WAITING PROVIDER`: identity documents are approved and the adapter is aligned to the current official Pattern API, but API-key/Pattern/sender-line/IP-policy account gates still require confirmation before one live Preview OTP.
 
 ## Production safety
 
-W15 does not merge to `main`, does not modify Production environment variables, does not deploy Production, does not create a provider secret, does not send a real SMS and does not purchase a line/package.
+W15 does not merge to `main`, does not modify Production environment variables, does not deploy Production, does not create provider secrets, does not send a real SMS and does not purchase or recharge anything.

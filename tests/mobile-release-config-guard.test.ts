@@ -6,7 +6,8 @@ const appConfig = JSON.parse(await readFile(new URL('../apps/mobile/app.json', i
 const easConfig = JSON.parse(await readFile(new URL('../apps/mobile/eas.json', import.meta.url), 'utf8'));
 const packageJson = JSON.parse(await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8'));
 
-const productionApiOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
+const previewApiOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
+const productionApiOrigin = 'https://yeki-hast-theta.vercel.app';
 const sdk57Node = '22.23.1';
 
 test('mobile app has stable Android and iOS application identifiers', () => {
@@ -63,7 +64,7 @@ test('mobile preview build is internally distributable, explicit and uses produc
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.environment, 'preview');
   assert.equal(easConfig.build.preview.node, sdk57Node);
-  assert.equal(easConfig.build.preview.env.EXPO_PUBLIC_API_BASE_URL, productionApiOrigin);
+  assert.equal(easConfig.build.preview.env.EXPO_PUBLIC_API_BASE_URL, previewApiOrigin);
 });
 
 test('mobile production build is reproducible enough for store beta versioning', () => {

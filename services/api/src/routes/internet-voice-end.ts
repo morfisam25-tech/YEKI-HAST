@@ -80,13 +80,15 @@ async function prepareVoiceEnd(input: {
     }
 
     let safetyEventId: string | null = null;
+    let safetyCutoffAt: string | null = null;
     if (input.safety) {
-      const event = await client.query<{ id: string }>(`
+      const event = await client.query<{ id: string; created_at: string }>(`
         INSERT INTO app.safety_events(call_session_id, triggered_by, trigger_user_id, severity, action_code)
         VALUES ($1,$2,$3,'high','end_for_safety')
-        RETURNING id::text
+        RETURNING id::text, created_at::text
       `, [input.callId, role, input.userId]);
       safetyEventId = event.rows[0].id;
+      safetyCutoffAt = event.rows[0].created_at;
       if (input.details) {
         await client.query(`
           INSERT INTO private_data.safety_event_details(safety_event_id, details_ciphertext)
@@ -163,15 +165,16 @@ async function prepareVoiceEnd(input: {
     if (row.status !== 'connected') throw new HttpError(409, 'call_not_live');
 
     // A failed reconnect and the server liveness sweeper must settle at the same
-    // server-owned cutoff. An unresolved reconnecting signal activates the cutoff;
-    // the older participant heartbeat is the last liveness point both paths can use.
-    // A later reconnected signal from the same sender clears the cutoff entirely.
+    // server-owned cutoff. An unresolved reconnecting signal activates the heartbeat
+    // cutoff; a later reconnected signal from the same sender clears it. Safety Exit
+    // additionally supplies its own server timestamp, and settlement uses whichever
+    // valid cutoff happened first so no post-safety interval can be billed.
     const disconnect = await client.query<{ effective_end_at: string | null }>(`
-      SELECT CASE
-        WHEN EXISTS (
+      WITH reconnect AS (
+        SELECT EXISTS (
           SELECT 1
           FROM app.internet_voice_signals reconnecting
-          WHERE reconnecting.call_session_id=cs.id
+          WHERE reconnecting.call_session_id=$1
             AND reconnecting.signal_kind='reconnecting'
             AND NOT EXISTS (
               SELECT 1
@@ -181,15 +184,27 @@ async function prepareVoiceEnd(input: {
                 AND recovered.signal_kind='reconnected'
                 AND recovered.created_at > reconnecting.created_at
             )
-        ) THEN LEAST(
+        ) AS unresolved
+      )
+      SELECT CASE
+        WHEN $2::timestamptz IS NOT NULL AND reconnect.unresolved THEN LEAST(
+          $2::timestamptz,
+          LEAST(
+            COALESCE(cs.caller_voice_heartbeat_at,cs.connected_at),
+            COALESCE(cs.listener_voice_heartbeat_at,cs.connected_at)
+          )
+        )::text
+        WHEN $2::timestamptz IS NOT NULL THEN $2::timestamptz::text
+        WHEN reconnect.unresolved THEN LEAST(
           COALESCE(cs.caller_voice_heartbeat_at,cs.connected_at),
           COALESCE(cs.listener_voice_heartbeat_at,cs.connected_at)
         )::text
         ELSE NULL
       END AS effective_end_at
       FROM app.call_sessions cs
+      CROSS JOIN reconnect
       WHERE cs.id=$1
-    `, [input.callId]);
+    `, [input.callId, safetyCutoffAt]);
 
     return {
       kind: 'connected' as const,

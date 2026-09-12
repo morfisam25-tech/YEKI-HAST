@@ -2,41 +2,187 @@
 
 Date: 2026-09-11
 Branch: `w15/sms-auth-readiness-20260911`
+Draft PR: `#64` — QA only, do not merge
 
-## Existing architecture found
+## Existing authentication architecture
 
-The repository already contained a server-side SMS provider interface, an SMS.ir Verify adapter, phone OTP request/verify routes, hashed OTP challenges, session issuance, per-phone/IP/global rate limits, a five-attempt verification ceiling, expiry checks, single-use consumption, and a separate working Email OTP path. Historical commits show the SMS.ir Verify adapter was added before the mobile login UI moved to Email OTP as the primary visible method.
+Email OTP remains a separate working login path and is not modified by the SMS provider work.
 
-W15 keeps the Email OTP route and provider unchanged. SMS OTP is an additional login method and uses the same `app.users` identity and `private_data.auth_sessions` session model.
+SMS OTP uses backend-owned challenges in `private_data.otp_challenges`. The application owns OTP generation, hashing, TTL, resend cooldown, attempt limits, phone/IP/global rate limits, single-use consumption and session issuance. SMS providers are delivery transports only; they never verify the application OTP.
 
-## W15 changes
+Iranian mobile input is normalized to E.164 (`+989...`) before hashing or storage. No heuristic account merge is performed. A phone identifier and an email identifier are linked only through an explicitly authenticated ownership flow.
 
-- Iranian mobile input is normalized to E.164 (`+989...`) and non-Iran/non-mobile inputs are rejected for SMS login.
-- An explicit 60-second resend cooldown is enforced server-side in addition to the existing 15-minute rate limits.
-- Existing OTP expiry, five-attempt ceiling, hashing, single-use consumption and replay protection remain in force.
-- Provider failures are reduced to the application-level `sms_delivery_unavailable` error; provider response bodies and credentials are not returned to clients.
-- The development SMS provider remains impossible to select when `NODE_ENV=production`.
-- SMS.ir remains the primary production adapter and production still fails closed until the Verify template is marked approved.
-- The existing mobile auth screen now offers both `ورود با ایمیل` and `ورود با شماره موبایل` without changing the W9 web Home.
+## Provider-neutral contract
 
-## Identity and linking strategy
+`services/api/src/providers/sms.ts` exposes `SmsOtpProvider` with:
 
-A person may have an email identifier, a phone identifier, or both. Both identifiers belong to one `app.users.id` when they have been explicitly linked.
+- provider identity
+- template/pattern identifier
+- `sendOtp(...)`
+- normalized send result
+- optional provider reference/message ID
+- normalized error kind
+- retryable/permanent classification
+- HTTP status classification without provider response-body leakage
 
-W15 does not perform heuristic identity merging. A matching name, device, IP address or other soft signal is never enough to merge two users. A first-time verified phone may create a phone-only user; a first-time verified email may create an email-only user. Adding the second identifier to an existing user must happen while that user has an authenticated session and after ownership of the new identifier is separately verified.
+Supported selectors:
 
-The schema already supports both verified email and verified phone state on the same user. It also prevents the same phone hash from being casually attached to multiple users. If an identifier is already owned by another user, the correct path is account recovery/support or an explicit merge procedure, not an automatic merge.
+- `SMS_PROVIDER=dev` — development only
+- `SMS_PROVIDER=smsir`
+- `SMS_PROVIDER=farazsms`
 
-The current `account-contact` route is Caller-specific and is not treated as a generic account-merge mechanism. A future account-settings surface may expose explicit second-identifier linking, but public phone login itself must remain usable for phone-only users.
+There is no automatic production fallback. If the selected provider is missing required configuration or approval flags, the SMS request path fails closed with the application-level `sms_delivery_unavailable` response.
 
-## Provider readiness
+## SMS.ir adapter
 
-SMS.ir current public documentation uses `https://api.sms.ir/v1/send/verify`, authenticates with `X-API-KEY`, requires a panel-defined Verify template for production, and publishes a Sandbox using the same API shape without sending real SMS. Public documentation describes IP allowlisting as an optional restriction mechanism rather than a requirement for Iranian-origin servers.
+Current contract used by the adapter:
 
-No SMS.ir account, invoice, API activation notice, template approval notice, or credentials were found in the connected project Gmail accounts during W15 review. No credential value was copied into this document or repository.
+- endpoint: `POST https://api.sms.ir/v1/send/verify`
+- auth header: `X-API-KEY`
+- body fields: `mobile`, integer `templateId`, `parameters[]`
+- parameter model: `name`, `value`
+- documented success envelope: `status=1`, `data.messageId`, `data.cost`
+- HTTP 429 is normalized as retryable provider rate limiting
+- HTTP 408/425/5xx and network failures are normalized as retryable temporary failures
+- HTTP 400/401/403 and other non-retryable HTTP failures are normalized as permanent provider failures
 
-Until a real SMS.ir account/API key is confirmed, W15 can prove the application contract and automated tests but cannot send a real Production or Preview SMS.
+The adapter sends the normalized Iranian mobile in SMS.ir's documented national form without country prefix or leading zero, for example `9123456789`.
+
+Production additionally requires `SMSIR_OTP_TEMPLATE_APPROVED=true`. This must remain false while the current template is rejected.
+
+Operational state supplied by Central PM:
+
+- real account exists and is accessible
+- existing YEKI-HAST API key is active; its value is not stored in the repository or this document
+- existing OTP template is rejected pending provider reconsideration/requirements clarification
+- no second API key is needed
+
+## FarazSMS / IranPayamak adapter
+
+The FarazSMS account uses the current IPPanel Edge API contract.
+
+Current contract used by the adapter:
+
+- endpoint: `POST https://edge.ippanel.com/v1/api/send`
+- auth header: `Authorization: <API key/token>`
+- body `sending_type`: `pattern`
+- sender: `from_number` in E.164
+- pattern identifier: `code`
+- recipient: a one-item `recipients` array in E.164
+- pattern parameters: `params` object whose keys match the approved pattern placeholders
+- successful send APIs use the common `data` / `meta` envelope; when `message_outbox_ids` or another documented reference field is returned, W15 normalizes the first reference into `providerReferenceId`
+- Pattern documentation may omit a response body, so an HTTP 2xx empty response is accepted without inventing a reference ID
+
+Production additionally requires `FARAZSMS_OTP_PATTERN_APPROVED=true` and all of:
+
+- `FARAZSMS_API_KEY`
+- `FARAZSMS_PATTERN_CODE`
+- `FARAZSMS_FROM_NUMBER`
+
+Operational state supplied by Central PM:
+
+- fallback account/profile exists
+- initial panel payment is complete
+- identity documents were uploaded
+- approval is pending
+- no API key has been created yet
+- no dedicated line, extra package or unrelated commitment form should be purchased/uploaded unless the provider explicitly proves it is required for OTP
+
+The adapter does not assume that a dedicated line is mandatory. It requires a configured sender number only when the provider makes an approved Pattern sender available for the account.
+
+## Security and observability
+
+Preserved controls:
+
+- Iran mobile normalization to `+98`
+- 60-second resend cooldown
+- OTP TTL
+- five-attempt verification ceiling
+- per-phone request limit
+- per-IP request limit
+- global request limit
+- single-use challenge consumption
+- hashed OTP storage
+- no account enumeration in request flow
+- provider credentials server-side only
+- dev OTP exposure impossible outside `NODE_ENV=development`
+- dev SMS provider impossible in Production
+- no OTP or mobile number is written to provider audit logs
+
+After a provider accepts a send, server logs may record only:
+
+- challenge ID
+- provider name
+- template/pattern identifier
+- provider reference ID when returned
+
+This is sufficient for the one-message Preview/internal-beta live E2E audit without logging the OTP or phone number.
+
+## Tests
+
+Provider unit/contract tests cover both adapters:
+
+- documented endpoint and auth header
+- payload shape and phone format
+- provider reference normalization
+- production configuration guard
+- approval guard
+- retryable provider failure
+- provider rate limiting
+- permanent provider failure
+- response-body sanitization
+
+A dual-provider mocked OTP contract harness covers, for both `smsir` and `farazsms`:
+
+- request accepted
+- correct OTP verification
+- wrong OTP
+- OTP replay rejection
+- expiry
+- resend cooldown / duplicate request
+- excessive verification attempts
+- per-phone request limiting
+- temporary provider failure
+- hard provider failure
+- safe retry after a failed delivery challenge is consumed
+
+The production route invariants separately assert the real SQL-backed TTL, cooldown, attempt, phone/IP/global rate-limit and single-use conditions.
+
+## Foreign-cloud connectivity
+
+The W15 GitHub Actions reachability workflow performs credential-free checks from a GitHub-hosted Ubuntu runner for:
+
+- `api.sms.ir:443` and `https://api.sms.ir/v1/send/verify`
+- `edge.ippanel.com:443` and `https://edge.ippanel.com/v1/api/send`
+
+The check records DNS resolution, TLS handshake and a non-`000` HTTPS response. It sends no API credential, OTP, SMS or transaction.
+
+## Minimum live E2E after one provider is approved
+
+Preview/internal-beta only:
+
+1. Put exactly one provider credential and its approved template/pattern configuration into the isolated Preview/internal-beta environment.
+2. Keep Production unchanged.
+3. Set `SMS_PROVIDER` to that provider; do not configure automatic fallback.
+4. Use one controlled Iranian mobile number.
+5. Request exactly one OTP.
+6. Confirm server audit contains provider name and provider reference when returned, with no phone/OTP in logs.
+7. Enter the received OTP once and verify a normal application session is issued.
+8. Confirm replay fails.
+9. Remove the Preview provider secret/config after the controlled test if it is not needed for continued internal beta.
+
+No Production enablement or merge is part of this live test.
+
+## Current provider classification
+
+SMS.ir: `WAITING PROVIDER` — account/API key are operational, but the OTP template remains rejected.
+
+FarazSMS: `WAITING PROVIDER` — account and documents exist, but identity/account approval and API/Pattern availability are pending.
+
+Current preference remains SMS.ir as PRIMARY because the real account and API key already exist, the Verify API is purpose-built for service/OTP delivery, and foreign-cloud reachability was previously proven. FarazSMS is the FALLBACK because its current Edge API is suitable and the adapter is ready, but account/API/Pattern activation has not yet been granted.
+
+If FarazSMS becomes fully approved first while SMS.ir continues to reject the production OTP template, Central PM can temporarily choose `SMS_PROVIDER=farazsms` for the controlled Preview E2E without changing the provider-neutral authentication state machine.
 
 ## Production safety
 
-W15 does not modify Production environment variables, does not deploy Production, and does not merge to `main`. Real SMS credentials remain server-side only. No hardcoded Production OTP is introduced.
+W15 does not merge to `main`, does not modify Production environment variables, does not deploy Production, does not create a provider secret, does not send a real SMS and does not purchase a line/package.

@@ -228,7 +228,7 @@ jobs:
           }
           check_path / 'ورود با ایمیل'
           check_path / 'mailto:sales@uniqueholding.com.tr'
-          check_path /privacy 'Web و اپ موبایل'
+          check_path /privacy 'در وب و اپ موبایل'
           check_path /terms 'قوانین استفاده'
           check_path /account/delete 'تأیید مالک حساب'
           check_path /account/delete 'حذف واقعی حساب'

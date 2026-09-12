@@ -52,6 +52,22 @@ ALTER TABLE app.call_sessions
   ADD CONSTRAINT call_sessions_listener_currency_code_check
   CHECK (listener_currency_code ~ '^[A-Z]{3}$');
 
+-- The original caller_rate_per_minute_minor >= listener_rate_per_minute_minor guard (table
+-- default name call_sessions_check) assumed both rates were always minor units of the same
+-- currency. That assumption breaks the moment a foreign Caller's rate and the shared Iran
+-- Listener's IRR payout are in different currencies: their minor-unit magnitudes are not
+-- comparable (e.g. USD cents vs IRR rial), so a realistic cross-currency call can never be
+-- inserted. Replace it with a currency-aware version that keeps the exact same-currency
+-- safety invariant unchanged and drops the magnitude comparison only when currencies differ.
+ALTER TABLE app.call_sessions
+  DROP CONSTRAINT IF EXISTS call_sessions_check;
+ALTER TABLE app.call_sessions
+  ADD CONSTRAINT call_sessions_rate_order_check
+  CHECK (
+    currency_code <> listener_currency_code
+    OR caller_rate_per_minute_minor >= listener_rate_per_minute_minor
+  );
+
 CREATE INDEX IF NOT EXISTS call_sessions_caller_market_idx
   ON app.call_sessions(caller_user_id, caller_market_id, requested_at DESC);
 

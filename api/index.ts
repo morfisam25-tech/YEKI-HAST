@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getPublicReleaseConfig } from '../services/api/src/lib/public-release.ts';
 import { isCallerClosedBetaEnabled } from '../services/api/src/lib/caller-beta.ts';
+import { isInternalOwnerTestMode } from '../services/api/src/lib/internal-owner-test.ts';
 
 const EXPECTED_MIGRATIONS = new Map([
   ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
@@ -58,6 +59,10 @@ async function loadPgPool(connectionString: string) {
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const method = req.method ?? 'GET';
   const url = new URL(req.url ?? '/', 'http://localhost');
+
+  // Preview-only internal mode keeps its runtime config in an encoded env value.
+  // Decode it before any route can acquire a DB client on a cold function instance.
+  isInternalOwnerTestMode();
 
   if (method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
     const sha = releaseSha();

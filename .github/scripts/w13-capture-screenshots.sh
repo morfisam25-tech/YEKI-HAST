@@ -7,6 +7,7 @@ on_error() {
   adb exec-out screencap -p > store-screenshots/failure.png 2>/dev/null || true
   cp /tmp/w13-api-server.log store-screenshots/api-server.log 2>/dev/null || true
   cp /tmp/w13-bootstrap.json store-screenshots/bootstrap.json 2>/dev/null || true
+  adb logcat -d > store-screenshots/logcat.txt 2>/dev/null || true
   adb shell uiautomator dump /sdcard/w13-window.xml >/dev/null 2>&1 || true
   adb exec-out cat /sdcard/w13-window.xml > store-screenshots/window.xml 2>/dev/null || true
 }
@@ -16,7 +17,7 @@ trap on_error ERR
 # locally to the emulator. This avoids relying on emulator outbound networking while
 # preserving the real production feature gates used by the app.
 curl -fsS --retry 3 --retry-all-errors \
-  https://yeki-hast-unique-6ff0.vercel.app/v1/bootstrap \
+  https://yeki-hast-theta.vercel.app/v1/bootstrap \
   -o /tmp/w13-bootstrap.json
 python3 - <<'PY'
 import json
@@ -36,8 +37,9 @@ adb shell wm size 1080x1920
 adb shell wm density 420
 adb install -r screenshot-apk/app-release.apk
 adb reverse tcp:8787 tcp:8787
+adb logcat -c
 sleep 2
-adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
+adb shell am start -n app.yekihast.mobile/.MainActivity
 
 wait_text() {
   local needle="$1"
@@ -54,6 +56,7 @@ wait_text() {
   echo "UI text did not appear: $needle" >&2
   cat /tmp/w13-window.xml >&2 || true
   cat /tmp/w13-api-server.log >&2 || true
+  adb logcat -d | tail -300 >&2 || true
   return 1
 }
 
@@ -91,7 +94,7 @@ wait_text 'گفت‌وگوی عمومی هنوز باز نشده است' 15
 adb exec-out screencap -p > store-screenshots/02-caller-closed.png
 
 adb shell am force-stop app.yekihast.mobile
-adb shell monkey -p app.yekihast.mobile -c android.intent.category.LAUNCHER 1
+adb shell am start -n app.yekihast.mobile/.MainActivity
 wait_text 'می‌خوام شنونده بشم' 20
 
 tap_text 'می‌خوام شنونده بشم'

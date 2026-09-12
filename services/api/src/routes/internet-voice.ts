@@ -184,6 +184,9 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
 
 export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // Internal Preview config is decoded lazily. Signal-only requests may land on a
+  // cold function instance, so hydrate it before authentication opens a DB transaction.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
   const body = await readJson<{ kind?: unknown; payload?: unknown }>(req);
   const kind = assertSignalKind(body.kind);
@@ -277,6 +280,8 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
 
 export async function getInternetVoiceSignals(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // See postInternetVoiceSignal: this is a separate cold-start entry point.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
 
   const result = await withTransaction(async (client) => {

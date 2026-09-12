@@ -46,14 +46,19 @@ test('W15 SMS.ir adapter uses Verify API and server-only credential', () => {
   assert.doesNotMatch(emailScreen, /SMSIR_API_KEY|SMSIR_OTP_TEMPLATE_ID|X-API-KEY/);
 });
 
-test('W15 FarazSMS adapter uses IPPanel Edge Pattern API and E.164 recipient', () => {
-  assert.match(smsProvider, /https:\/\/edge\.ippanel\.com\/v1\/api\/send/);
-  assert.match(smsProvider, /sending_type: 'pattern'/);
-  assert.match(smsProvider, /authorization: this\.#apiKey/);
-  assert.match(smsProvider, /recipients: \[input\.phoneE164\]/);
+test('W15 FarazSMS adapter uses current IranPayamak Pattern API contract', () => {
+  assert.match(smsProvider, /https:\/\/api\.iranpayamak\.com\/ws\/v1\/sms\/pattern/);
+  assert.match(smsProvider, /'Api-Key': this\.#apiKey/);
+  assert.match(smsProvider, /attributes: \{ \[this\.#parameterName\]: input\.code \}/);
+  assert.match(smsProvider, /recipient: iranMobileForFarazSms\(input\.phoneE164\)/);
+  assert.match(smsProvider, /line_number: this\.#lineNumber/);
+  assert.match(smsProvider, /number_format: 'english'/);
+  assert.match(smsProvider, /FARAZSMS_LINE_NUMBER/);
+  assert.match(smsProvider, /FARAZSMS_FROM_NUMBER/);
   assert.match(smsProvider, /FARAZSMS_OTP_PATTERN_APPROVED/);
-  assert.doesNotMatch(phoneScreen, /FARAZSMS_API_KEY|FARAZSMS_PATTERN_CODE|Authorization/);
-  assert.doesNotMatch(emailScreen, /FARAZSMS_API_KEY|FARAZSMS_PATTERN_CODE|Authorization/);
+  assert.doesNotMatch(smsProvider, /edge\.ippanel\.com|sending_type: 'pattern'|recipients: \[input\.phoneE164\]|params:/);
+  assert.doesNotMatch(phoneScreen, /FARAZSMS_API_KEY|FARAZSMS_PATTERN_CODE|Api-Key/);
+  assert.doesNotMatch(emailScreen, /FARAZSMS_API_KEY|FARAZSMS_PATTERN_CODE|Api-Key/);
 });
 
 test('W15 provider audit logging excludes phone and OTP values', () => {
@@ -81,6 +86,7 @@ test('W15 documents both providers and production approval guards without real s
   assert.match(envExample, /SMSIR_OTP_TEMPLATE_APPROVED=false/);
   assert.match(envExample, /FARAZSMS_API_KEY=\n/);
   assert.match(envExample, /FARAZSMS_PATTERN_CODE=\n/);
+  assert.match(envExample, /FARAZSMS_LINE_NUMBER=\n/);
   assert.match(envExample, /FARAZSMS_FROM_NUMBER=\n/);
   assert.match(envExample, /FARAZSMS_OTP_PATTERN_APPROVED=false/);
 });

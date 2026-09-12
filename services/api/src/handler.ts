@@ -56,6 +56,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/ready') { ensureDatabaseReady(); await query('SELECT 1'); sendJson(res, 200, { ok: true, database: 'ready' }); return; }
     if (method === 'GET' && url.pathname === '/v1/bootstrap') { ensureDatabaseReady(); const { bootstrap } = await import('./routes/bootstrap.ts'); return await bootstrap(res); }
     if (method === 'GET' && url.pathname === '/v1/payments/nextpay/callback') { ensureDatabaseReady(); const { nextPayCallback } = await import('./routes/payments.ts'); return await nextPayCallback(req, res); }
+    if (method === 'GET' && url.pathname === '/v1/payments/zibal/callback') { ensureDatabaseReady(); const { zibalCallback } = await import('./routes/payments.ts'); return await zibalCallback(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/email/request') { ensureEmailAuthReady(); const { requestEmailOtp } = await import('./routes/auth-email.ts'); return await requestEmailOtp(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/email/verify') { ensureEmailAuthReady(); const { verifyEmailOtp } = await import('./routes/auth-email.ts'); return await verifyEmailOtp(req, res); }
     if (method === 'POST' && url.pathname === '/v1/auth/otp/request') { ensureOtpReady(); const { requestOtp } = await import('./routes/auth.ts'); return await requestOtp(req, res); }

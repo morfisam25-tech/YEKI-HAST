@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
-import { nextPayVerificationDisposition } from '../domain/payment-status.ts';
+import { paymentVerificationDisposition } from '../domain/payment-status.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { sendPaymentCallbackPage } from '../lib/payment-callback-page.ts';
-import { getPaymentProvider, PaymentProviderError } from '../providers/payment.ts';
+import { getPaymentProvider, isProviderPaymentId, paymentRedirectUrl, PaymentProviderError } from '../providers/payment.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BIGINT = 9_223_372_036_854_775_807n;
@@ -46,7 +46,7 @@ function parseAmountMinor(value: unknown): bigint {
   throw new HttpError(400, 'invalid_amount');
 }
 
-function paymentCallbackUri(): string {
+function paymentCallbackUri(provider: string): string {
   const fallback = process.env.NODE_ENV === 'production'
     ? 'https://yeki-hast-theta.vercel.app'
     : 'http://localhost:4000';
@@ -57,14 +57,16 @@ function paymentCallbackUri(): string {
   if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
     throw new HttpError(503, 'payment_not_configured');
   }
-  url.pathname = '/v1/payments/nextpay/callback';
+  if (provider === 'nextpay') url.pathname = '/v1/payments/nextpay/callback';
+  else if (provider === 'zibal') url.pathname = '/v1/payments/zibal/callback';
+  else throw new HttpError(503, 'payment_not_configured');
   url.search = '';
   url.hash = '';
   return url.toString();
 }
 
-function paymentUrl(providerPaymentId: string): string {
-  return `https://nextpay.org/nx/gateway/payment/${encodeURIComponent(providerPaymentId)}`;
+function paymentUrl(provider: string, providerPaymentId: string): string | null {
+  return paymentRedirectUrl(provider, providerPaymentId);
 }
 
 function publicAttempt(row: AttemptRow) {
@@ -74,7 +76,7 @@ function publicAttempt(row: AttemptRow) {
     status: row.status,
     currencyCode: row.currency_code,
     amountMinor: row.amount_minor,
-    paymentUrl: row.status === 'pending' && row.provider_payment_id ? paymentUrl(row.provider_payment_id) : null,
+    paymentUrl: row.status === 'pending' && row.provider_payment_id ? paymentUrl(row.provider, row.provider_payment_id) : null,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -86,8 +88,12 @@ function limitFrom(value: string | null): number {
   return Math.min(parsed, 100);
 }
 
-function paymentProvider() {
-  try { return getPaymentProvider(); }
+function paymentProvider(expectedProvider?: string) {
+  try {
+    const provider = getPaymentProvider();
+    if (expectedProvider && provider.key !== expectedProvider) throw new PaymentProviderError('payment_provider_not_configured');
+    return provider;
+  }
   catch (error) {
     if (error instanceof PaymentProviderError) throw new HttpError(503, 'payment_not_configured');
     throw error;
@@ -112,12 +118,12 @@ async function verifyAndFinalizeAttempt(
     throw new HttpError(409, 'payment_state_conflict');
   }
   const providerPaymentId = row.provider_payment_id ?? candidateProviderPaymentId ?? null;
-  if (row.provider !== 'nextpay' || !providerPaymentId || !UUID_RE.test(providerPaymentId)) {
+  if (!providerPaymentId || !isProviderPaymentId(row.provider, providerPaymentId)) {
     throw new HttpError(409, 'payment_not_ready_for_verification');
   }
   if (row.currency_code !== 'IRR') throw new HttpError(409, 'payment_currency_mismatch');
 
-  const provider = paymentProvider();
+  const provider = paymentProvider(row.provider);
   let verified;
   try {
     verified = await provider.verifyPayment({
@@ -133,8 +139,11 @@ async function verifyAndFinalizeAttempt(
     throw error;
   }
 
-  const disposition = nextPayVerificationDisposition(verified.providerCode);
+  const disposition = paymentVerificationDisposition(row.provider, verified.providerCode);
   const callbackRecovery = row.provider_payment_id === null && candidateProviderPaymentId === providerPaymentId;
+  if (!verified.paid && disposition === 'succeeded') {
+    return { status: 'pending', providerCode: verified.providerCode };
+  }
   if (callbackRecovery && disposition !== 'succeeded') {
     return { status: 'pending', providerCode: verified.providerCode };
   }
@@ -228,7 +237,7 @@ async function verifyAndFinalizeAttempt(
         wallet_id, currency_code, type, delta_minor, balance_after_minor,
         payment_attempt_id, created_by_user_id, reason_code, idempotency_key
       )
-      VALUES ($1,$2,'payment_topup',$3,$4,$5,$6,'nextpay_verified',$7)
+      VALUES ($1,$2,'payment_topup',$3,$4,$5,$6,$7,$8)
     `, [
       current.wallet_id,
       current.currency_code,
@@ -236,6 +245,7 @@ async function verifyAndFinalizeAttempt(
       newBalance.toString(),
       current.id,
       current.user_id,
+      `${current.provider}_verified`,
       `payment-topup:${current.id}:credit`,
     ]);
 
@@ -248,10 +258,11 @@ async function verifyAndFinalizeAttempt(
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
       VALUES ($1,'payment_verified','payment_attempt',$2,
-              jsonb_build_object('provider','nextpay','providerReference',$3,'providerCode',$4,'amountMinor',$5,'currencyCode',$6))
+              jsonb_build_object('provider',$3,'providerReference',$4,'providerCode',$5,'amountMinor',$6,'currencyCode',$7))
     `, [
       current.user_id,
       current.id,
+      current.provider,
       verified.providerReference,
       verified.providerCode,
       current.amount_minor,
@@ -345,7 +356,7 @@ export async function createWalletTopup(req: IncomingMessage, res: ServerRespons
   const amountMinor = parseAmountMinor(body.amountMinor);
   const clientKey = requireString(body.idempotencyKey, 'idempotencyKey', 8, 100);
   const idempotencyKey = `wallet-topup:${userId}:${clientKey}`;
-  const callbackUri = paymentCallbackUri();
+  const callbackUri = paymentCallbackUri(provider.key);
 
   const attempt = await withTransaction(async (client) => {
     const existing = await client.query<AttemptRow>(`
@@ -506,5 +517,23 @@ export async function nextPayCallback(req: IncomingMessage, res: ServerResponse)
     throw new HttpError(400, 'invalid_payment_callback');
   }
   const outcome = await verifyAndFinalizeAttempt(row, transId);
+  sendPaymentCallbackPage(res, outcome.status);
+}
+
+export async function zibalCallback(req: IncomingMessage, res: ServerResponse) {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const trackId = url.searchParams.get('trackId')?.trim() ?? '';
+  if (!isProviderPaymentId('zibal', trackId)) throw new HttpError(400, 'invalid_payment_callback');
+
+  const initial = await query<AttemptRow>(`
+    SELECT id::text, user_id::text, wallet_id::text, market_id::text, provider,
+           currency_code, amount_minor::text, status::text, provider_payment_id,
+           provider_fee_minor::text, created_at::text, completed_at::text
+    FROM app.payment_attempts
+    WHERE provider='zibal' AND provider_payment_id=$1
+  `, [trackId]);
+  const row = initial.rows[0];
+  if (!row) throw new HttpError(400, 'invalid_payment_callback');
+  const outcome = await verifyAndFinalizeAttempt(row, trackId);
   sendPaymentCallbackPage(res, outcome.status);
 }

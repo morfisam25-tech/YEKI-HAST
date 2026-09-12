@@ -98,6 +98,7 @@ function optionalIdentifier(value: unknown): string | null {
 function zibalTrackId(value: unknown): string | null {
   const valueText = optionalIdentifier(value);
   if (!valueText || !/^[1-9][0-9]{0,17}$/.test(valueText)) return null;
+  if (BigInt(valueText) > BigInt(Number.MAX_SAFE_INTEGER)) return null;
   return valueText;
 }
 

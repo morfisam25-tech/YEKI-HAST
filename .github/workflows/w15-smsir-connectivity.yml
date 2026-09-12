@@ -1,4 +1,4 @@
-name: W15 SMS.ir Reachability
+name: W15 SMS Provider Reachability
 
 on:
   workflow_dispatch:
@@ -15,13 +15,28 @@ jobs:
   reachability:
     runs-on: ubuntu-latest
     steps:
-      - name: Check DNS TLS and HTTP reachability
+      - name: Check SMS.ir DNS TLS and HTTPS route without credentials
         shell: bash
         run: |
           set -euo pipefail
+          echo '=== api.sms.ir DNS ==='
           getent ahosts api.sms.ir | head -n 3
-          curl --fail-with-body --silent --show-error --head --connect-timeout 10 --max-time 15 https://api.sms.ir/v1/line || status=$?
-          test "${status:-0}" -ne 6
-          test "${status:-0}" -ne 7
-          test "${status:-0}" -ne 35
-          test "${status:-0}" -ne 60
+          echo '=== api.sms.ir TLS ==='
+          echo | openssl s_client -connect api.sms.ir:443 -servername api.sms.ir -brief 2>&1 | sed -n '1,8p'
+          echo '=== api.sms.ir HTTPS ==='
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --head --connect-timeout 10 --max-time 15 https://api.sms.ir/v1/send/verify)"
+          echo "smsir_http_status=${status}"
+          test "${status}" != '000'
+
+      - name: Check FarazSMS IPPanel DNS TLS and HTTPS route without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== edge.ippanel.com DNS ==='
+          getent ahosts edge.ippanel.com | head -n 3
+          echo '=== edge.ippanel.com TLS ==='
+          echo | openssl s_client -connect edge.ippanel.com:443 -servername edge.ippanel.com -brief 2>&1 | sed -n '1,8p'
+          echo '=== edge.ippanel.com HTTPS ==='
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --head --connect-timeout 10 --max-time 15 https://edge.ippanel.com/v1/api/send)"
+          echo "farazsms_http_status=${status}"
+          test "${status}" != '000'

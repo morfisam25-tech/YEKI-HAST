@@ -1,5 +1,5 @@
 name: W10 Product Audio E2E
-# Temporary branch-only verification; media acknowledgement lifecycle pass.
+# Temporary branch-only verification; lifecycle stage diagnosis.
 
 on:
   push:

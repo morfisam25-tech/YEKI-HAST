@@ -7,6 +7,7 @@ import {
   requireInternalOwnerTestMode,
 } from '../lib/internal-owner-test.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
+import { computeCallAuthorization } from '../domain/call-authorization.ts';
 import { newOpaqueToken, tokenHash } from '../lib/security.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 
@@ -148,12 +149,13 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
   const callId = await withTransaction(async (client) => {
     const context = await client.query<{
       product_id:string; service_id:string; market_id:string; language_id:string;
-      pricing_plan_id:string; currency_code:string; caller_rate:string; listener_rate:string;
+      pricing_plan_id:string; currency_code:string; caller_rate:string; listener_rate:string; billing_increment_seconds:number;
     }>(`
       SELECT p.id::text product_id, s.id::text service_id, m.id::text market_id,
              l.id::text language_id, pp.id::text pricing_plan_id, pp.currency_code,
              pp.caller_rate_per_minute_minor::text caller_rate,
-             pp.listener_rate_per_minute_minor::text listener_rate
+             pp.listener_rate_per_minute_minor::text listener_rate,
+             pp.billing_increment_seconds
       FROM app.products p
       JOIN app.service_catalog s ON s.code=$2 AND s.status='active'
       JOIN app.markets m ON m.code=$3 AND m.is_active=true
@@ -164,6 +166,29 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
     `, [productCode, serviceCode, marketCode]);
     const ctx = context.rows[0];
     if (!ctx) throw new HttpError(503, 'internal_test_context_unavailable');
+    const wallet = await client.query<{id:string;balance_minor:string;reserved_minor:string}>(`
+      SELECT id::text,balance_minor::text,reserved_minor::text
+      FROM app.wallets
+      WHERE user_id=$1 AND currency_code=$2
+      FOR UPDATE
+    `, [INTERNAL_OWNER_TEST_CALLER_ID,ctx.currency_code]);
+    const walletRow = wallet.rows[0];
+    if (!walletRow) throw new HttpError(503, 'internal_test_wallet_unavailable');
+    const authorization = computeCallAuthorization({
+      balanceMinor: BigInt(walletRow.balance_minor),
+      reservedMinor: BigInt(walletRow.reserved_minor),
+      callerRatePerMinuteMinor: BigInt(ctx.caller_rate),
+      billingIncrementSeconds: ctx.billing_increment_seconds,
+      requestedMaxSeconds: 600,
+    });
+    if (!authorization) throw new HttpError(409, 'internal_test_credit_unavailable');
+    const reserved = await client.query<{id:string}>(`
+      UPDATE app.wallets
+      SET reserved_minor=reserved_minor+$2::bigint,version=version+1,updated_at=now()
+      WHERE id=$1 AND balance_minor-reserved_minor >= $2::bigint
+      RETURNING id::text
+    `, [walletRow.id,authorization.authorizedMinor.toString()]);
+    if (!reserved.rows[0]) throw new HttpError(409, 'internal_test_reservation_conflict');
     const created = await client.query<{id:string}>(`
       INSERT INTO app.call_sessions(
         product_id,service_id,market_id,caller_user_id,listener_user_id,
@@ -177,7 +202,20 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
       ) RETURNING id::text
     `, [ctx.product_id,ctx.service_id,ctx.market_id,INTERNAL_OWNER_TEST_CALLER_ID,
       INTERNAL_OWNER_TEST_LISTENER_ID,ctx.language_id,ctx.pricing_plan_id,ctx.currency_code,
-      ctx.caller_rate,ctx.listener_rate]);
+      ctx.caller_rate,ctx.listener_rate,authorization.authorizedMinor.toString(),authorization.maxBillableSeconds]);
+    await client.query(`
+      INSERT INTO app.wallet_hold_events(
+        wallet_id,call_session_id,currency_code,event_type,amount_minor,reason_code,idempotency_key,metadata
+      ) VALUES ($1,$2,$3,'reserve',$4,'internal_owner_test_authorization',$5,$6::jsonb)
+      ON CONFLICT (idempotency_key) DO NOTHING
+    `, [
+      reserved.rows[0].id,
+      created.rows[0].id,
+      ctx.currency_code,
+      authorization.authorizedMinor.toString(),
+      `call:${created.rows[0].id}:hold:reserve`,
+      JSON.stringify({internalTestData:true,maxBillableSeconds:authorization.maxBillableSeconds}),
+    ]);
     await client.query(`INSERT INTO app.call_events(call_session_id,status,source,metadata)
       VALUES ($1,'routing','internal_owner_test',$2::jsonb)`, [created.rows[0].id, JSON.stringify({internalTestData:true,liveMoney:false})]);
     return created.rows[0].id;

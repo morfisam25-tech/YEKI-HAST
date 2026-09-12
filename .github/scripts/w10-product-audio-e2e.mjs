@@ -90,13 +90,20 @@ try{
  if(!result.relay||!result.aToB||!result.bToA||!result.iceViaApi)throw new Error('rtp_validation');
  console.log('REAL_PEER_CONNECTION=PASS');console.log('SELECTED_ICE=RELAY');console.log('CALLER_TO_LISTENER_AUDIO_RTP=PASS');console.log('LISTENER_TO_CALLER_AUDIO_RTP=PASS');
 }finally{await browser.close()}
+console.log('LIFECYCLE_STAGE=first_media_post');
 const firstMedia=await api('/v1/calls/'+callId+'/voice/signals',caller,'POST',{kind:'media_connected',payload:{}});
 if(firstMedia.becameConnected||firstMedia.status==='connected')throw new Error('connected_after_one_side');
+console.log('LIFECYCLE_STAGE=first_media_verified');
+console.log('LIFECYCLE_STAGE=second_media_post');
 const secondMedia=await api('/v1/calls/'+callId+'/voice/signals',listener,'POST',{kind:'media_connected',payload:{}});
 if(!secondMedia.becameConnected||secondMedia.status!=='connected')throw new Error('not_connected_after_both');
+console.log('LIFECYCLE_STAGE=second_media_verified');
+console.log('LIFECYCLE_STAGE=first_end_post');
 const end1=await api('/v1/calls/'+callId+'/voice/end',caller,'POST',{endedReason:'internal_audio_e2e'});
+console.log('LIFECYCLE_STAGE=second_end_post');
 const end2=await api('/v1/calls/'+callId+'/voice/end',caller,'POST',{endedReason:'internal_audio_e2e'});
 if(String(end1.callerChargeMinor)!=='0'||String(end1.listenerEarningMinor)!=='0'||end1.idempotent!==false||end2.idempotent!==true)throw new Error('settlement_or_billing');
+console.log('LIFECYCLE_STAGE=wallet_read');
 const walletAfter=await api('/v1/wallet',caller);
 if(walletAmount(walletBefore)!==walletAmount(walletAfter))throw new Error('wallet_changed');
 console.log('PRODUCT_CALL_LIFECYCLE=PASS');console.log('BILLING_SIMULATION=PASS');console.log('SETTLEMENT_IDEMPOTENCY=PASS');console.log('W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY');

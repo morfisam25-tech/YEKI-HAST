@@ -82,14 +82,28 @@ async function prepareVoiceEnd(input: {
     let safetyEventId: string | null = null;
     let safetyCutoffAt: string | null = null;
     if (input.safety) {
-      const event = await client.query<{ id: string; created_at: string }>(`
-        INSERT INTO app.safety_events(call_session_id, triggered_by, trigger_user_id, severity, action_code)
-        VALUES ($1,$2,$3,'high','end_for_safety')
-        RETURNING id::text, created_at::text
-      `, [input.callId, role, input.userId]);
-      safetyEventId = event.rows[0].id;
-      safetyCutoffAt = event.rows[0].created_at;
-      if (input.details) {
+      // The call row is already locked. Reuse an earlier in-flight Safety Exit event so
+      // concurrent retries cannot create multiple safety events before settlement commits.
+      const priorEvent = await client.query<{ id: string; created_at: string }>(`
+        SELECT id::text, created_at::text
+        FROM app.safety_events
+        WHERE call_session_id=$1 AND action_code='end_for_safety'
+        ORDER BY created_at, id
+        LIMIT 1
+      `, [input.callId]);
+      let event = priorEvent.rows[0];
+      const createdEvent = !event;
+      if (!event) {
+        const inserted = await client.query<{ id: string; created_at: string }>(`
+          INSERT INTO app.safety_events(call_session_id, triggered_by, trigger_user_id, severity, action_code)
+          VALUES ($1,$2,$3,'high','end_for_safety')
+          RETURNING id::text, created_at::text
+        `, [input.callId, role, input.userId]);
+        event = inserted.rows[0];
+      }
+      safetyEventId = event.id;
+      safetyCutoffAt = event.created_at;
+      if (input.details && createdEvent) {
         await client.query(`
           INSERT INTO private_data.safety_event_details(safety_event_id, details_ciphertext)
           VALUES ($1,$2)

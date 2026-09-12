@@ -52,6 +52,12 @@ function required(name: string): string {
   return value;
 }
 
+function requiredWithFallback(primaryName: string, fallbackName: string): string {
+  const value = process.env[primaryName]?.trim() || process.env[fallbackName]?.trim();
+  if (!value) throw new Error('sms_provider_not_configured');
+  return value;
+}
+
 function approvedInProduction(name: string): void {
   if (process.env.NODE_ENV !== 'production') return;
   if (process.env[name]?.trim().toLowerCase() !== 'true') {
@@ -97,9 +103,12 @@ function iranMobileForSmsIr(phoneE164: string): string {
   return phoneE164.slice(3);
 }
 
-function requireE164(value: string): string {
-  if (!/^\+[1-9]\d{7,14}$/.test(value)) throw new Error('sms_provider_not_configured');
-  return value;
+function iranMobileForFarazSms(phoneE164: string): string {
+  if (!/^\+989\d{9}$/.test(phoneE164)) {
+    throw new SmsProviderError({ provider: 'farazsms', kind: 'request_rejected', retryable: false });
+  }
+  // IranPayamak Pattern examples use the Iranian national mobile form: 09xxxxxxxxx.
+  return `0${phoneE164.slice(3)}`;
 }
 
 class DevSmsProvider implements SmsOtpProvider {
@@ -181,14 +190,14 @@ class FarazSmsProvider implements SmsOtpProvider {
   readonly provider = 'farazsms' as const;
   readonly #apiKey: string;
   readonly #patternCode: string;
-  readonly #fromNumber: string;
+  readonly #lineNumber: string;
   readonly #parameterName: string;
 
   constructor() {
     this.#apiKey = required('FARAZSMS_API_KEY');
     this.#patternCode = required('FARAZSMS_PATTERN_CODE');
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(this.#patternCode)) throw new Error('sms_provider_not_configured');
-    this.#fromNumber = requireE164(required('FARAZSMS_FROM_NUMBER'));
+    this.#lineNumber = requiredWithFallback('FARAZSMS_LINE_NUMBER', 'FARAZSMS_FROM_NUMBER');
     this.#parameterName = process.env.FARAZSMS_OTP_PARAMETER_NAME?.trim() || 'code';
     if (!/^[A-Za-z0-9_]{1,64}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
     approvedInProduction('FARAZSMS_OTP_PATTERN_APPROVED');
@@ -199,25 +208,21 @@ class FarazSmsProvider implements SmsOtpProvider {
   }
 
   async sendOtp(input: SmsOtpInput): Promise<SmsOtpSendResult> {
-    if (!/^\+989\d{9}$/.test(input.phoneE164)) {
-      throw new SmsProviderError({ provider: this.provider, kind: 'request_rejected', retryable: false });
-    }
-
     let response: Response;
     try {
-      response = await fetch('https://edge.ippanel.com/v1/api/send', {
+      response = await fetch('https://api.iranpayamak.com/ws/v1/sms/pattern', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           accept: 'application/json',
-          authorization: this.#apiKey,
+          'Api-Key': this.#apiKey,
         },
         body: JSON.stringify({
-          sending_type: 'pattern',
-          from_number: this.#fromNumber,
           code: this.#patternCode,
-          recipients: [input.phoneE164],
-          params: { [this.#parameterName]: input.code },
+          attributes: { [this.#parameterName]: input.code },
+          recipient: iranMobileForFarazSms(input.phoneE164),
+          line_number: this.#lineNumber,
+          number_format: 'english',
         }),
         signal: AbortSignal.timeout(10_000),
       });
@@ -228,16 +233,19 @@ class FarazSmsProvider implements SmsOtpProvider {
 
     if (!response.ok) throw httpProviderError(this.provider, response.status);
 
-    // IPPanel documents a data/meta success envelope for send APIs. Some Pattern examples
-    // omit a response body, so an HTTP 2xx with an empty body remains an accepted send.
     const payload = asRecord(await optionalJson(response));
-    const meta = asRecord(payload?.meta);
-    if (meta && meta.status === false) {
-      throw new SmsProviderError({ provider: this.provider, kind: 'request_rejected', retryable: false });
+    // The current official Pattern endpoint documents HTTP 201 with status="success" and
+    // a numeric data field. Any other 2xx envelope is a provider-declared rejection rather
+    // than a successful send; provider response details are deliberately not surfaced.
+    if (!payload || payload.status !== 'success') {
+      throw new SmsProviderError({
+        provider: this.provider,
+        kind: 'request_rejected',
+        retryable: false,
+        statusCode: response.status,
+      });
     }
-    const data = asRecord(payload?.data);
-    const ids = Array.isArray(data?.message_outbox_ids) ? data.message_outbox_ids : undefined;
-    const rawReference = ids?.[0] ?? data?.bulk_id ?? data?.message_id;
+    const rawReference = payload.data;
     const providerReferenceId = typeof rawReference === 'number' || typeof rawReference === 'string'
       ? String(rawReference)
       : undefined;
@@ -245,7 +253,7 @@ class FarazSmsProvider implements SmsOtpProvider {
     return {
       provider: this.provider,
       templateIdentifier: this.templateIdentifier,
-      ...(providerReferenceId ? { providerReferenceId } : {}),
+      ...(providerReferenceId !== undefined ? { providerReferenceId } : {}),
     };
   }
 }

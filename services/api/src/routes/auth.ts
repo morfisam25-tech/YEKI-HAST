@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
-import { getSmsProvider } from '../providers/sms.ts';
+import { getSmsProvider, SmsProviderError } from '../providers/sms.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { requireAuth, revokeCurrentSession } from '../lib/auth.ts';
 import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
@@ -128,16 +128,37 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
     return inserted.rows[0].id;
   });
 
+  let sendResult: Awaited<ReturnType<typeof smsProvider.sendOtp>>;
   try {
-    await smsProvider.sendOtp({ phoneE164, code, ttlSeconds });
-  } catch {
+    sendResult = await smsProvider.sendOtp({ phoneE164, code, ttlSeconds });
+  } catch (error) {
     try {
       await query('UPDATE private_data.otp_challenges SET consumed_at=now() WHERE id=$1 AND consumed_at IS NULL', [challengeId]);
     } catch {
       console.error('otp_cleanup_after_sms_failure_failed');
     }
+
+    if (error instanceof SmsProviderError) {
+      console.warn('otp_sms_delivery_failed', {
+        provider: error.provider,
+        kind: error.kind,
+        retryable: error.retryable,
+        statusCode: error.statusCode ?? null,
+      });
+    } else {
+      console.warn('otp_sms_delivery_failed', { provider: smsProvider.provider, kind: 'unknown' });
+    }
     throw new HttpError(503, 'sms_delivery_unavailable');
   }
+
+  // Deliberately excludes phone number and OTP. The provider reference is retained only in
+  // server logs so a controlled Preview send can be audited without exposing provider secrets.
+  console.info('otp_sms_accepted', {
+    challengeId,
+    provider: sendResult.provider,
+    templateIdentifier: sendResult.templateIdentifier,
+    providerReferenceId: sendResult.providerReferenceId ?? null,
+  });
 
   const devExpose = process.env.NODE_ENV === 'development' && process.env.DEV_EXPOSE_OTP === 'true';
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });

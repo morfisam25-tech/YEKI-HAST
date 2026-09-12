@@ -1,5 +1,5 @@
 name: W10 Product Audio E2E
-# Temporary branch-only verification; cold-start signaling hydration pass.
+# Temporary branch-only verification; full API cold-start hydration pass.
 
 on:
   push:

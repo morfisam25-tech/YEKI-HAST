@@ -189,6 +189,7 @@ async function prepareVoiceEnd(input: {
           SELECT 1
           FROM app.internet_voice_signals reconnecting
           WHERE reconnecting.call_session_id=$1
+            AND reconnecting.sender_role <> $2
             AND reconnecting.signal_kind='reconnecting'
             AND NOT EXISTS (
               SELECT 1
@@ -201,14 +202,14 @@ async function prepareVoiceEnd(input: {
         ) AS unresolved
       )
       SELECT CASE
-        WHEN $2::timestamptz IS NOT NULL AND reconnect.unresolved THEN LEAST(
-          $2::timestamptz,
+        WHEN $3::timestamptz IS NOT NULL AND reconnect.unresolved THEN LEAST(
+          $3::timestamptz,
           LEAST(
             COALESCE(cs.caller_voice_heartbeat_at,cs.connected_at),
             COALESCE(cs.listener_voice_heartbeat_at,cs.connected_at)
           )
         )::text
-        WHEN $2::timestamptz IS NOT NULL THEN $2::timestamptz::text
+        WHEN $3::timestamptz IS NOT NULL THEN $3::timestamptz::text
         WHEN reconnect.unresolved THEN LEAST(
           COALESCE(cs.caller_voice_heartbeat_at,cs.connected_at),
           COALESCE(cs.listener_voice_heartbeat_at,cs.connected_at)
@@ -218,7 +219,7 @@ async function prepareVoiceEnd(input: {
       FROM app.call_sessions cs
       CROSS JOIN reconnect
       WHERE cs.id=$1
-    `, [input.callId, safetyCutoffAt]);
+    `, [input.callId, role, safetyCutoffAt]);
 
     return {
       kind: 'connected' as const,

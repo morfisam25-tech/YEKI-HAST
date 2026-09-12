@@ -191,14 +191,14 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
     if (!reserved.rows[0]) throw new HttpError(409, 'internal_test_reservation_conflict');
     const created = await client.query<{id:string}>(`
       INSERT INTO app.call_sessions(
-        product_id,service_id,market_id,caller_user_id,listener_user_id,
+        product_id,service_id,market_id,caller_market_id,caller_user_id,listener_user_id,
         client_request_id,status,requested_listener_gender,requested_language_id,
         caller_mood,topic_code,pricing_plan_id,currency_code,
-        caller_rate_per_minute_minor,listener_rate_per_minute_minor,
+        caller_rate_per_minute_minor,listener_rate_per_minute_minor,listener_currency_code,
         authorized_minor,max_billable_seconds,recording_mode
       ) VALUES (
-        $1,$2,$3,$4,$5,'internal-owner-test:'||gen_random_uuid()::text,
-        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,$11,$12,'none'
+        $1,$2,$3,$3,$4,$5,'internal-owner-test:'||gen_random_uuid()::text,
+        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,$8,$11,$12,'none'
       ) RETURNING id::text
     `, [ctx.product_id,ctx.service_id,ctx.market_id,INTERNAL_OWNER_TEST_CALLER_ID,
       INTERNAL_OWNER_TEST_LISTENER_ID,ctx.language_id,ctx.pricing_plan_id,ctx.currency_code,

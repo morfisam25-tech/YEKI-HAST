@@ -263,18 +263,23 @@ try {
       .map((deployment) => deployment.uid ?? deployment.id);
     if (previewDeploymentIds.length !== 1) throw new Error('preview_deployment_not_unique');
 
-    const e2e = spawnSync(process.execPath, ['.github/scripts/w10-product-audio-e2e.mjs'], {
-      env: { ...process.env, PREVIEW_URL: previewUrl },
+    const lifecycleOnly = process.env.W10_LIFECYCLE_ONLY === '1';
+    const e2eScript = lifecycleOnly
+      ? '.github/scripts/w10-lifecycle-billing.mjs'
+      : '.github/scripts/w10-product-audio-e2e.mjs';
+    const e2e = spawnSync(process.execPath, [e2eScript], {
+      env: { ...process.env, PREVIEW_URL: previewUrl, W10_LIFECYCLE_ONLY: lifecycleOnly ? '1' : '' },
       encoding: 'utf8',
       timeout: 180_000,
       maxBuffer: 10 * 1024 * 1024,
     });
     for (const line of e2e.stdout.split(/\r?\n/)) {
-      if (/^(PRODUCTION_HARD_BLOCK|PRODUCT_FLOW|REAL_PEER_CONNECTION|SELECTED_ICE|CALLER_TO_LISTENER_AUDIO_RTP|LISTENER_TO_CALLER_AUDIO_RTP|LIFECYCLE_STAGE|PRODUCT_CALL_LIFECYCLE|BILLING_SIMULATION|SETTLEMENT_IDEMPOTENCY|W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY)=?[A-Za-z_]*$/.test(line)) {
+      if (/^(PRODUCTION_HARD_BLOCK|AUDIO_EVIDENCE_PRESERVED|FRESH_EXECUTION|PRODUCT_FLOW|REAL_PEER_CONNECTION|SELECTED_ICE|CALLER_TO_LISTENER_AUDIO_RTP|LISTENER_TO_CALLER_AUDIO_RTP|LIFECYCLE_STAGE|PRODUCT_CALL_LIFECYCLE|BILLING_SIMULATION|SETTLEMENT_IDEMPOTENCY|NO_ANSWER_ZERO_CHARGE|DUPLICATE_SETTLEMENT_SAFE|W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY|W10_LIFECYCLE_BILLING_READY)=?[A-Za-z_]*$/.test(line)) {
         process.stdout.write(`${line}\n`);
       }
     }
-    if (e2e.status !== 0 || !e2e.stdout.includes('W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY')) {
+    const completionMarker = lifecycleOnly ? 'W10_LIFECYCLE_BILLING_READY' : 'W10_PRODUCT_AUDIO_E2E_AUTOMATED_READY';
+    if (e2e.status !== 0 || !e2e.stdout.includes(completionMarker)) {
       const diagnosticText = `${e2e.stdout}\n${e2e.stderr}`;
       const categories = [
         ['TypeError: Failed to fetch', 'browser_fetch_failed'],

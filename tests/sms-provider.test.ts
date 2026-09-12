@@ -186,6 +186,7 @@ test('FarazSMS provider fails closed without complete or approved production con
     SMS_PROVIDER: 'farazsms',
     FARAZSMS_API_KEY: undefined,
     FARAZSMS_PATTERN_CODE: undefined,
+    FARAZSMS_LINE_NUMBER: undefined,
     FARAZSMS_FROM_NUMBER: undefined,
     FARAZSMS_OTP_PARAMETER_NAME: undefined,
     FARAZSMS_OTP_PATTERN_APPROVED: undefined,
@@ -195,14 +196,26 @@ test('FarazSMS provider fails closed without complete or approved production con
     NODE_ENV: 'production',
     SMS_PROVIDER: 'farazsms',
     FARAZSMS_API_KEY: 'test-key',
-    FARAZSMS_PATTERN_CODE: 'pattern_123',
-    FARAZSMS_FROM_NUMBER: '+983000505',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: '50002178584000',
+    FARAZSMS_FROM_NUMBER: undefined,
     FARAZSMS_OTP_PARAMETER_NAME: 'code',
     FARAZSMS_OTP_PATTERN_APPROVED: 'false',
   }, () => assert.throws(() => getSmsProvider(), /sms_provider_not_configured/));
+
+  withEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'farazsms',
+    FARAZSMS_API_KEY: 'test-key',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: undefined,
+    FARAZSMS_FROM_NUMBER: undefined,
+    FARAZSMS_OTP_PARAMETER_NAME: 'code',
+    FARAZSMS_OTP_PATTERN_APPROVED: 'true',
+  }, () => assert.throws(() => getSmsProvider(), /sms_provider_not_configured/));
 });
 
-test('FarazSMS/IPPanel Pattern request matches current documented contract and returns provider reference', async () => {
+test('FarazSMS official Pattern request uses Api-Key, national recipient, line and attributes', async () => {
   const beforeFetch = globalThis.fetch;
   let capturedUrl = '';
   let capturedInit: RequestInit | undefined;
@@ -210,38 +223,43 @@ test('FarazSMS/IPPanel Pattern request matches current documented contract and r
   await withAsyncEnv({
     NODE_ENV: 'production',
     SMS_PROVIDER: 'farazsms',
-    FARAZSMS_API_KEY: 'test-key',
-    FARAZSMS_PATTERN_CODE: 'pattern_123',
-    FARAZSMS_FROM_NUMBER: '+983000505',
-    FARAZSMS_OTP_PARAMETER_NAME: 'code',
+    FARAZSMS_API_KEY: 'test-secret-api-key',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: '50002178584000',
+    FARAZSMS_FROM_NUMBER: undefined,
+    FARAZSMS_OTP_PARAMETER_NAME: 'otp',
     FARAZSMS_OTP_PATTERN_APPROVED: 'true',
   }, async () => {
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       capturedUrl = String(url);
       capturedInit = init;
       return new Response(JSON.stringify({
-        data: { message_outbox_ids: [1123544244] },
-        meta: { status: true, message_code: '200-1' },
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
+        status: 'success',
+        data: 1123544244,
+        messages: 'sent',
+      }), { status: 201, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
 
     try {
       const result = await getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '654321', ttlSeconds: 300 });
-      assert.equal(capturedUrl, 'https://edge.ippanel.com/v1/api/send');
+      assert.equal(capturedUrl, 'https://api.iranpayamak.com/ws/v1/sms/pattern');
       assert.equal(capturedInit?.method, 'POST');
       const headers = new Headers(capturedInit?.headers);
-      assert.equal(headers.get('authorization'), 'test-key');
+      assert.equal(headers.get('Api-Key'), 'test-secret-api-key');
+      assert.equal(headers.get('authorization'), null);
       assert.equal(headers.get('content-type'), 'application/json');
-      assert.deepEqual(JSON.parse(String(capturedInit?.body)), {
-        sending_type: 'pattern',
-        from_number: '+983000505',
-        code: 'pattern_123',
-        recipients: ['+989123456789'],
-        params: { code: '654321' },
+      const body = JSON.parse(String(capturedInit?.body));
+      assert.deepEqual(body, {
+        code: 'SJ3FgPrE0C',
+        attributes: { otp: '654321' },
+        recipient: '09123456789',
+        line_number: '50002178584000',
+        number_format: 'english',
       });
+      assert.equal(JSON.stringify(body).includes('test-secret-api-key'), false);
       assert.deepEqual(result, {
         provider: 'farazsms',
-        templateIdentifier: 'pattern_123',
+        templateIdentifier: 'SJ3FgPrE0C',
         providerReferenceId: '1123544244',
       });
     } finally {
@@ -250,21 +268,70 @@ test('FarazSMS/IPPanel Pattern request matches current documented contract and r
   });
 });
 
-test('FarazSMS normalizes temporary and permanent provider errors without exposing response bodies', async () => {
+test('FarazSMS temporarily accepts legacy FARAZSMS_FROM_NUMBER as line-number fallback', async () => {
   const beforeFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | undefined;
   await withAsyncEnv({
     NODE_ENV: 'production',
     SMS_PROVIDER: 'farazsms',
     FARAZSMS_API_KEY: 'test-key',
-    FARAZSMS_PATTERN_CODE: 'pattern_123',
-    FARAZSMS_FROM_NUMBER: '+983000505',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: undefined,
+    FARAZSMS_FROM_NUMBER: '50002178584000',
+    FARAZSMS_OTP_PARAMETER_NAME: 'code',
+    FARAZSMS_OTP_PATTERN_APPROVED: 'true',
+  }, async () => {
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ status: 'success', data: 1, messages: 'sent' }), { status: 201 });
+    }) as typeof fetch;
+    try {
+      await getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '123456', ttlSeconds: 300 });
+      assert.equal(capturedBody?.line_number, '50002178584000');
+    } finally {
+      globalThis.fetch = beforeFetch;
+    }
+  });
+});
+
+test('FarazSMS maps HTTP auth, rate-limit and temporary failures safely', async () => {
+  const beforeFetch = globalThis.fetch;
+  await withAsyncEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'farazsms',
+    FARAZSMS_API_KEY: 'test-secret-api-key',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: '50002178584000',
+    FARAZSMS_FROM_NUMBER: undefined,
     FARAZSMS_OTP_PARAMETER_NAME: 'code',
     FARAZSMS_OTP_PATTERN_APPROVED: 'true',
   }, async () => {
     try {
-      globalThis.fetch = (async () => new Response('provider-internal-detail', { status: 503 })) as typeof fetch;
+      for (const status of [401, 403]) {
+        globalThis.fetch = (async () => new Response('secret-body', { status })) as typeof fetch;
+        await assert.rejects(
+          getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '987654', ttlSeconds: 300 }),
+          (error: unknown) => error instanceof SmsProviderError
+            && error.message === 'sms_delivery_failed'
+            && error.kind === 'authentication_failed'
+            && !error.retryable
+            && error.statusCode === status,
+        );
+      }
+
+      globalThis.fetch = (async () => new Response('busy', { status: 429 })) as typeof fetch;
       await assert.rejects(
-        getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '123456', ttlSeconds: 300 }),
+        getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '987654', ttlSeconds: 300 }),
+        (error: unknown) => error instanceof SmsProviderError
+          && error.message === 'sms_delivery_failed'
+          && error.kind === 'rate_limited'
+          && error.retryable
+          && error.statusCode === 429,
+      );
+
+      globalThis.fetch = (async () => new Response('down', { status: 503 })) as typeof fetch;
+      await assert.rejects(
+        getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '987654', ttlSeconds: 300 }),
         (error: unknown) => error instanceof SmsProviderError
           && error.message === 'sms_delivery_failed'
           && error.kind === 'temporary_unavailable'
@@ -272,14 +339,14 @@ test('FarazSMS normalizes temporary and permanent provider errors without exposi
           && error.statusCode === 503,
       );
 
-      globalThis.fetch = (async () => new Response('provider-internal-detail', { status: 401 })) as typeof fetch;
+      globalThis.fetch = (async () => { throw new Error('network failed with test-secret-api-key 987654 09123456789'); }) as typeof fetch;
       await assert.rejects(
-        getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '123456', ttlSeconds: 300 }),
+        getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '987654', ttlSeconds: 300 }),
         (error: unknown) => error instanceof SmsProviderError
           && error.message === 'sms_delivery_failed'
-          && error.kind === 'authentication_failed'
-          && !error.retryable
-          && error.statusCode === 401,
+          && error.kind === 'temporary_unavailable'
+          && error.retryable
+          && error.statusCode === undefined,
       );
     } finally {
       globalThis.fetch = beforeFetch;
@@ -287,22 +354,69 @@ test('FarazSMS normalizes temporary and permanent provider errors without exposi
   });
 });
 
-test('FarazSMS accepts documented 2xx Pattern responses even when no response body is returned', async () => {
+test('FarazSMS provider-declared rejection is sanitized and non-retryable', async () => {
   const beforeFetch = globalThis.fetch;
+  const apiKey = 'test-secret-api-key';
+  const otp = '987654';
+  const phone = '+989123456789';
+  const providerBody = JSON.stringify({ status: 'error', data: null, messages: `bad ${apiKey} ${otp} ${phone}` });
+
+  await withAsyncEnv({
+    NODE_ENV: 'production',
+    SMS_PROVIDER: 'farazsms',
+    FARAZSMS_API_KEY: apiKey,
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: '50002178584000',
+    FARAZSMS_FROM_NUMBER: undefined,
+    FARAZSMS_OTP_PARAMETER_NAME: 'code',
+    FARAZSMS_OTP_PATTERN_APPROVED: 'true',
+  }, async () => {
+    globalThis.fetch = (async () => new Response(providerBody, { status: 201 })) as typeof fetch;
+    try {
+      await assert.rejects(
+        getSmsProvider().sendOtp({ phoneE164: phone, code: otp, ttlSeconds: 300 }),
+        (error: unknown) => {
+          assert.ok(error instanceof SmsProviderError);
+          assert.equal(error.message, 'sms_delivery_failed');
+          assert.equal(error.kind, 'request_rejected');
+          assert.equal(error.retryable, false);
+          assert.equal(error.statusCode, 201);
+          const exposed = `${error.name}:${error.message}:${JSON.stringify(error)}`;
+          assert.equal(exposed.includes(apiKey), false);
+          assert.equal(exposed.includes(otp), false);
+          assert.equal(exposed.includes(phone), false);
+          assert.equal(exposed.includes('bad '), false);
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = beforeFetch;
+    }
+  });
+});
+
+test('FarazSMS rejects non-Iranian OTP recipient before fetch', async () => {
+  const beforeFetch = globalThis.fetch;
+  let called = false;
   await withAsyncEnv({
     NODE_ENV: 'production',
     SMS_PROVIDER: 'farazsms',
     FARAZSMS_API_KEY: 'test-key',
-    FARAZSMS_PATTERN_CODE: 'pattern_123',
-    FARAZSMS_FROM_NUMBER: '+983000505',
+    FARAZSMS_PATTERN_CODE: 'SJ3FgPrE0C',
+    FARAZSMS_LINE_NUMBER: '50002178584000',
+    FARAZSMS_FROM_NUMBER: undefined,
     FARAZSMS_OTP_PARAMETER_NAME: 'code',
     FARAZSMS_OTP_PATTERN_APPROVED: 'true',
   }, async () => {
-    globalThis.fetch = (async () => new Response(null, { status: 200 })) as typeof fetch;
+    globalThis.fetch = (async () => { called = true; return new Response('{}', { status: 201 }); }) as typeof fetch;
     try {
-      const result = await getSmsProvider().sendOtp({ phoneE164: '+989123456789', code: '123456', ttlSeconds: 300 });
-      assert.equal(result.provider, 'farazsms');
-      assert.equal(result.providerReferenceId, undefined);
+      await assert.rejects(
+        getSmsProvider().sendOtp({ phoneE164: '+12025550123', code: '123456', ttlSeconds: 300 }),
+        (error: unknown) => error instanceof SmsProviderError
+          && error.kind === 'request_rejected'
+          && !error.retryable,
+      );
+      assert.equal(called, false);
     } finally {
       globalThis.fetch = beforeFetch;
     }

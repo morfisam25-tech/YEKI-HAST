@@ -1,5 +1,5 @@
 name: W10 Product Audio E2E
-# Temporary branch-only verification; redacted exception diagnosis.
+# Temporary branch-only verification; cold-start signaling hydration pass.
 
 on:
   push:

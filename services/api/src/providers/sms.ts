@@ -1,11 +1,48 @@
-export interface SmsProvider {
-  sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void>;
+export type SmsOtpProviderName = 'dev' | 'smsir' | 'farazsms';
+
+export type SmsProviderFailureKind =
+  | 'rate_limited'
+  | 'temporary_unavailable'
+  | 'authentication_failed'
+  | 'request_rejected';
+
+export interface SmsOtpInput {
+  phoneE164: string;
+  code: string;
+  ttlSeconds: number;
 }
 
-class DevSmsProvider implements SmsProvider {
-  async sendOtp(): Promise<void> {
-    // Deliberately no console logging of OTPs. In local development the API can return
-    // devCode only when DEV_EXPOSE_OTP=true and NODE_ENV=development.
+export interface SmsOtpSendResult {
+  provider: SmsOtpProviderName;
+  templateIdentifier: string;
+  providerReferenceId?: string;
+}
+
+export interface SmsOtpProvider {
+  readonly provider: SmsOtpProviderName;
+  readonly templateIdentifier: string;
+  sendOtp(input: SmsOtpInput): Promise<SmsOtpSendResult>;
+}
+
+export class SmsProviderError extends Error {
+  readonly provider: SmsOtpProviderName;
+  readonly kind: SmsProviderFailureKind;
+  readonly retryable: boolean;
+  readonly statusCode?: number;
+
+  constructor(input: {
+    provider: SmsOtpProviderName;
+    kind: SmsProviderFailureKind;
+    retryable: boolean;
+    statusCode?: number;
+  }) {
+    // Never surface provider response bodies, credentials, mobile numbers or OTPs.
+    super('sms_delivery_failed');
+    this.name = 'SmsProviderError';
+    this.provider = input.provider;
+    this.kind = input.kind;
+    this.retryable = input.retryable;
+    this.statusCode = input.statusCode;
   }
 }
 
@@ -15,23 +52,157 @@ function required(name: string): string {
   return value;
 }
 
-function iranLocalMobile(phoneE164: string): string {
-  if (phoneE164.startsWith('+98')) return `0${phoneE164.slice(3)}`;
-  return phoneE164;
+function approvedInProduction(name: string): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (process.env[name]?.trim().toLowerCase() !== 'true') {
+    throw new Error('sms_provider_not_configured');
+  }
 }
 
-class IPPanelSmsProvider implements SmsProvider {
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+async function optionalJson(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return undefined;
+  try { return JSON.parse(text); }
+  catch { return undefined; }
+}
+
+function httpProviderError(provider: SmsOtpProviderName, statusCode: number): SmsProviderError {
+  if (statusCode === 429) {
+    return new SmsProviderError({ provider, kind: 'rate_limited', retryable: true, statusCode });
+  }
+  if (statusCode === 408 || statusCode === 425 || statusCode >= 500) {
+    return new SmsProviderError({ provider, kind: 'temporary_unavailable', retryable: true, statusCode });
+  }
+  if (statusCode === 401 || statusCode === 403) {
+    return new SmsProviderError({ provider, kind: 'authentication_failed', retryable: false, statusCode });
+  }
+  return new SmsProviderError({ provider, kind: 'request_rejected', retryable: false, statusCode });
+}
+
+function networkProviderError(provider: SmsOtpProviderName): SmsProviderError {
+  return new SmsProviderError({ provider, kind: 'temporary_unavailable', retryable: true });
+}
+
+function iranMobileForSmsIr(phoneE164: string): string {
+  if (!/^\+989\d{9}$/.test(phoneE164)) {
+    throw new SmsProviderError({ provider: 'smsir', kind: 'request_rejected', retryable: false });
+  }
+  // SMS.ir Verify examples use the national mobile without +98 and without a leading zero: 912xxxxxxxx.
+  return phoneE164.slice(3);
+}
+
+function requireE164(value: string): string {
+  if (!/^\+[1-9]\d{7,14}$/.test(value)) throw new Error('sms_provider_not_configured');
+  return value;
+}
+
+class DevSmsProvider implements SmsOtpProvider {
+  readonly provider = 'dev' as const;
+  readonly templateIdentifier = 'dev';
+
+  async sendOtp(): Promise<SmsOtpSendResult> {
+    // Deliberately no console logging of OTPs. In local development the API can return
+    // devCode only when DEV_EXPOSE_OTP=true and NODE_ENV=development.
+    return { provider: this.provider, templateIdentifier: this.templateIdentifier };
+  }
+}
+
+class SmsIrProvider implements SmsOtpProvider {
+  readonly provider = 'smsir' as const;
+  readonly #apiKey: string;
+  readonly #templateId: number;
+  readonly #parameterName: string;
+
+  constructor() {
+    this.#apiKey = required('SMSIR_API_KEY');
+    const templateId = Number(required('SMSIR_OTP_TEMPLATE_ID'));
+    if (!Number.isSafeInteger(templateId) || templateId <= 0) throw new Error('sms_provider_not_configured');
+    this.#templateId = templateId;
+    this.#parameterName = process.env.SMSIR_OTP_PARAMETER_NAME?.trim() || 'CODE';
+    if (!/^[A-Za-z0-9_]{1,32}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
+    approvedInProduction('SMSIR_OTP_TEMPLATE_APPROVED');
+  }
+
+  get templateIdentifier(): string {
+    return String(this.#templateId);
+  }
+
+  async sendOtp(input: SmsOtpInput): Promise<SmsOtpSendResult> {
+    let response: Response;
+    try {
+      response = await fetch('https://api.sms.ir/v1/send/verify', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          'X-API-KEY': this.#apiKey,
+        },
+        body: JSON.stringify({
+          mobile: iranMobileForSmsIr(input.phoneE164),
+          templateId: this.#templateId,
+          parameters: [{ name: this.#parameterName, value: input.code }],
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (error) {
+      if (error instanceof SmsProviderError) throw error;
+      throw networkProviderError(this.provider);
+    }
+
+    if (!response.ok) throw httpProviderError(this.provider, response.status);
+
+    const payload = asRecord(await optionalJson(response));
+    // SMS.ir documents a JSON envelope with status=1 on success. A malformed success body
+    // is treated as temporary failure so we do not create a false-positive accepted send.
+    if (!payload || payload.status !== 1) {
+      throw new SmsProviderError({ provider: this.provider, kind: 'temporary_unavailable', retryable: true });
+    }
+    const data = asRecord(payload.data);
+    const rawMessageId = data?.messageId;
+    const providerReferenceId = typeof rawMessageId === 'number' || typeof rawMessageId === 'string'
+      ? String(rawMessageId)
+      : undefined;
+
+    return {
+      provider: this.provider,
+      templateIdentifier: this.templateIdentifier,
+      ...(providerReferenceId ? { providerReferenceId } : {}),
+    };
+  }
+}
+
+class FarazSmsProvider implements SmsOtpProvider {
+  readonly provider = 'farazsms' as const;
   readonly #apiKey: string;
   readonly #patternCode: string;
   readonly #fromNumber: string;
+  readonly #parameterName: string;
 
   constructor() {
-    this.#apiKey = required('IPPANEL_API_KEY');
-    this.#patternCode = required('IPPANEL_PATTERN_CODE');
-    this.#fromNumber = required('IPPANEL_FROM_NUMBER');
+    this.#apiKey = required('FARAZSMS_API_KEY');
+    this.#patternCode = required('FARAZSMS_PATTERN_CODE');
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(this.#patternCode)) throw new Error('sms_provider_not_configured');
+    this.#fromNumber = requireE164(required('FARAZSMS_FROM_NUMBER'));
+    this.#parameterName = process.env.FARAZSMS_OTP_PARAMETER_NAME?.trim() || 'code';
+    if (!/^[A-Za-z0-9_]{1,64}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
+    approvedInProduction('FARAZSMS_OTP_PATTERN_APPROVED');
   }
 
-  async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {
+  get templateIdentifier(): string {
+    return this.#patternCode;
+  }
+
+  async sendOtp(input: SmsOtpInput): Promise<SmsOtpSendResult> {
+    if (!/^\+989\d{9}$/.test(input.phoneE164)) {
+      throw new SmsProviderError({ provider: this.provider, kind: 'request_rejected', retryable: false });
+    }
+
     let response: Response;
     try {
       response = await fetch('https://edge.ippanel.com/v1/api/send', {
@@ -46,72 +217,46 @@ class IPPanelSmsProvider implements SmsProvider {
           from_number: this.#fromNumber,
           code: this.#patternCode,
           recipients: [input.phoneE164],
-          params: { code: input.code },
+          params: { [this.#parameterName]: input.code },
         }),
         signal: AbortSignal.timeout(10_000),
       });
-    } catch {
-      throw new Error('sms_delivery_failed');
+    } catch (error) {
+      if (error instanceof SmsProviderError) throw error;
+      throw networkProviderError(this.provider);
     }
 
-    if (!response.ok) throw new Error('sms_delivery_failed');
-    try { await response.json(); }
-    catch { throw new Error('sms_delivery_failed'); }
+    if (!response.ok) throw httpProviderError(this.provider, response.status);
+
+    // IPPanel documents a data/meta success envelope for send APIs. Some Pattern examples
+    // omit a response body, so an HTTP 2xx with an empty body remains an accepted send.
+    const payload = asRecord(await optionalJson(response));
+    const meta = asRecord(payload?.meta);
+    if (meta && meta.status === false) {
+      throw new SmsProviderError({ provider: this.provider, kind: 'request_rejected', retryable: false });
+    }
+    const data = asRecord(payload?.data);
+    const ids = Array.isArray(data?.message_outbox_ids) ? data.message_outbox_ids : undefined;
+    const rawReference = ids?.[0] ?? data?.bulk_id ?? data?.message_id;
+    const providerReferenceId = typeof rawReference === 'number' || typeof rawReference === 'string'
+      ? String(rawReference)
+      : undefined;
+
+    return {
+      provider: this.provider,
+      templateIdentifier: this.templateIdentifier,
+      ...(providerReferenceId ? { providerReferenceId } : {}),
+    };
   }
 }
 
-class SmsIrProvider implements SmsProvider {
-  readonly #apiKey: string;
-  readonly #templateId: number;
-  readonly #parameterName: string;
-
-  constructor() {
-    this.#apiKey = required('SMSIR_API_KEY');
-    const templateId = Number(required('SMSIR_OTP_TEMPLATE_ID'));
-    if (!Number.isSafeInteger(templateId) || templateId <= 0) throw new Error('sms_provider_not_configured');
-    this.#templateId = templateId;
-    this.#parameterName = process.env.SMSIR_OTP_PARAMETER_NAME?.trim() || 'CODE';
-    if (!/^[A-Za-z0-9_]{1,32}$/.test(this.#parameterName)) throw new Error('sms_provider_not_configured');
-
-    // Production delivery stays fail-closed until the template has been approved in SMS.ir.
-    if (process.env.NODE_ENV === 'production' && process.env.SMSIR_OTP_TEMPLATE_APPROVED?.trim().toLowerCase() !== 'true') {
-      throw new Error('sms_provider_not_configured');
-    }
-  }
-
-  async sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void> {
-    let response: Response;
-    try {
-      response = await fetch('https://api.sms.ir/v1/send/verify', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-          'X-API-KEY': this.#apiKey,
-        },
-        body: JSON.stringify({
-          mobile: iranLocalMobile(input.phoneE164),
-          templateId: this.#templateId,
-          parameters: [{ name: this.#parameterName, value: input.code }],
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch {
-      throw new Error('sms_delivery_failed');
-    }
-
-    // Provider details and response bodies never escape the server boundary.
-    if (!response.ok) throw new Error('sms_delivery_failed');
-  }
-}
-
-export function getSmsProvider(): SmsProvider {
+export function getSmsProvider(): SmsOtpProvider {
   const provider = process.env.SMS_PROVIDER?.trim() || (process.env.NODE_ENV === 'development' ? 'dev' : '');
   if (provider === 'dev') {
     if (process.env.NODE_ENV !== 'development') throw new Error('sms_provider_not_configured');
     return new DevSmsProvider();
   }
   if (provider === 'smsir') return new SmsIrProvider();
-  if (provider === 'ippanel') return new IPPanelSmsProvider();
+  if (provider === 'farazsms') return new FarazSmsProvider();
   throw new Error('sms_provider_not_configured');
 }

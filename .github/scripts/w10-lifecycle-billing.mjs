@@ -17,13 +17,24 @@ async function api(path, token, method = 'GET', body) {
   return data;
 }
 
-function balanceMinor(wallet) {
+function activeWallet(payload) {
+  if (!Array.isArray(payload.wallets)) return payload;
+  const wallet = payload.wallets.find((row) => row.activeForCalls === true)
+    ?? payload.wallets.find((row) => row.currencyCode === payload.activeCurrencyCode)
+    ?? payload.wallets[0];
+  if (!wallet) throw new Error('active_wallet_missing');
+  return wallet;
+}
+
+function balanceMinor(walletPayload) {
+  const wallet = activeWallet(walletPayload);
   const value = wallet.balanceMinor ?? wallet.balance_minor ?? wallet.balance?.minor;
   if (value === undefined || value === null) throw new Error('wallet_balance_missing');
   return BigInt(value);
 }
 
-function reservedMinor(wallet) {
+function reservedMinor(walletPayload) {
+  const wallet = activeWallet(walletPayload);
   const value = wallet.reservedMinor ?? wallet.reserved_minor ?? wallet.reserved?.minor;
   if (value === undefined || value === null) throw new Error('wallet_reserved_missing');
   return BigInt(value);

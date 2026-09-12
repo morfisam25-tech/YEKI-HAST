@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import {
   INTERNAL_OWNER_TEST_CALLER_ID,
   INTERNAL_OWNER_TEST_LISTENER_ID,
+  requireInternalOwnerTestAuthorization,
   requireInternalOwnerTestMode,
 } from '../lib/internal-owner-test.ts';
 import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
@@ -29,15 +30,17 @@ export function serveOwnerTestPage(_req: IncomingMessage, res: ServerResponse): 
   sendHtml(res, `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>تست داخلی مالک · یکی هست</title><style>
-body{margin:0;background:#101914;color:#eef7f0;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:760px;margin:48px auto;padding:24px}.card{background:#17251d;border:1px solid #31513d;border-radius:20px;padding:24px}.tag{color:#9fd8ae;font-size:13px}.note{color:#bbcabf;line-height:1.9}button{border:0;border-radius:12px;padding:14px 20px;background:#9fd8ae;color:#102016;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}ol{line-height:2.1;padding-right:22px}.pass{color:#9fd8ae}.fail{color:#ff9c9c}code{direction:ltr;display:inline-block}</style></head>
+body{margin:0;background:#101914;color:#eef7f0;font-family:Tahoma,Arial,sans-serif}.wrap{max-width:760px;margin:48px auto;padding:24px}.card{background:#17251d;border:1px solid #31513d;border-radius:20px;padding:24px}.tag{color:#9fd8ae;font-size:13px}.note{color:#bbcabf;line-height:1.9}input{box-sizing:border-box;width:100%;margin:0 0 16px;padding:13px 14px;border:1px solid #31513d;border-radius:12px;background:#101914;color:#eef7f0}button{border:0;border-radius:12px;padding:14px 20px;background:#9fd8ae;color:#102016;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}ol{line-height:2.1;padding-right:22px}.pass{color:#9fd8ae}.fail{color:#ff9c9c}code{direction:ltr;display:inline-block}</style></head>
 <body><main class="wrap"><section class="card"><p class="tag">INTERNAL TEST DATA · PREVIEW ONLY</p><h1>تست داخلی Caller ↔ Listener</h1>
 <p class="note">این مسیر از OTP، KYC و آموزش کاربران واقعی استفاده نمی‌کند. در Production وجود ندارد.</p>
+<input id="ownerAuth" type="password" autocomplete="off" placeholder="Owner Test authorization token" aria-label="Owner Test authorization token">
 <button id="run">ساخت شنونده تست و اجرای تماس داخلی</button><ol id="steps"></ol></section></main>
 <script>
-const button=document.getElementById('run'),steps=document.getElementById('steps');
+const button=document.getElementById('run'),steps=document.getElementById('steps'),ownerAuth=document.getElementById('ownerAuth');
 function line(text,ok=true){const li=document.createElement('li');li.textContent=text;li.className=ok?'pass':'fail';steps.appendChild(li)}
-async function request(path,token,method='GET',body){const r=await fetch(path,{method,headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||('HTTP '+r.status));return data}
+async function request(path,token,method='GET',body){const internal=path.startsWith('/v1/internal-beta/owner-test/');const headers={...(internal?{'x-internal-beta-owner-test-token':ownerAuth.value}:{}),...(token?{authorization:'Bearer '+token}:{}),...(body?{'content-type':'application/json'}:{})};const r=await fetch(path,{method,headers,body:body?JSON.stringify(body):undefined});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||('HTTP '+r.status));return data}
 button.onclick=async()=>{button.disabled=true;steps.textContent='';try{
+ if(!ownerAuth.value)throw new Error('owner_test_authorization_required');
  const boot=await request('/v1/internal-beta/owner-test/bootstrap','', 'POST');line('هویت‌های مصنوعی Caller و Listener ساخته یا بازیابی شدند');
  const listener=boot.sessions.listener,caller=boot.sessions.caller;
  await request('/v1/listener/presence',listener,'POST',{status:'online',acceptsMale:true,acceptsFemale:true});line('Listener روی Available Now قرار گرفت');
@@ -56,7 +59,7 @@ button.onclick=async()=>{button.disabled=true;steps.textContent='';try{
 }
 
 export async function bootstrapOwnerTest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  requireInternalOwnerTestMode();
+  requireInternalOwnerTestAuthorization(req);
   const callerToken = newOpaqueToken();
   const listenerToken = newOpaqueToken();
   const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
@@ -136,7 +139,7 @@ export async function bootstrapOwnerTest(req: IncomingMessage, res: ServerRespon
 }
 
 export async function assertOwnerTestActor(req: IncomingMessage, expected: 'caller'|'listener'): Promise<string> {
-  requireInternalOwnerTestMode();
+  requireInternalOwnerTestAuthorization(req);
   const { userId } = await requireAuth(req);
   const expectedId = expected === 'caller' ? INTERNAL_OWNER_TEST_CALLER_ID : INTERNAL_OWNER_TEST_LISTENER_ID;
   if (userId !== expectedId) throw new HttpError(403, 'internal_test_actor_required');

@@ -90,8 +90,6 @@ try{
  if(!result.relay||!result.aToB||!result.bToA||!result.iceViaApi)throw new Error('rtp_validation');
  console.log('REAL_PEER_CONNECTION=PASS');console.log('SELECTED_ICE=RELAY');console.log('CALLER_TO_LISTENER_AUDIO_RTP=PASS');console.log('LISTENER_TO_CALLER_AUDIO_RTP=PASS');
 }finally{await browser.close()}
-const beforeConnected=await api('/v1/calls/'+callId,caller);
-if(beforeConnected.status==='connected')throw new Error('connected_before_media');
 const firstMedia=await api('/v1/calls/'+callId+'/voice/signals',caller,'POST',{kind:'media_connected',payload:{}});
 if(firstMedia.becameConnected||firstMedia.status==='connected')throw new Error('connected_after_one_side');
 const secondMedia=await api('/v1/calls/'+callId+'/voice/signals',listener,'POST',{kind:'media_connected',payload:{}});

@@ -9,13 +9,10 @@ const privacyPage = await readFile(new URL('../apps/web/app/privacy/page.tsx', i
 const deletionPage = await readFile(new URL('../apps/web/app/account/delete/page.tsx', import.meta.url), 'utf8');
 const submissionPacket = await readFile(new URL('../docs/STORE_SUBMISSION_ANSWERS.md', import.meta.url), 'utf8');
 const playPacket = await readFile(new URL('../docs/GOOGLE_PLAY_FINAL_PACKET.md', import.meta.url), 'utf8');
+const currentRelease = await readFile(new URL('../docs/STORE_RELEASE_CURRENT.md', import.meta.url), 'utf8');
 const platformRequirements = await readFile(new URL('../docs/STORE_PLATFORM_REQUIREMENTS.md', import.meta.url), 'utf8');
 
-const allMobileDeps = {
-  ...(mobilePackage.dependencies ?? {}),
-  ...(mobilePackage.devDependencies ?? {}),
-};
-
+const allMobileDeps = { ...(mobilePackage.dependencies ?? {}), ...(mobilePackage.devDependencies ?? {}) };
 const analyticsOrAdsPackages = [
   '@sentry/react-native',
   '@react-native-firebase/analytics',
@@ -40,27 +37,15 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
   assert.match(platformRequirements, /SDK 57/);
 });
 
-test('privacy policy covers current listener path and truthfully marks contact and Internet Voice closed in production', () => {
-  assert.match(privacyPage, /وب و اپ موبایل/);
-  assert.match(privacyPage, /نام مستعار/);
-  assert.match(privacyPage, /زبان‌ها و سطح تسلط/);
-  assert.match(privacyPage, /معرفی کوتاه اختیاری/);
-  assert.match(privacyPage, /SecureStore/);
-  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده/);
-  assert.match(privacyPage, /تماس صوتی اینترنتی/);
-  assert.match(privacyPage, /فعال نیستند/);
-  assert.match(privacyPage, /RECORD_AUDIO/);
-  assert.match(privacyPage, /مسیر عمومی تماس‌گیرنده و تماس صوتی در وضعیت فعلی production بسته است/);
-  assert.match(privacyPage, /صدای مکالمه از این قابلیت جمع‌آوری یا منتقل نمی‌شود/);
-  assert.match(privacyPage, /WebRTC/);
-  assert.match(privacyPage, /واسط TURN/);
-  assert.match(privacyPage, /مسیر ضبط یا ذخیره محتوای صوتی مکالمه در backend وجود ندارد/);
-  assert.match(privacyPage, /پیش از باز شدن تماس‌گیرنده یا تماس صوتی اینترنتی در production/);
-  assert.match(privacyPage, /حذف واقعی همان‌جا انجام می‌شود/);
-  assert.match(privacyPage, /نگهداری ضروری/);
+test('privacy policy covers the public 18+ human-listening and live WebRTC runtime', () => {
+  for (const marker of [
+    'وب و اپ موبایل', '۱۸ سال و بالاتر', 'شنونده انسانی', 'نام مستعار', 'زبان‌های خوداظهاری',
+    'معرفی کوتاه', 'SecureStore', 'WebRTC', 'TURN', 'ضبط تماس توسط پلتفرم خاموش است',
+    'تماس‌ها پایش یا شنود نمی‌شوند', 'دوره‌های نهایی',
+  ]) assert.match(privacyPage, new RegExp(marker));
 });
 
-test('account deletion is discoverable in app and truthfully completable from the public web resource', () => {
+test('account deletion is discoverable and distinguishes deletion from retained-record review', () => {
   assert.match(mobileRoot, />حذف حساب</);
   assert.match(mobileRoot, /accountDeletionUrl/);
   assert.match(deletionPage, /\/api\/account\/deletion-request/);
@@ -69,47 +54,29 @@ test('account deletion is discoverable in app and truthfully completable from th
   assert.match(deletionPage, /نشست‌ها فوراً باطل می‌شوند/);
 });
 
-test('current mobile package has no known analytics or advertising SDK that would invalidate privacy draft', () => {
-  for (const dependency of analyticsOrAdsPackages) {
-    assert.equal(
-      allMobileDeps[dependency],
-      undefined,
-      `${dependency} requires Store privacy/data-safety review before release`,
-    );
+test('current mobile package has no known analytics or advertising SDK', () => {
+  for (const dependency of analyticsOrAdsPackages) assert.equal(allMobileDeps[dependency], undefined);
+});
+
+test('release documents record W32 Play reality and prohibit stale upload claims', () => {
+  assert.match(currentRelease, /Draft/);
+  for (const source of [currentRelease, playPacket]) {
+    assert.match(source, /zero testers|zero configured testers|zero/);
+    assert.match(source, /14-day.*not started|14-day clock has not started/);
+    assert.match(source, /vc7/);
+    assert.match(source, /8 or higher|8\+/);
   }
+  assert.match(currentRelease, /Uploaded AAB: \*\*none\*\*/);
+  assert.match(currentRelease, /Data Safety: \*\*not started\*\*/);
+  assert.match(currentRelease, /Child safety declaration: \*\*not started\*\*/);
+  assert.match(currentRelease, /app icon, feature graphic, and phone screenshots in Console: \*\*missing\*\*/i);
 });
 
-test('store submission packet is pinned to final vc5 identifiers and current closed production voice gate', () => {
-  assert.match(submissionPacket, /app\.yekihast\.mobile/);
-  assert.match(submissionPacket, /https:\/\/yekihast\.app\/privacy/);
-  assert.match(submissionPacket, /https:\/\/yekihast\.app\/account\/delete/);
-  assert.match(submissionPacket, /GOOGLE_PLAY_FINAL_PACKET\.md/);
-  assert.match(submissionPacket, /final versionCode: `5`/);
-  assert.match(submissionPacket, /target SDK: Android 16 \/ API 36/);
-  assert.match(submissionPacket, /51dc645a-b56f-4428-91b5-73337898f870/);
-  assert.match(submissionPacket, /f843909c6a239d784f38c97c304310a64a7e4ab5c59410cd905de8b89bd06e32/);
-  assert.match(submissionPacket, /RECORD_AUDIO/);
+test('store answers remain explicitly unsubmitted and require exact future-binary review', () => {
+  assert.match(submissionPacket, /unsubmitted draft/i);
+  assert.match(submissionPacket, /No answer in this file has been filed/);
+  assert.match(submissionPacket, /exact future AAB/);
   assert.match(submissionPacket, /Microphone permission: \*\*Yes\*\*/);
-  assert.match(submissionPacket, /Camera permission: No/);
-  assert.match(submissionPacket, /Audio files \/ Voice or sound recordings — Collected: \*\*No\*\*/);
-  assert.match(submissionPacket, /Audio files \/ Voice or sound recordings — Shared: \*\*No\*\*/);
-  assert.match(submissionPacket, /Caller closed beta is disabled/);
-  assert.match(submissionPacket, /no TURN\/ICE relay is configured/);
-  assert.match(submissionPacket, /vc2\/vc3\/vc4 are superseded/);
-  assert.match(submissionPacket, /AndroidX ProfileInstaller receiver protection/);
-  assert.match(submissionPacket, /Apple \/ iOS — parked/);
-});
-
-test('authoritative Play packet separates microphone permission from current audio collection and locks re-file gate', () => {
-  assert.match(playPacket, /RECORD_AUDIO/);
-  assert.match(playPacket, /CALLER_CLOSED_BETA_ENABLED=false/);
-  assert.match(playPacket, /COMMERCIAL_HOSTING_APPROVED=false/);
-  assert.match(playPacket, /34161228428/);
-  assert.match(playPacket, /34161306558/);
-  assert.match(playPacket, /Audio files \/ Voice or sound recordings/);
-  assert.match(playPacket, /Collected: \*\*No\*\*/);
-  assert.match(playPacket, /Shared: \*\*No\*\*/);
-  assert.match(playPacket, /Microphone permission: \*\*Yes\*\*/);
-  assert.match(playPacket, /Before `CALLER_CLOSED_BETA_ENABLED`/);
-  assert.match(playPacket, /update Privacy and Store disclosures \*\*before\*\* enabling the feature/);
+  assert.match(submissionPacket, /Platform recording: \*\*Off\*\*/);
+  assert.match(submissionPacket, /written confirmation is still required/i);
 });

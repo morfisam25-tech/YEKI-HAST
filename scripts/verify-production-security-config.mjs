@@ -218,8 +218,11 @@ if (callerClosedBetaEnabled) {
   publicHttpsUrl('PRIVACY_POLICY_URL');
   publicHttpsUrl('TERMS_OF_SERVICE_URL');
   publicHttpsUrl('ACCOUNT_DELETION_URL');
+  publicHttpsUrl('CHILD_SAFETY_URL');
   emailAddress('SUPPORT_EMAIL');
-  integer('CALLER_MINIMUM_AGE', undefined, 13, 99);
+  if (integer('CALLER_MINIMUM_AGE', undefined, 18, 18) !== 18) {
+    throw new Error('Public Caller requires CALLER_MINIMUM_AGE=18');
+  }
   required('CALLER_AGE_POLICY_VERSION');
   validateInternetVoiceLaunchTransport();
 }

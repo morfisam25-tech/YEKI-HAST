@@ -48,6 +48,23 @@ test('Web voice routes allow microphone only where live audio is used', () => {
   for (const route of ['/talk', '/booking/call', '/listener/work']) {
     assert.equal(routePolicies.get(route)?.get('permissions-policy'), 'camera=(), geolocation=(), microphone=(self), payment=(), usb=()');
   }
+
+  const effectivePermissionsPolicy = (path: string) => {
+    let policy: string | undefined;
+    for (const entry of webVercel.headers) {
+      if (entry.source === '/(.*)' || entry.source === path) {
+        const current = new Map((entry.headers ?? []).map((header: any) => [String(header.key).toLowerCase(), String(header.value)]));
+        policy = current.get('permissions-policy') ?? policy;
+      }
+    }
+    return policy;
+  };
+  for (const route of ['/talk', '/booking/call', '/listener/work']) {
+    assert.equal(effectivePermissionsPolicy(route), 'camera=(), geolocation=(), microphone=(self), payment=(), usb=()');
+  }
+  for (const route of ['/', '/privacy', '/terms', '/booking']) {
+    assert.equal(effectivePermissionsPolicy(route), 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
+  }
 });
 
 test('production browser sessions use __Host cookies and strict cookie attributes', () => {

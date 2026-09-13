@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const repoRoot = new URL('../', import.meta.url);
 const staleOrigin = 'https://yeki-hast.vercel.app';
@@ -24,7 +25,7 @@ async function collectTextFiles(relativeDir: string): Promise<string[]> {
     }
   }
 
-  await walk(rootPath.pathname);
+  await walk(fileURLToPath(rootPath));
   return results;
 }
 

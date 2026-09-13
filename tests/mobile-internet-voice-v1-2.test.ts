@@ -18,13 +18,16 @@ test('Android native build declares WebRTC dependency, plugin and audio-only mic
 });
 
 test('Android Store-facing shell describes Internet Voice accurately and exposes required public policy/support links', () => {
-  assert.match(app, /تماس اصلی از اینترنت برقرار می‌شود/);
-  assert.match(app, /برای Internet Voice شماره تلفن لازم نیست/);
+  assert.match(app, /تماس زنده از اینترنت برقرار می‌شود/);
+  assert.match(app, /تماس اصلی از اینترنت انجام می‌شود و شماره واقعی دو طرف برای آن لازم نیست یا نمایش داده نمی‌شود/);
   assert.doesNotMatch(app, /شماره تماس جداگانه تأیید می‌شود/);
-  assert.match(app, /https:\/\/yekihast\.app\/privacy/);
-  assert.match(app, /https:\/\/yekihast\.app\/terms/);
-  assert.match(app, /https:\/\/yekihast\.app\/account\/delete/);
-  assert.match(app, /mailto:sales@uniqueholding\.com\.tr/);
+  assert.match(app, /legal\?\.privacyPolicyUrl/);
+  assert.match(app, /legal\?\.termsOfServiceUrl/);
+  assert.match(app, /legal\?\.accountDeletionUrl/);
+  assert.match(app, /legal\?\.childSafetyUrl/);
+  assert.match(app, /legal\?\.supportEmail/);
+  assert.doesNotMatch(app, /https:\/\/yekihast\.app/);
+  assert.doesNotMatch(app, /sales@uniqueholding\.com\.tr/);
 });
 
 test('Android Caller requests microphone before creating the Wallet HOLD and never dispatches PSTN', () => {

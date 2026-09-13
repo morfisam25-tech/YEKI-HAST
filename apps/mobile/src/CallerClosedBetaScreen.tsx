@@ -492,8 +492,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <Text style={styles.title}>Caller · تماس اینترنتی</Text>
-      <Text style={styles.note}>Internet Voice مسیر اصلی تماس است. شماره تلفن برای این مسیر لازم نیست؛ PSTN فقط fallback عملیاتی است.</Text>
+      <Text style={styles.title}>تماس اینترنتی با شنونده انسانی</Text>
+      <Text style={styles.note}>ویژه ۱۸ سال و بالاتر · تماس زنده WebRTC · ضبط توسط پلتفرم خاموش است. این سرویس درمانی، پزشکی، دوست‌یابی یا اضطراری نیست.</Text>
 
       {!recoveryComplete && <View style={styles.card}><Text style={styles.heading}>بررسی تماس جاری</Text><Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text></View>}
 
@@ -507,13 +507,13 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   <View style={styles.card}>
     <Text style={styles.heading}>تأیید سن و قوانین</Text>
     <Text style={styles.body}>قبل از دیدن شنونده‌ها هر سه مورد را جداگانه تأیید کن.</Text>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
-      <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</Text>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageConfirmed, disabled: busy }} disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
+      <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم ۱۸ سال یا بیشتر دارم.</Text>
     </TouchableOpacity>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: termsAccepted, disabled: busy }} disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
       <Text style={styles.policyText}>{termsAccepted ? '☑' : '☐'} قوانین استفاده را خواندم و می‌پذیرم. لینک «قوانین استفاده» پایین صفحه در دسترس است.</Text>
     </TouchableOpacity>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: safetyAccepted, disabled: busy }} disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
       <Text style={styles.policyText}>{safetyAccepted ? '☑' : '☐'} می‌پذیرم محترمانه رفتار کنم؛ اینجا محل دوست‌یابی یا مشاوره تخصصی نیست و اطلاعات تماس شخصی ردوبدل نمی‌کنم.</Text>
     </TouchableOpacity>
     <TouchableOpacity disabled={busy || !policiesReady} style={[styles.primary, !policiesReady && styles.disabled]} onPress={acceptAgeGate}>
@@ -539,7 +539,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             <View key={listener.id} style={styles.listener}>
               <View style={styles.listenerText}>
                 <Text style={styles.listenerName}>{listener.nickname}</Text>
-                <Text style={styles.meta}>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                <Text style={styles.meta}>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب آزمایشی؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
                 {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}
               </View>
               <TouchableOpacity disabled={busy} style={styles.smallButton} onPress={() => { void startCall(listener); }}><Text style={styles.smallButtonText}>تماس</Text></TouchableOpacity>

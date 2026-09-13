@@ -18,6 +18,7 @@ import {
   getListenerApplication,
   logoutCurrentSession,
   type BootstrapLanguage,
+  type PublicLegalConfig,
   type SessionResponse,
 } from './src/api';
 import { clearStoredSession, loadStoredSession, saveStoredSession } from './src/session-storage';
@@ -51,7 +52,7 @@ function Choice({ label, selected, onPress }: ChoiceProps) {
 
 function errorMessage(code: string): string {
   const messages: Record<string, string> = {
-    caller_closed_beta_disabled: 'مسیر Caller برای این محیط فعال نیست.',
+    caller_closed_beta_disabled: 'مسیر تماس‌گیرنده برای این محیط فعال نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
     listener_application_not_found: 'درخواست شنونده هنوز ساخته نشده.',
@@ -61,19 +62,20 @@ function errorMessage(code: string): string {
   return messages[code] ?? 'خطایی رخ داد. دوباره امتحان کن.';
 }
 
-const PUBLIC_LINKS = [
-  ['حریم خصوصی', 'https://yekihast.app/privacy'],
-  ['قوانین استفاده', 'https://yekihast.app/terms'],
-  ['حذف حساب', 'https://yekihast.app/account/delete'],
-  ['پشتیبانی', 'mailto:sales@uniqueholding.com.tr'],
-] as const;
-
-function LegalLinks({ compact = false }: { compact?: boolean }) {
+function LegalLinks({ compact = false, legal }: { compact?: boolean; legal: PublicLegalConfig | null }) {
+  const links = [
+    legal?.privacyPolicyUrl ? ['حریم خصوصی', legal.privacyPolicyUrl] : null,
+    legal?.termsOfServiceUrl ? ['قوانین استفاده', legal.termsOfServiceUrl] : null,
+    legal?.accountDeletionUrl ? ['حذف حساب', legal.accountDeletionUrl] : null,
+    legal?.childSafetyUrl ? ['ایمنی کودک', legal.childSafetyUrl] : null,
+    legal?.supportEmail ? ['پشتیبانی', `mailto:${legal.supportEmail}`] : null,
+  ].filter((entry): entry is [string, string] => entry !== null);
+  if (!links.length) return null;
   return (
     <View style={[styles.legalBox, compact && styles.legalBoxCompact]}>
       {!compact && <Text style={styles.legalTitle}>اطلاعات و پشتیبانی</Text>}
       <View style={styles.legalRow}>
-        {PUBLIC_LINKS.map(([label, url]) => (
+        {links.map(([label, url]) => (
           <TouchableOpacity key={url} onPress={() => { void Linking.openURL(url).catch(() => undefined); }}>
             <Text style={styles.legalLink}>{label}</Text>
           </TouchableOpacity>
@@ -90,7 +92,7 @@ function screenForApplicationStatus(status: string): Screen {
   return 'listener-training';
 }
 
-export default function App() {
+export default function App({ legal }: { legal: PublicLegalConfig | null }) {
   const [screen, setScreen] = useState<Screen>('home');
   const [authPurpose, setAuthPurpose] = useState<AuthPurpose>('listener');
   const [callerBetaEnabled, setCallerBetaEnabled] = useState(false);
@@ -323,7 +325,7 @@ export default function App() {
             <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
           </TouchableOpacity>
         </View>
-        <LegalLinks compact />
+        <LegalLinks compact legal={legal} />
         <CallerClosedBetaScreen token={token} onClose={() => setScreen('home')} />
       </SafeAreaView>
     );
@@ -342,17 +344,17 @@ export default function App() {
               <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
               <Text style={styles.heroBody}>
                 {callerBetaEnabled
-                  ? 'Caller در این محیط فعال است. ورود با ایمیل انجام می‌شود و تماس اصلی از اینترنت برقرار می‌شود؛ برای Internet Voice شماره تلفن لازم نیست.'
-                  : 'بخش مکالمه Caller در این محیط فعلاً فعال نیست.'}
+                  ? 'تماس با شنونده انسانی در این محیط فعال است. سرویس فقط برای ۱۸ سال به بالا است، تماس زنده از اینترنت برقرار می‌شود و ضبط توسط پلتفرم خاموش است.'
+                  : 'بخش تماس عمومی در این محیط فعلاً فعال نیست.'}
               </Text>
               <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>
-                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود Caller' : 'اطلاعات Caller'}</Text>
+                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود تماس‌گیرنده' : 'اطلاعات تماس'}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>شنونده خوبی هستی؟</Text>
-              <Text style={styles.body}>اول کار را ببین، با ایمیل وارد شو و پروفایل آزمایشی‌ات را بساز.</Text>
+              <Text style={styles.body}>اول نقش و مرزهای آن را ببین، با ایمیل وارد شو و پروفایل شنونده‌ات را بساز.</Text>
               <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('listener-intro')}>
                 <Text style={styles.primaryButtonText}>می‌خوام شنونده بشم</Text>
               </TouchableOpacity>
@@ -362,9 +364,9 @@ export default function App() {
 
         {screen === 'waitlist' && (
           <View style={styles.card}>
-            <Text style={styles.titleSmall}>Caller در این محیط فعال نیست</Text>
+            <Text style={styles.titleSmall}>تماس عمومی در این محیط فعال نیست</Text>
             <Text style={styles.body}>
-              این محیط گیت Caller را باز نکرده است. تا زمانی که همان گیت production فعال نباشد، ورود یا تماس Caller به‌صورت صوری باز نمی‌شود.
+              این محیط هنوز مسیر تماس‌گیرنده را باز نکرده است. ورود یا تماس تا آماده‌بودن تنظیمات لازم بسته می‌ماند.
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('home')}>
               <Text style={styles.primaryButtonText}>برگشت</Text>
@@ -377,7 +379,7 @@ export default function App() {
             <Text style={styles.titleSmall}>شنونده بودن یعنی چی؟</Text>
             <Text style={styles.body}>
               کار تو درمان یا مشاوره نیست. گوش می‌دی، سؤال طبیعی می‌پرسی و با احترام همراه مکالمه می‌مونی.
-              هویت واقعی‌ات بعداً فقط برای قرارداد، احراز و پرداخت نزد پلتفرم ثبت می‌شود و Caller آن را نمی‌بیند.
+              اطلاعات خصوصی لازم برای احراز یا تسویه نزد پلتفرم می‌ماند و تماس‌گیرنده آن را نمی‌بیند. جزئیات عمومی پروفایل خوداظهاری است مگر فیلدی صریحاً بررسی شود.
             </Text>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ ساعات حضورت را خودت تعیین می‌کنی.</Text></View>
             <View style={styles.rule}><Text style={styles.ruleText}>✓ وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
@@ -398,8 +400,8 @@ export default function App() {
 
         {screen === 'listener-profile' && (
           <View style={styles.card}>
-            <Text style={styles.titleSmall}>پروفایل آزمایشی</Text>
-            <Text style={styles.helper}>فعلاً اسم واقعی، مدرک هویتی یا حساب بانکی لازم نیست.</Text>
+            <Text style={styles.titleSmall}>پروفایل شنونده</Text>
+            <Text style={styles.helper}>نام مستعار و معرفی عمومی خوداظهاری‌اند. داده خصوصی احراز یا تسویه در پروفایل عمومی نمایش داده نمی‌شود.</Text>
 
             <Text style={styles.label}>اسم مستعار</Text>
             <TextInput value={nickname} onChangeText={setNickname} placeholder="مثلاً رها" style={styles.input} textAlign="right" />
@@ -450,7 +452,7 @@ export default function App() {
           <ListenerWorkScreen token={token} onDone={() => setScreen('home')} />
         )}
 
-        <LegalLinks />
+        <LegalLinks legal={legal} />
 
         {token && (
           <TouchableOpacity disabled={busy} onPress={logout} style={styles.logoutButton}>

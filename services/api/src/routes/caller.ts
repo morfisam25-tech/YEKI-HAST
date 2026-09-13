@@ -3,8 +3,9 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
-export const CALLER_TERMS_VERSION = 'terms-2026-09-07';
-export const CALLER_SAFETY_PROTOCOL_VERSION = 'safety-2026-09-07';
+export const PUBLIC_CALLER_MINIMUM_AGE = 18;
+export const CALLER_TERMS_VERSION = 'terms-2026-09-13';
+export const CALLER_SAFETY_PROTOCOL_VERSION = 'safety-2026-09-13';
 
 async function recordCurrentCallerConsents(userId: string, termsAccepted: boolean, safetyAccepted: boolean) {
   if (!termsAccepted || !safetyAccepted) throw new HttpError(400, 'caller_consent_required');
@@ -38,7 +39,7 @@ export async function setAgeGate(req: IncomingMessage, res: ServerResponse) {
 
   const minimumAge = Number(process.env.CALLER_MINIMUM_AGE);
   const policyVersion = process.env.CALLER_AGE_POLICY_VERSION?.trim();
-  if (!Number.isInteger(minimumAge) || minimumAge < 13 || minimumAge > 99 || !policyVersion) {
+  if (minimumAge !== PUBLIC_CALLER_MINIMUM_AGE || !policyVersion) {
     throw new HttpError(503, 'caller_age_policy_not_configured');
   }
 
@@ -109,7 +110,7 @@ export async function joinWaitlist(req: IncomingMessage, res: ServerResponse) {
 export async function requireCurrentCallerAgeAssertion(userId: string): Promise<void> {
   const minimumAge = Number(process.env.CALLER_MINIMUM_AGE);
   const policyVersion = process.env.CALLER_AGE_POLICY_VERSION?.trim();
-  if (!Number.isInteger(minimumAge) || minimumAge < 13 || minimumAge > 99 || !policyVersion) {
+  if (minimumAge !== PUBLIC_CALLER_MINIMUM_AGE || !policyVersion) {
     throw new HttpError(503, 'caller_age_policy_not_configured');
   }
 

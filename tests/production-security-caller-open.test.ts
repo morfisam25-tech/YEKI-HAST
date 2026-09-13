@@ -42,6 +42,7 @@ function baseEnv(): NodeJS.ProcessEnv {
     PRIVACY_POLICY_URL: 'https://example.test/privacy',
     TERMS_OF_SERVICE_URL: 'https://example.test/terms',
     ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
+    CHILD_SAFETY_URL: 'https://example.test/safety/children',
     SUPPORT_EMAIL: 'support@example.test',
     CALL_PRIMARY_TRANSPORT: 'internet_voice',
     CLOUDFLARE_TURN_KEY_ID: 'turnkey12345678',

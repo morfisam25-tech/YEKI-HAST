@@ -1,31 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import App from './App';
-import { getBootstrap, type BootstrapResponse } from './src/api';
-
-type LegalConfig = {
-  ready: boolean;
-  privacyPolicyUrl: string | null;
-  termsOfServiceUrl: string | null;
-  accountDeletionUrl: string | null;
-  supportEmail: string | null;
-};
-
-type BootstrapWithLegal = BootstrapResponse & { legal?: LegalConfig };
+import { getBootstrap, type PublicLegalConfig } from './src/api';
 
 function openExternal(url: string) {
   void Linking.openURL(url).catch(() => undefined);
 }
 
 export default function RootApp() {
-  const [legal, setLegal] = useState<LegalConfig | null>(null);
+  const [legal, setLegal] = useState<PublicLegalConfig | null>(null);
 
   useEffect(() => {
     let disposed = false;
     getBootstrap()
       .then((value) => {
         if (disposed) return;
-        const config = (value as BootstrapWithLegal).legal ?? null;
+        const config = value.legal ?? null;
         setLegal(config);
       })
       .catch(() => {
@@ -38,12 +28,13 @@ export default function RootApp() {
     legal?.privacyPolicyUrl
     || legal?.termsOfServiceUrl
     || legal?.accountDeletionUrl
+    || legal?.childSafetyUrl
     || legal?.supportEmail,
   );
 
   return (
     <View style={styles.root}>
-      <View style={styles.app}><App /></View>
+      <View style={styles.app}><App legal={legal} /></View>
       <SafeAreaView style={styles.footer}>
         <Text style={styles.boundary}>
           یکی هست جایگزین درمان، مشاوره تخصصی یا خدمات اضطراری نیست. در خطر فوری از خدمات اضطراری محل زندگی خود کمک بگیر.
@@ -63,6 +54,11 @@ export default function RootApp() {
             {legal?.accountDeletionUrl && (
               <TouchableOpacity onPress={() => openExternal(legal.accountDeletionUrl!)}>
                 <Text style={styles.deleteLink}>حذف حساب</Text>
+              </TouchableOpacity>
+            )}
+            {legal?.childSafetyUrl && (
+              <TouchableOpacity onPress={() => openExternal(legal.childSafetyUrl!)}>
+                <Text style={styles.link}>ایمنی کودک</Text>
               </TouchableOpacity>
             )}
             {legal?.supportEmail && (

@@ -6,6 +6,15 @@ export type BootstrapLanguage = {
   nameEn: string | null;
 };
 
+export type PublicLegalConfig = {
+  ready: boolean;
+  privacyPolicyUrl: string | null;
+  termsOfServiceUrl: string | null;
+  accountDeletionUrl: string | null;
+  childSafetyUrl: string | null;
+  supportEmail: string | null;
+};
+
 export type BootstrapResponse = {
   brandName: string;
   market: { code: string; countryCode: string; timezone: string };
@@ -21,6 +30,7 @@ export type BootstrapResponse = {
   features?: {
     callerClosedBetaEnabled?: boolean;
   };
+  legal?: PublicLegalConfig;
   languages: BootstrapLanguage[];
 };
 

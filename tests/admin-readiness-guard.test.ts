@@ -37,11 +37,11 @@ test('Caller catalog readiness follows the shared operating context and active c
   assert.match(source, /callerCatalog: \{ ready: callerCatalogReady \}/);
 });
 
-test('caller age readiness uses bounded policy values', () => {
+test('caller age readiness is fixed to the public 18+ policy', () => {
   assert.match(source, /CALLER_AGE_POLICY_VERSION/);
   assert.match(source, /CALLER_MINIMUM_AGE/);
-  assert.match(source, />= 13/);
-  assert.match(source, /<= 99/);
+  assert.match(source, /=== 18/);
+  assert.doesNotMatch(source, />= 13|<= 99/);
 });
 
 test('admin bootstrap must be completely disarmed before caller launch can become ready', () => {

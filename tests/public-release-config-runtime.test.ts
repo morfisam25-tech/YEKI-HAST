@@ -6,6 +6,7 @@ const keys = [
   'PRIVACY_POLICY_URL',
   'TERMS_OF_SERVICE_URL',
   'ACCOUNT_DELETION_URL',
+  'CHILD_SAFETY_URL',
   'SUPPORT_EMAIL',
 ] as const;
 
@@ -32,6 +33,7 @@ test('public release config becomes ready only with complete public HTTPS surfac
     PRIVACY_POLICY_URL: 'https://example.test/privacy',
     TERMS_OF_SERVICE_URL: 'https://example.test/terms',
     ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
+    CHILD_SAFETY_URL: 'https://example.test/safety/children',
     SUPPORT_EMAIL: 'support@example.test',
   }, () => {
     const config = getPublicReleaseConfig();
@@ -39,6 +41,7 @@ test('public release config becomes ready only with complete public HTTPS surfac
     assert.equal(config.privacyPolicyUrl, 'https://example.test/privacy');
     assert.equal(config.termsOfServiceUrl, 'https://example.test/terms');
     assert.equal(config.accountDeletionUrl, 'https://example.test/account/delete');
+    assert.equal(config.childSafetyUrl, 'https://example.test/safety/children');
     assert.equal(config.supportEmail, 'support@example.test');
   });
 });
@@ -50,18 +53,21 @@ test('public release config fails closed for missing, local, insecure or credent
       PRIVACY_POLICY_URL: 'http://example.test/privacy',
       TERMS_OF_SERVICE_URL: 'https://example.test/terms',
       ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
+      CHILD_SAFETY_URL: 'https://example.test/safety/children',
       SUPPORT_EMAIL: 'support@example.test',
     },
     {
       PRIVACY_POLICY_URL: 'https://localhost/privacy',
       TERMS_OF_SERVICE_URL: 'https://example.test/terms',
       ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
+      CHILD_SAFETY_URL: 'https://example.test/safety/children',
       SUPPORT_EMAIL: 'support@example.test',
     },
     {
       PRIVACY_POLICY_URL: 'https://user:pass@example.test/privacy',
       TERMS_OF_SERVICE_URL: 'https://example.test/terms',
       ACCOUNT_DELETION_URL: 'https://example.test/account/delete',
+      CHILD_SAFETY_URL: 'https://example.test/safety/children',
       SUPPORT_EMAIL: 'support@example.test',
     },
   ];

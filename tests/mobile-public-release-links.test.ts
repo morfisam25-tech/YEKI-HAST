@@ -17,11 +17,13 @@ test('mobile exposes discoverable policy, account deletion and support actions f
   assert.match(root, /privacyPolicyUrl/);
   assert.match(root, /termsOfServiceUrl/);
   assert.match(root, /accountDeletionUrl/);
+  assert.match(root, /childSafetyUrl/);
   assert.match(root, /supportEmail/);
   assert.match(root, />حذف حساب</);
   assert.match(root, />حریم خصوصی</);
   assert.match(root, />قوانین استفاده</);
   assert.match(root, />پشتیبانی</);
+  assert.match(root, />ایمنی کودک</);
 });
 
 test('mobile states the human-listening service boundary without inventing a hotline', () => {

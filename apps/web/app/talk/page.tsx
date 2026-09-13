@@ -98,6 +98,7 @@ export default function TalkPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [safetyNotice, setSafetyNotice] = useState('');
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -333,6 +334,7 @@ export default function TalkPage() {
     setBusy(true);
     setPhase('preparing');
     setError('');
+    setSafetyNotice('');
     setNotice('در حال ثبت تأییدها و بررسی میکروفن…');
 
     let preparedStream: MediaStream | null = null;
@@ -437,6 +439,37 @@ export default function TalkPage() {
     }
   }
 
+  async function reportLastCall() {
+    if (!callId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('safety/report', {
+        method: 'POST',
+        body: JSON.stringify({ callId, category: 'inappropriate_conduct' }),
+      });
+      setSafetyNotice('گزارش ثبت شد. بررسی بر پایه متن گزارش و شواهد غیرصوتی موجود انجام می‌شود.');
+    } catch {
+      setError('ثبت گزارش انجام نشد. دوباره تلاش کن.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function blockLastCall() {
+    if (!callId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('safety/block', { method: 'POST', body: JSON.stringify({ callId }) });
+      setSafetyNotice('این شنونده برای تماس‌های بعدی بلاک شد.');
+    } catch {
+      setError('ثبت بلاک انجام نشد. دوباره تلاش کن.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="talk-page">
       <header className="site-header">
@@ -449,11 +482,23 @@ export default function TalkPage() {
           <p className="kicker">اعتبار قابل استفاده</p>
           <h1>{formatWallet(wallet)}</h1>
         </div>
-        <p>زمان انتخابی سقف تماس است. پیش از اتصال، مبلغ فقط موقتاً کنار گذاشته می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود.</p>
+        <p>زمان انتخابی سقف تماس است. پیش از اتصال، مبلغ فقط موقتاً کنار گذاشته می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود. ضبط تماس توسط پلتفرم خاموش است.</p>
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="helper" aria-live="polite">{notice}</p>}
+      {safetyNotice && <p className="helper" aria-live="polite">{safetyNotice}</p>}
+
+      {phase === 'ended' && callId && (
+        <section className="call-setup" aria-labelledby="post-call-safety-title">
+          <h2 id="post-call-safety-title">ایمنی بعد از تماس</h2>
+          <p>فایل صوتی تماس وجود ندارد. می‌توانی رفتار نامناسب را گزارش کنی یا این شنونده را برای تماس‌های بعدی بلاک کنی.</p>
+          <div className="duration-options">
+            <button type="button" disabled={busy} onClick={() => void reportLastCall()}>گزارش رفتار نامناسب</button>
+            <button type="button" disabled={busy} onClick={() => void blockLastCall()}>بلاک شنونده</button>
+          </div>
+        </section>
+      )}
 
       {(phase === 'idle' || phase === 'ended') ? (
         <>
@@ -463,7 +508,7 @@ export default function TalkPage() {
             <p>«یکی هست» برای شنیده‌شدن و گفت‌وگوی محترمانه است. شنونده درمانگر، پزشک، وکیل یا سرویس اضطراری نیست. این فضا برای آشنایی عاطفی، گفت‌وگوی جنسی، درخواست اطلاعات تماس شخصی یا انتقال رابطه به بیرون از سرویس طراحی نشده است.</p>
             <label className="age-check">
               <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />
-              <span>تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</span>
+              <span>تأیید می‌کنم ۱۸ سال یا بیشتر دارم.</span>
             </label>
             <label className="age-check">
               <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
@@ -492,7 +537,7 @@ export default function TalkPage() {
                   onClick={() => setSelected(listener)}
                 >
                   <strong>{listener.nickname}</strong>
-                  <span>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأیید نشده'}</span>
+                  <span>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب آزمایشی؛ جزئیات پروفایل خوداظهاری است.'}</span>
                   <span>{listener.ratingAverage === null ? 'بدون امتیاز' : `امتیاز ${listener.ratingAverage.toFixed(1)} از ${faNumber(listener.ratingCount)} نظر`}</span>
                   {listener.shortIntro && <small>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</small>}
                 </button>

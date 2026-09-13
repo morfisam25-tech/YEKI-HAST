@@ -58,7 +58,7 @@ test('Web Caller handles 90-second no-answer, actual connected timing, warnings 
 });
 
 test('Web listener cards distinguish verified status from self-declared intro', () => {
-  assert.match(callerPage, /هویت\/فیلدهای تأییدشده مشخص است/);
+  assert.match(callerPage, /حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است/);
   assert.match(callerPage, /معرفی خوداظهاری \(تأییدنشده\)/);
 });
 

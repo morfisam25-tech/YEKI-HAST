@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { getEmailAuthErrorCode, requestEmailOtp, verifyEmailOtp } from './email-auth-api';
 import type { SessionResponse } from './api';
+import PhoneAuthScreen from './PhoneAuthScreen';
 
 type Props = {
   onAuthenticated: (session: SessionResponse) => Promise<void> | void;
   onBack: () => void;
 };
+
+type AuthMethod = 'email' | 'phone' | null;
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
@@ -20,7 +23,7 @@ function messageFor(code: string): string {
   return messages[code] ?? 'عملیات انجام نشد. دوباره امتحان کن.';
 }
 
-export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
+function EmailOtpForm({ onAuthenticated, onBack }: Props) {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
@@ -58,9 +61,7 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.title}>ورود با ایمیل</Text>
-      <Text style={styles.body}>
-        برای ورود یک کد یک‌بارمصرف به ایمیلت می‌فرستیم. شماره موبایل فقط جداگانه برای تماس واقعی استفاده می‌شود.
-      </Text>
+      <Text style={styles.body}>برای ورود یک کد یک‌بارمصرف به ایمیلت می‌فرستیم.</Text>
       <TextInput
         value={email}
         onChangeText={setEmail}
@@ -97,7 +98,32 @@ export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
         </>
       )}
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <TouchableOpacity disabled={busy} onPress={onBack}><Text style={styles.link}>برگشت</Text></TouchableOpacity>
+      <TouchableOpacity disabled={busy} onPress={onBack}><Text style={styles.link}>روش ورود</Text></TouchableOpacity>
+    </View>
+  );
+}
+
+export default function EmailAuthScreen({ onAuthenticated, onBack }: Props) {
+  const [method, setMethod] = useState<AuthMethod>(null);
+
+  if (method === 'email') {
+    return <EmailOtpForm onAuthenticated={onAuthenticated} onBack={() => setMethod(null)} />;
+  }
+  if (method === 'phone') {
+    return <PhoneAuthScreen onAuthenticated={onAuthenticated} onBack={() => setMethod(null)} />;
+  }
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>ورود</Text>
+      <Text style={styles.body}>یکی از روش‌های ورود را انتخاب کن.</Text>
+      <TouchableOpacity style={styles.primary} onPress={() => setMethod('email')}>
+        <Text style={styles.primaryText}>ورود با ایمیل</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.secondary} onPress={() => setMethod('phone')}>
+        <Text style={styles.secondaryText}>ورود با شماره موبایل</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onBack}><Text style={styles.link}>برگشت</Text></TouchableOpacity>
     </View>
   );
 }
@@ -109,6 +135,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#D9D2C8', borderRadius: 12, padding: 13, textAlign: 'left' },
   primary: { backgroundColor: '#171717', borderRadius: 12, padding: 14 },
   primaryText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
+  secondary: { borderWidth: 1, borderColor: '#171717', borderRadius: 12, padding: 14 },
+  secondaryText: { color: '#171717', textAlign: 'center', fontWeight: '700' },
   link: { textAlign: 'center', textDecorationLine: 'underline', paddingVertical: 7 },
   error: { color: '#9E2525', textAlign: 'right', lineHeight: 21 },
 });

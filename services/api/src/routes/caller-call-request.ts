@@ -6,6 +6,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { resolveCallerMarketContext, type SqlRunner } from '../lib/caller-market.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
+import { INTERNAL_OWNER_TEST_LISTENER_ID, isInternalOwnerTestCaller } from '../lib/internal-owner-test.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
@@ -166,9 +167,11 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
       SELECT lp.user_id::text listener_user_id
       FROM app.listener_profiles lp
       JOIN app.listener_service_profiles sp
-        ON sp.listener_user_id=lp.user_id AND sp.service_id=$2 AND sp.is_public=true
+        ON sp.listener_user_id=lp.user_id AND sp.service_id=$2
+        AND (sp.is_public=true OR ($10::boolean AND lp.user_id=$11::uuid))
       JOIN app.listener_applications la
-        ON la.user_id=lp.user_id AND la.service_id=$2 AND la.status IN ('approved','active')
+        ON la.user_id=lp.user_id AND la.service_id=$2
+        AND (la.status IN ('approved','active') OR ($10::boolean AND lp.user_id=$11::uuid))
       JOIN app.listener_languages ll
         ON ll.listener_user_id=lp.user_id AND ll.language_id=$4
       JOIN app.listener_presence pres
@@ -176,7 +179,7 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
         AND pres.product_id=$1 AND pres.service_id=$2 AND pres.market_id=$3
         AND pres.status='online'
         AND pres.last_heartbeat_at > now() - interval '90 seconds'
-      WHERE lp.is_verified=true
+      WHERE (lp.is_verified=true OR ($10::boolean AND lp.user_id=$11::uuid))
         AND lp.user_id<>$8::uuid
         AND ($5::uuid IS NULL OR lp.user_id=$5::uuid)
         AND ($6::text='any' OR lp.gender::text=$6)
@@ -204,6 +207,8 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
       callerGender,
       userId,
       ACTIVE_CALL_STATUSES,
+      isInternalOwnerTestCaller(userId),
+      INTERNAL_OWNER_TEST_LISTENER_ID,
     ]);
     const selectedListenerId = candidate.rows[0]?.listener_user_id;
     if (!selectedListenerId) throw new HttpError(409, 'no_listener_available');

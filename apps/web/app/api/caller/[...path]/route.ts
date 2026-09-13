@@ -10,6 +10,7 @@ import {
 
 const UUID = '[0-9a-fA-F-]{36}';
 const ALLOWED_PATHS = [
+  /^bootstrap$/,
   /^listeners$/,
   /^bookable-listeners$/,
   new RegExp(`^listeners\/${UUID}\/availability$`),
@@ -22,11 +23,15 @@ const ALLOWED_PATHS = [
   /^wallet\/topups\/[^/]+\/verify$/,
   /^caller\/age-gate$/,
   /^caller\/calls\/recent$/,
+  /^caller\/market$/,
+  /^caller\/bootstrap$/,
+  /^caller\/quote$/,
   /^calls\/active$/,
   /^calls\/request$/,
   new RegExp(`^calls\/${UUID}$`),
+  new RegExp(`^calls\/${UUID}\/feedback$`),
   new RegExp(`^calls\/${UUID}\/cancel$`),
-  new RegExp(`^calls\/${UUID}\/voice\/(start|config|signals|no-answer|extend|end|safety-exit)$`),
+  new RegExp(`^calls\/${UUID}\/voice\/(start|config|signals|no-answer|extend|heartbeat|end|safety-exit)$`),
   /^safety\/(report|block)$/,
 ];
 const MAX_PROXY_BODY_BYTES = 64 * 1024;

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
+import { listenerTrainingComplete } from '../domain/listener-onboarding.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
@@ -221,6 +222,13 @@ export async function reviewListenerAssessment(req: IncomingMessage, res: Server
     if (!row) throw new HttpError(404, 'assessment_attempt_not_found');
     if (row.result !== 'pending') throw new HttpError(409, 'assessment_already_reviewed');
     if (row.application_status !== 'assessment') throw new HttpError(409, 'application_not_in_assessment');
+
+    const training = await client.query<{ module_key: string; status: string; progress_percent: number }>(`
+      SELECT module_key, status::text, progress_percent
+      FROM app.listener_training_progress
+      WHERE application_id=$1
+    `, [row.application_id]);
+    if (!listenerTrainingComplete(training.rows)) throw new HttpError(409, 'training_incomplete');
 
     const newer = await client.query(`
       SELECT 1

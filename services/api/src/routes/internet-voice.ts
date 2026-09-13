@@ -2,7 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
-import { getCallTransportReadiness, getInternetVoiceClientConfig } from '../providers/call-transport.ts';
+import { getCallTransportReadiness, getInternetVoiceClientConfig, parseIceServers } from '../providers/call-transport.ts';
+import { isInternalOwnerTestCaller, isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_STATUSES = ['routing', 'calling_listener', 'connected'] as const;
@@ -53,6 +54,14 @@ async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTra
 }
 
 async function getVoiceClientConfigOr503() {
+  if (isInternalOwnerTestMode()) {
+    const iceServers = parseIceServers(process.env.INTERNET_VOICE_ICE_SERVERS_JSON);
+    const relayConfigured = iceServers.some((server) =>
+      (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url)),
+    );
+    if (!relayConfigured) throw new HttpError(503, 'internet_voice_turn_credentials_unavailable');
+    return { signalingMode: 'http_polling' as const, iceServers, relayConfigured, iranDomesticPath: false };
+  }
   try {
     return await getInternetVoiceClientConfig();
   } catch {
@@ -63,7 +72,7 @@ async function getVoiceClientConfigOr503() {
 export async function startInternetVoiceCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
   const { userId } = await requireAuth(req);
-  const readiness = getCallTransportReadiness();
+  const readiness = isInternalOwnerTestCaller(userId) ? { primary: 'internet_voice' as const } : getCallTransportReadiness();
   if (readiness.primary !== 'internet_voice') throw new HttpError(409, 'internet_voice_not_primary');
   // Resolve short-lived TURN credentials before mutating call state. If the external TURN
   // control plane is unavailable, the call stays in routing rather than becoming half-started.
@@ -175,6 +184,9 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
 
 export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // Internal Preview config is decoded lazily. Signal-only requests may land on a
+  // cold function instance, so hydrate it before authentication opens a DB transaction.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
   const body = await readJson<{ kind?: unknown; payload?: unknown }>(req);
   const kind = assertSignalKind(body.kind);
@@ -268,6 +280,8 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
 
 export async function getInternetVoiceSignals(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // See postInternetVoiceSignal: this is a separate cold-start entry point.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
 
   const result = await withTransaction(async (client) => {

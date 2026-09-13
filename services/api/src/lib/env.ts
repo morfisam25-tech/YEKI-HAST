@@ -1,3 +1,4 @@
+import { isInternalOwnerTestMode } from './internal-owner-test.ts';
 import { validateSecurityEnv } from './security.ts';
 
 function requireValue(name: string): string {
@@ -22,6 +23,9 @@ function validateNodeEnv(): void {
 
 export function validateDatabaseEnv(): void {
   validateNodeEnv();
+  // In Owner Internal Beta, bind every DB-backed route to the dedicated isolated DB
+  // before any pool can be acquired. Production always returns false and is untouched.
+  isInternalOwnerTestMode();
   requireValue('DATABASE_URL');
 }
 

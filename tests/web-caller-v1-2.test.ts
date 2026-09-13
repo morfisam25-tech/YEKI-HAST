@@ -14,7 +14,7 @@ test('Web Caller proxy keeps the session token server-side and allow-lists Calle
   assert.match(callerProxy, /browserMutationAllowed/);
   assert.match(callerProxy, /\^listeners\$/);
   assert.match(callerProxy, /cancel\$/);
-  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|end\|safety-exit\)/);
+  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|heartbeat\|end\|safety-exit\)/);
   assert.doesNotMatch(callerProxy, /localStorage|sessionStorage/);
 });
 

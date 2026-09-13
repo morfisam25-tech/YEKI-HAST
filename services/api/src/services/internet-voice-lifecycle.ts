@@ -36,6 +36,7 @@ export async function settleInternetVoiceCall(input: {
       market_id: string;
       pricing_plan_id: string | null;
       currency_code: string;
+      listener_currency_code: string | null;
       caller_rate: string;
       listener_rate: string;
       authorized_minor: string;
@@ -49,6 +50,7 @@ export async function settleInternetVoiceCall(input: {
       SELECT id::text, status::text, transport::text,
              caller_user_id::text, listener_user_id::text,
              market_id::text, pricing_plan_id::text, currency_code,
+             listener_currency_code,
              caller_rate_per_minute_minor::text caller_rate,
              listener_rate_per_minute_minor::text listener_rate,
              authorized_minor::text, max_billable_seconds,
@@ -81,7 +83,7 @@ export async function settleInternetVoiceCall(input: {
     }
     if (row.status !== 'connected') throw new Error('call_not_settleable');
     if (!row.connected_at) throw new Error('call_missing_connected_at');
-    if (!row.listener_user_id || !row.pricing_plan_id || !row.max_billable_seconds) {
+    if (!row.listener_user_id || !row.pricing_plan_id || !row.max_billable_seconds || !row.listener_currency_code) {
       throw new Error('call_missing_settlement_context');
     }
 
@@ -105,8 +107,9 @@ export async function settleInternetVoiceCall(input: {
     const authorized = BigInt(row.authorized_minor);
     const charge = settlement.callerChargeMinor;
     const earning = settlement.listenerEarningMinor;
+    const sameCurrency = row.currency_code === row.listener_currency_code;
     if (charge > authorized) throw new Error('settlement_exceeds_authorization');
-    if (earning > charge) throw new Error('negative_platform_spread');
+    if (sameCurrency && earning > charge) throw new Error('negative_platform_spread');
 
     const wallet = await client.query<{ id: string; balance_minor: string; reserved_minor: string }>(`
       SELECT id::text, balance_minor::text, reserved_minor::text
@@ -186,7 +189,8 @@ export async function settleInternetVoiceCall(input: {
           listener_user_id, call_session_id, market_id, currency_code, amount_minor, status
         )
         VALUES ($1,$2,$3,$4,$5,'pending')
-      `, [row.listener_user_id, row.id, row.market_id, row.currency_code, earning.toString()]);
+        ON CONFLICT (call_session_id) DO NOTHING
+      `, [row.listener_user_id, row.id, row.market_id, row.listener_currency_code, earning.toString()]);
     }
 
     const finalStatus = input.safety ? 'safety_terminated' : 'completed';
@@ -198,7 +202,11 @@ export async function settleInternetVoiceCall(input: {
           billable_seconds=$4,
           caller_charge_minor=$5,
           listener_earning_minor=$6,
-          platform_contribution_minor=$5::bigint-$6::bigint-telephony_cost_minor-payment_cost_minor-other_variable_cost_minor,
+          platform_contribution_minor=CASE
+            WHEN currency_code=listener_currency_code
+              THEN $5::bigint-$6::bigint-telephony_cost_minor-payment_cost_minor-other_variable_cost_minor
+            ELSE NULL
+          END,
           updated_at=now()
       WHERE id=$1 AND status='connected' AND transport='internet_voice'
     `, [row.id, finalStatus, endedReason, settlement.billableSeconds, charge.toString(), earning.toString()]);
@@ -214,8 +222,11 @@ export async function settleInternetVoiceCall(input: {
       connectedSecondsObserved: boundedConnectedSeconds,
       billableSeconds: settlement.billableSeconds,
       callerChargeMinor: charge.toString(),
+      callerCurrencyCode: row.currency_code,
       listenerEarningMinor: earning.toString(),
+      listenerCurrencyCode: row.listener_currency_code,
       holdReleasedMinor: unusedHold.toString(),
+      platformContributionPendingFx: !sameCurrency,
     })]);
 
     await client.query('DELETE FROM app.internet_voice_signals WHERE call_session_id=$1', [row.id]);

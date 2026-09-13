@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const apiWorkflow = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
-const frontendWorkflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
-const migrationWorkflow = await readFile(new URL('../.github/workflows/migrate-production-db.yml', import.meta.url), 'utf8');
+const apiWorkflow = (await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const frontendWorkflow = (await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const migrationWorkflow = (await readFile(new URL('../.github/workflows/migrate-production-db.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const qaWorkflow = await readFile(new URL('../.github/workflows/foundation-qa.yml', import.meta.url), 'utf8');
 const lockWorkflow = await readFile(new URL('../.github/workflows/generate-dependency-lock.yml', import.meta.url), 'utf8');
 const envSync = await readFile(new URL('../scripts/sync-vercel-production-env.mjs', import.meta.url), 'utf8');

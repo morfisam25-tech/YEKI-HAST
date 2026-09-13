@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
+const workflow = (await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 const webProjectId = 'prj_afhSiMYpsCfIAxuOmotLAWBvTMDg';
 const adminProjectId = 'prj_l18v3f003ORfiN6hKxYwJbvVPzzC';

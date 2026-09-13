@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 const workflowPath = new URL('../.github/workflows/deploy-production-web-v2.yml', import.meta.url);
-const workflow = readFileSync(workflowPath, 'utf8');
+const workflow = readFileSync(workflowPath, 'utf8').replace(/\r\n/g, '\n');
 
 function index(label: string) {
   const position = workflow.indexOf(label);

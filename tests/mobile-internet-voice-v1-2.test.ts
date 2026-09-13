@@ -3,8 +3,8 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const app = await readFile(new URL('../apps/mobile/App.tsx', import.meta.url), 'utf8');
-const caller = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
-const listener = await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8');
+const caller = (await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const listener = (await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const voiceApi = await readFile(new URL('../apps/mobile/src/internet-voice-api.ts', import.meta.url), 'utf8');
 const appConfig = await readFile(new URL('../apps/mobile/app.json', import.meta.url), 'utf8');
 const mobilePackage = await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8');

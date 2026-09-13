@@ -52,7 +52,7 @@ const HEARTBEAT_MS = 5_000;
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
-    caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
+    caller_closed_beta_disabled: 'مسیر تماس‌گیرنده برای این محیط فعال نیست.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
     caller_consent_required: 'برای ادامه باید قوانین استفاده و مرزبندی ایمنی را بپذیری.',
@@ -539,7 +539,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             <View key={listener.id} style={styles.listener}>
               <View style={styles.listenerText}>
                 <Text style={styles.listenerName}>{listener.nickname}</Text>
-                <Text style={styles.meta}>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب آزمایشی؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                <Text style={styles.meta}>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب شنونده هنوز برای فعالیت تأیید نشده؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
                 {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}
               </View>
               <TouchableOpacity disabled={busy} style={styles.smallButton} onPress={() => { void startCall(listener); }}><Text style={styles.smallButtonText}>تماس</Text></TouchableOpacity>

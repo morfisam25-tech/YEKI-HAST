@@ -7,7 +7,8 @@ const source = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.u
 
 test('mobile API keeps an explicit override and current production fallback', () => {
   assert.match(source, /process\.env\.EXPO_PUBLIC_API_BASE_URL/);
-  assert.match(source, /https:\/\/yeki-hast-theta\.vercel\.app/);
+  assert.match(source, /https:\/\/yeki-hast-unique-6ff0\.vercel\.app/);
+  assert.doesNotMatch(source, /https:\/\/yeki-hast-theta\.vercel\.app/);
   assert.doesNotMatch(source, /https:\/\/yeki-hast\.vercel\.app/);
 });
 

@@ -1,4 +1,4 @@
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast-theta.vercel.app').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast-unique-6ff0.vercel.app').replace(/\/$/, '');
 
 export type BootstrapLanguage = {
   code: string;

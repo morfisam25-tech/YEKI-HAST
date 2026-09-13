@@ -132,7 +132,9 @@ export default function Page() {
       </section>
 
       <section className={styles.dualSection} aria-labelledby="distance-title">
-        <div className={`${styles.photoPanel} ${styles.diasporaPhoto}`} role="img" aria-label="یک زن و یک مرد در دو خانه در شیکاگو، در دو سوی یک تماس" />
+        <video className={`${styles.photoPanel} ${styles.diasporaVideo}`} autoPlay muted loop playsInline controls preload="metadata" aria-label="یک زن و یک مرد در دو خانه در شیکاگو، در دو سوی یک تماس">
+          <source src="/w9/diaspora-poem-reel.mp4" type="video/mp4" />
+        </video>
         <div className={styles.dualCopy}>
           <p className={styles.sectionEyebrow}>فاصله همیشه روی نقشه نیست</p>
           <h2 id="distance-title"><span>از تهران تا شیکاگو،</span><span>همهٔ شب‌ها شبیه هم‌اند؛</span><span>ولی غربت این را نمی‌فهمد.</span></h2>

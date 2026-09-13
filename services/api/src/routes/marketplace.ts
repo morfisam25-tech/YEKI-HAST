@@ -113,6 +113,7 @@ export async function browseListeners(req: IncomingMessage, res: ServerResponse)
     FROM ctx c
     CROSS JOIN caller cp
     JOIN app.listener_profiles lp ON true
+    JOIN app.users mu ON mu.id=lp.user_id AND mu.status='active'
     JOIN app.listener_service_profiles sp
       ON sp.listener_user_id=lp.user_id AND sp.service_id=c.service_id
       AND (sp.is_public=true OR ($10::boolean AND lp.user_id=$11::uuid))

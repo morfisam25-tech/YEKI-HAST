@@ -166,6 +166,7 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
     const candidate = await client.query<{ listener_user_id: string }>(`
       SELECT lp.user_id::text listener_user_id
       FROM app.listener_profiles lp
+      JOIN app.users su ON su.id=lp.user_id AND su.status='active'
       JOIN app.listener_service_profiles sp
         ON sp.listener_user_id=lp.user_id AND sp.service_id=$2
         AND (sp.is_public=true OR ($10::boolean AND lp.user_id=$11::uuid))

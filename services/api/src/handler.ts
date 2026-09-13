@@ -136,6 +136,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && adminCallRecoveryMatch) { ensureDatabaseReady(); const { recoverStaleRoutingCall } = await import('./routes/admin-call-recovery.ts'); return await recoverStaleRoutingCall(req, res, adminCallRecoveryMatch[1]); }
     const adminSafetyActionMatch = url.pathname.match(/^\/v1\/admin\/safety-cases\/(reports|events)\/([^/]+)$/);
     if (method === 'POST' && adminSafetyActionMatch) { ensureDatabaseReady(); const { actOnAdminSafetyCase } = await import('./routes/admin-safety.ts'); return await actOnAdminSafetyCase(req, res, adminSafetyActionMatch[1] === 'reports' ? 'report' : 'event', adminSafetyActionMatch[2]); }
+    const adminSafetyLimitationMatch = url.pathname.match(/^\/v1\/admin\/users\/([^/]+)\/safety-limitation$/);
+    if (method === 'POST' && adminSafetyLimitationMatch) { ensureDatabaseReady(); const { setAdminUserSafetyLimitation } = await import('./routes/admin-safety-enforcement.ts'); return await setAdminUserSafetyLimitation(req, res, adminSafetyLimitationMatch[1]); }
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) { ensureDatabaseReady(); const { getListenerKycForAdmin } = await import('./routes/admin-kyc.ts'); return await getListenerKycForAdmin(req, res, adminKycMatch[1]); }
     if (method === 'POST' && adminKycMatch) { ensureDatabaseReady(); const { reviewListenerKyc } = await import('./routes/admin-kyc.ts'); return await reviewListenerKyc(req, res, adminKycMatch[1]); }

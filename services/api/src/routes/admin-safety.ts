@@ -3,7 +3,7 @@ import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAdmin } from '../lib/admin.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 
-const allowedStatuses = new Set(['open', 'in_review', 'resolved', 'dismissed']);
+const allowedStatuses = new Set(['open', 'reviewing', 'resolved', 'dismissed']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RESOLUTION_RE = /^[a-z0-9][a-z0-9_-]{1,63}$/;
 
@@ -176,7 +176,7 @@ export async function actOnAdminSafetyCase(
   const body = await readJson<{ action?: unknown; resolutionCode?: unknown }>(req);
   const action = actionFrom(body.action);
   const resolutionCode = resolutionCodeFrom(body.resolutionCode, action);
-  const targetStatus = action === 'claim' ? 'in_review' : action === 'resolve' ? 'resolved' : 'dismissed';
+  const targetStatus = action === 'claim' ? 'reviewing' : action === 'resolve' ? 'resolved' : 'dismissed';
 
   const row = await withTransaction(async (client) => {
     const sql = kind === 'report'
@@ -191,7 +191,7 @@ export async function actOnAdminSafetyCase(
           AND (
             ($5='claim' AND status::text='open')
             OR
-            ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+            ($5 IN ('resolve','dismiss') AND status::text IN ('open','reviewing')
               AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
           )
         RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
@@ -207,7 +207,7 @@ export async function actOnAdminSafetyCase(
           AND (
             ($5='claim' AND status::text='open')
             OR
-            ($5 IN ('resolve','dismiss') AND status::text IN ('open','in_review')
+            ($5 IN ('resolve','dismiss') AND status::text IN ('open','reviewing')
               AND (assigned_admin_user_id IS NULL OR assigned_admin_user_id=$3))
           )
         RETURNING id::text, status::text, assigned_admin_user_id::text, resolution_code, resolved_at::text, updated_at::text
@@ -238,7 +238,7 @@ export async function actOnAdminSafetyCase(
 
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
-      VALUES ($1,$2,$3,$4,jsonb_build_object('targetStatus',$5,'resolutionCode',$6))
+      VALUES ($1,$2,$3,$4,jsonb_build_object('targetStatus',$5::text,'resolutionCode',$6::text))
     `, [
       admin.userId,
       `admin_safety_${action}`,

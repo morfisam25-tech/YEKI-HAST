@@ -115,6 +115,36 @@ export default function SafetyPage() {
     }
   }
 
+  async function limitUser(userId: string, action: 'suspend' | 'unsuspend') {
+    if (busyId) return;
+    const entered = window.prompt(
+      action === 'suspend' ? 'Suspension reason code:' : 'Unsuspend reason code:',
+      action === 'suspend' ? 'safety_review' : 'safety_cleared',
+    );
+    if (entered === null) return;
+    const reasonCode = entered.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(reasonCode)) {
+      setError('Reason code معتبر نیست.');
+      return;
+    }
+    if (!window.confirm(action === 'suspend'
+      ? 'این حساب برای ایمنی معلق شود؟ تماس‌ها مسدود می‌شود و هیچ داده‌ای حذف نمی‌شود.'
+      : 'تعلیق این حساب برداشته شود؟')) return;
+    setBusyId(`limit:${userId}`);
+    setError('');
+    try {
+      await api(`/api/ops/users/${encodeURIComponent(userId)}/safety-limitation`, {
+        method: 'POST',
+        body: JSON.stringify({ action, reasonCode }),
+      });
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'request_failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function actions(kind: 'reports' | 'events', item: { id: string; status: string }) {
     if (item.status === 'resolved' || item.status === 'dismissed') return null;
     return (
@@ -143,7 +173,7 @@ export default function SafetyPage() {
         <div className="reviewRow wide">
           <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Safety case status filter">
             <option value="open">باز</option>
-            <option value="in_review">در حال بررسی</option>
+            <option value="reviewing">در حال بررسی</option>
             <option value="resolved">حل‌شده</option>
             <option value="dismissed">مختومه بدون اقدام</option>
             <option value="">همه وضعیت‌ها</option>
@@ -171,6 +201,24 @@ export default function SafetyPage() {
               {item.resolutionCode && <p className="muted">Resolution: {item.resolutionCode}</p>}
               <p className="muted">ایجاد: {new Date(item.createdAt).toLocaleString('fa-IR')}</p>
               {actions('reports', item)}
+              {item.reportedUserId && (
+                <div className="actions">
+                  <button
+                    className="danger"
+                    disabled={busyId !== null}
+                    onClick={() => limitUser(item.reportedUserId as string, 'suspend')}
+                  >
+                    Suspend reported
+                  </button>
+                  <button
+                    className="ghost"
+                    disabled={busyId !== null}
+                    onClick={() => limitUser(item.reportedUserId as string, 'unsuspend')}
+                  >
+                    Unsuspend
+                  </button>
+                </div>
+              )}
             </article>
           ))}
           {!reports.length && <p className="muted">گزارشی در این وضعیت وجود ندارد.</p>}

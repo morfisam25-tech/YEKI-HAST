@@ -18,6 +18,7 @@
     "db:check": "npm --workspace @yeki-hast/db run check",
     "pretest": "node scripts/materialize-migration.mjs",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:safety-runtime-db": "bash scripts/run-safety-admin-runtime-db-test.sh",
     "prevalidate:foundation": "node scripts/materialize-migration.mjs",
     "validate:foundation": "node scripts/validate-foundation.mjs",
     "verify:security-config": "node scripts/verify-production-security-config.mjs",

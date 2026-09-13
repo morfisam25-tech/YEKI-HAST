@@ -247,8 +247,10 @@ test('legacy production-runtime hydration path is removed', async () => {
 });
 
 test('Home freeze blobs remain exact', async () => {
+  // Baseline updated for the W9-approved diaspora poem reel (commit 0e09f1a); these are
+  // that commit's own page.tsx/home.module.css blob hashes, not a new Home change.
   const page = await readFile(new URL('../apps/web/app/page.tsx', import.meta.url));
   const css = await readFile(new URL('../apps/web/app/home.module.css', import.meta.url));
-  assert.equal(gitBlobSha(page), 'e6074b4bd9e697e75b3eca5e9f8f51535c6780f8');
-  assert.equal(gitBlobSha(css), 'd749d64a2176ef9a0268811ef5ad453f348e5e8f');
+  assert.equal(gitBlobSha(page), 'a4e72b963207178ea417a602fb733c411cbadec8');
+  assert.equal(gitBlobSha(css), 'f99666c5899346084c47a58b9371be20582f3942');
 });

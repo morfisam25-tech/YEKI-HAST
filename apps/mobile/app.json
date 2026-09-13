@@ -24,6 +24,7 @@
     ],
     "android": {
       "package": "app.yekihast.mobile",
+      "versionCode": 8,
       "allowBackup": false,
       "permissions": [
         "android.permission.RECORD_AUDIO"

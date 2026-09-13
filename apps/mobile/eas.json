@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/eas.json",
   "cli": {
     "requireCommit": true,
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "preview": {
@@ -16,7 +16,6 @@
     "production": {
       "node": "22.23.1",
       "environment": "production",
-      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://yeki-hast-unique-6ff0.vercel.app"
       }

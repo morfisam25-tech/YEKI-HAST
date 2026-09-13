@@ -33,6 +33,12 @@ test('closed-beta caller shell exposes request plus real Internet Voice start, e
   assert.doesNotMatch(caller, /dispatchCall\(/);
 });
 
+test('closed-test caller shell avoids obsolete beta and test-profile copy', () => {
+  assert.doesNotMatch(caller, /بتای Caller|حساب آزمایشی/);
+  assert.match(caller, /مسیر تماس‌گیرنده برای این محیط فعال نیست/);
+  assert.match(caller, /جزئیات پروفایل خوداظهاری است/);
+});
+
 test('public app navigation is driven by the fail-closed server bootstrap flag', () => {
   assert.match(app, /import CallerClosedBetaScreen from '\.\/src\/CallerClosedBetaScreen'/);
   assert.match(app, /const \[callerBetaEnabled, setCallerBetaEnabled\] = useState\(false\)/);

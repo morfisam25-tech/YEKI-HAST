@@ -26,6 +26,7 @@ import EmailAuthScreen from './src/EmailAuthScreen';
 import ListenerKycScreen from './src/ListenerKycScreen';
 import ListenerTrainingScreen from './src/ListenerTrainingScreen';
 import ListenerWorkScreen from './src/ListenerWorkScreen';
+import { mobileRadius, mobileTheme } from './src/theme';
 
 type Screen =
   | 'home'
@@ -49,9 +50,21 @@ function Choice({ label, selected, onPress }: ChoiceProps) {
   );
 }
 
+function BrandLockup() {
+  return (
+    <View style={styles.brandLockup}>
+      <View style={styles.brandMark}><Text style={styles.brandMarkText}>◒</Text></View>
+      <View>
+        <Text style={styles.brand}>یکی هست</Text>
+        <Text style={styles.brandTagline}>یک انسان، برای شنیدن</Text>
+      </View>
+    </View>
+  );
+}
+
 function errorMessage(code: string): string {
   const messages: Record<string, string> = {
-    caller_closed_beta_disabled: 'مسیر Caller برای این محیط فعال نیست.',
+    caller_closed_beta_disabled: 'مسیر گفت‌وگو در این محیط فعال نیست.',
     unknown_language: 'یکی از زبان‌های انتخاب‌شده در دسترس نیست.',
     application_locked: 'این درخواست وارد مرحله بعد شده و دیگر قابل ویرایش نیست.',
     listener_application_not_found: 'درخواست شنونده هنوز ساخته نشده.',
@@ -64,6 +77,8 @@ function errorMessage(code: string): string {
 const PUBLIC_LINKS = [
   ['حریم خصوصی', 'https://yekihast.app/privacy'],
   ['قوانین استفاده', 'https://yekihast.app/terms'],
+  ['مرکز ایمنی', 'https://yekihast.app/safety'],
+  ['ایمنی کودک', 'https://yekihast.app/safety/children'],
   ['حذف حساب', 'https://yekihast.app/account/delete'],
   ['پشتیبانی', 'mailto:sales@uniqueholding.com.tr'],
 ] as const;
@@ -287,10 +302,10 @@ export default function App() {
   if (!bootstrapReady || !sessionRestoreComplete) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <View style={styles.restorePage}>
-          <Text style={styles.brand}>یکی هست</Text>
-          <Text style={styles.helper}>در حال بررسی سرویس و نشست امن…</Text>
+          <BrandLockup />
+          <Text style={styles.helperOnDark}>در حال بررسی سرویس و نشست امن…</Text>
         </View>
       </SafeAreaView>
     );
@@ -299,15 +314,15 @@ export default function App() {
   if (!bootstrapAvailable) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <View style={styles.restorePage}>
-          <Text style={styles.brand}>یکی هست</Text>
-          <Text style={styles.titleSmall}>سرویس موقتاً در دسترس نیست</Text>
-          <Text style={styles.body}>
-            برای جلوگیری از ثبت ناقص یا استفاده از اطلاعات قدیمی، تا زمانی که اطلاعات اصلی سرویس از سرور دریافت نشود ورود و ثبت‌نام باز نمی‌شود.
+          <BrandLockup />
+          <Text style={styles.titleOnDark}>سرویس موقتاً در دسترس نیست</Text>
+          <Text style={styles.bodyOnDark}>
+            برای جلوگیری از ثبت ناقص، ورود و ثبت‌نام تا دریافت اطلاعات اصلی سرویس از سرور باز نمی‌شود.
           </Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={retryBootstrap}>
-            <Text style={styles.primaryButtonText}>تلاش دوباره</Text>
+          <TouchableOpacity style={styles.accentButton} onPress={retryBootstrap}>
+            <Text style={styles.accentButtonText}>تلاش دوباره</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -317,10 +332,11 @@ export default function App() {
   if (screen === 'caller-beta' && token) {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <View style={styles.sessionBar}>
+          <BrandLockup />
           <TouchableOpacity disabled={busy} onPress={logout}>
-            <Text style={styles.logoutText}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
+            <Text style={styles.logoutTextOnDark}>{busy ? 'در حال خروج…' : 'خروج از حساب'}</Text>
           </TouchableOpacity>
         </View>
         <LegalLinks compact />
@@ -331,28 +347,29 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <Text style={styles.brand}>یکی هست</Text>
+        <BrandLockup />
 
         {screen === 'home' && (
           <>
             <View style={styles.hero}>
-              <Text style={styles.eyebrow}>برای وقتی که فقط یک آدم واقعی می‌خواهی</Text>
-              <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
+              <Text style={styles.eyebrow}>گفت‌وگو با یک شنوندهٔ انسانی</Text>
+              <Text style={styles.title}>گاهی فقط لازم است یکی واقعاً گوش بدهد.</Text>
               <Text style={styles.heroBody}>
                 {callerBetaEnabled
-                  ? 'Caller در این محیط فعال است. ورود با ایمیل انجام می‌شود و تماس اصلی از اینترنت برقرار می‌شود؛ برای Internet Voice شماره تلفن لازم نیست.'
-                  : 'بخش مکالمه Caller در این محیط فعلاً فعال نیست.'}
+                  ? 'گفت‌وگوی آزمایشی در این محیط فعال است. ورود با ایمیل انجام می‌شود و تماس از اینترنت برقرار می‌شود.'
+                  : 'گفت‌وگوی عمومی فعلاً بسته است. ورود و مسیر شنونده‌شدن در دسترس است.'}
               </Text>
-              <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>
-                <Text style={styles.secondaryButtonText}>{callerBetaEnabled ? 'ورود Caller' : 'اطلاعات Caller'}</Text>
+              <TouchableOpacity style={styles.outlineButton} onPress={beginCallerAuth}>
+                <Text style={styles.outlineButtonText}>{callerBetaEnabled ? 'ورود به گفت‌وگوی آزمایشی' : 'وضعیت گفت‌وگو'}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.card}>
+              <Text style={styles.cardEyebrow}>مسیر شنونده</Text>
               <Text style={styles.cardTitle}>شنونده خوبی هستی؟</Text>
-              <Text style={styles.body}>اول کار را ببین، با ایمیل وارد شو و پروفایل آزمایشی‌ات را بساز.</Text>
+              <Text style={styles.body}>اول نقش و مرزها را ببین، با ایمیل وارد شو و مسیر آموزش را شروع کن.</Text>
               <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('listener-intro')}>
                 <Text style={styles.primaryButtonText}>می‌خوام شنونده بشم</Text>
               </TouchableOpacity>
@@ -362,9 +379,10 @@ export default function App() {
 
         {screen === 'waitlist' && (
           <View style={styles.card}>
-            <Text style={styles.titleSmall}>Caller در این محیط فعال نیست</Text>
+            <Text style={styles.cardEyebrow}>وضعیت فعلی</Text>
+            <Text style={styles.titleSmall}>گفت‌وگوی عمومی هنوز باز نشده است</Text>
             <Text style={styles.body}>
-              این محیط گیت Caller را باز نکرده است. تا زمانی که همان گیت production فعال نباشد، ورود یا تماس Caller به‌صورت صوری باز نمی‌شود.
+              در نسخه فعلی، مسیر Caller برای عموم بسته است. تا بازشدن رسمی این بخش، تماس یا پرداخت عمومی فعال نمی‌شود.
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setScreen('home')}>
               <Text style={styles.primaryButtonText}>برگشت</Text>
@@ -374,14 +392,15 @@ export default function App() {
 
         {screen === 'listener-intro' && (
           <View style={styles.card}>
+            <Text style={styles.cardEyebrow}>قبل از شروع</Text>
             <Text style={styles.titleSmall}>شنونده بودن یعنی چی؟</Text>
             <Text style={styles.body}>
               کار تو درمان یا مشاوره نیست. گوش می‌دی، سؤال طبیعی می‌پرسی و با احترام همراه مکالمه می‌مونی.
               هویت واقعی‌ات بعداً فقط برای قرارداد، احراز و پرداخت نزد پلتفرم ثبت می‌شود و Caller آن را نمی‌بیند.
             </Text>
-            <View style={styles.rule}><Text style={styles.ruleText}>✓ ساعات حضورت را خودت تعیین می‌کنی.</Text></View>
-            <View style={styles.rule}><Text style={styles.ruleText}>✓ وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
-            <View style={styles.rule}><Text style={styles.ruleText}>✓ تماس اصلی از اینترنت انجام می‌شود و شماره واقعی دو طرف برای آن لازم نیست یا نمایش داده نمی‌شود.</Text></View>
+            <View style={styles.rule}><Text style={styles.ruleText}>ساعات حضورت را خودت تعیین می‌کنی.</Text></View>
+            <View style={styles.rule}><Text style={styles.ruleText}>وقتی Online هستی یعنی آماده پاسخگویی هستی.</Text></View>
+            <View style={styles.rule}><Text style={styles.ruleText}>تماس صوتی از اینترنت انجام می‌شود و شماره واقعی دو طرف نمایش داده نمی‌شود.</Text></View>
             <TouchableOpacity style={styles.primaryButton} onPress={beginListenerAuth}>
               <Text style={styles.primaryButtonText}>ادامه با ایمیل</Text>
             </TouchableOpacity>
@@ -398,11 +417,12 @@ export default function App() {
 
         {screen === 'listener-profile' && (
           <View style={styles.card}>
+            <Text style={styles.cardEyebrow}>پروفایل شنونده</Text>
             <Text style={styles.titleSmall}>پروفایل آزمایشی</Text>
             <Text style={styles.helper}>فعلاً اسم واقعی، مدرک هویتی یا حساب بانکی لازم نیست.</Text>
 
             <Text style={styles.label}>اسم مستعار</Text>
-            <TextInput value={nickname} onChangeText={setNickname} placeholder="مثلاً رها" style={styles.input} textAlign="right" />
+            <TextInput value={nickname} onChangeText={setNickname} placeholder="مثلاً رها" placeholderTextColor="#9A8F85" style={styles.input} textAlign="right" />
 
             <Text style={styles.label}>جنسیت</Text>
             <View style={styles.row}>
@@ -422,6 +442,7 @@ export default function App() {
               value={shortIntro}
               onChangeText={(value) => setShortIntro(value.slice(0, 500))}
               placeholder="مثلاً شنونده آرامی هستم و بدون قضاوت گوش می‌دم."
+              placeholderTextColor="#9A8F85"
               style={[styles.input, styles.multiline]}
               multiline
               textAlign="right"
@@ -463,43 +484,54 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f3ee' },
-  page: { padding: 20, gap: 18, direction: 'rtl' },
-  restorePage: { flex: 1, padding: 24, justifyContent: 'center', gap: 12 },
-  sessionBar: { paddingHorizontal: 20, paddingTop: 10, alignItems: 'flex-start' },
-  brand: { fontSize: 21, fontWeight: '800', textAlign: 'right', color: '#20211f', marginTop: 8 },
-  hero: { backgroundColor: '#20211f', padding: 24, borderRadius: 24, gap: 14 },
-  eyebrow: { color: '#c8c6bf', textAlign: 'right', fontSize: 13 },
-  title: { color: '#ffffff', textAlign: 'right', fontSize: 30, fontWeight: '800', lineHeight: 42 },
-  heroBody: { color: '#d6d4cd', textAlign: 'right', fontSize: 16, lineHeight: 27 },
-  titleSmall: { color: '#20211f', textAlign: 'right', fontSize: 24, fontWeight: '800', lineHeight: 34 },
-  body: { color: '#66665f', textAlign: 'right', fontSize: 16, lineHeight: 27 },
-  card: { backgroundColor: '#ffffff', padding: 22, borderRadius: 22, gap: 14 },
-  cardTitle: { color: '#20211f', textAlign: 'right', fontSize: 22, fontWeight: '800' },
-  primaryButton: { backgroundColor: '#20211f', paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16, marginTop: 4 },
-  primaryButtonText: { color: '#ffffff', textAlign: 'center', fontWeight: '800', fontSize: 16 },
-  secondaryButton: { backgroundColor: '#ffffff', paddingVertical: 16, paddingHorizontal: 18, borderRadius: 16 },
-  secondaryButtonText: { color: '#20211f', textAlign: 'center', fontWeight: '800', fontSize: 16 },
-  input: { borderWidth: 1, borderColor: '#dedbd3', borderRadius: 14, padding: 14, fontSize: 16, color: '#20211f', backgroundColor: '#fbfaf7' },
+  safe: { flex: 1, backgroundColor: mobileTheme.deep },
+  page: { padding: 20, gap: 18, direction: 'rtl', backgroundColor: mobileTheme.deep },
+  restorePage: { flex: 1, padding: 24, justifyContent: 'center', gap: 16, backgroundColor: mobileTheme.deep },
+  sessionBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, gap: 12, backgroundColor: mobileTheme.deep },
+  brandLockup: { flexDirection: 'row-reverse', alignItems: 'center', alignSelf: 'flex-end', gap: 10, marginTop: 4 },
+  brandMark: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(233,156,88,0.12)', alignItems: 'center', justifyContent: 'center' },
+  brandMarkText: { color: '#FFD49F', fontSize: 26, lineHeight: 28, transform: [{ rotate: '180deg' }] },
+  brand: { fontSize: 19, fontWeight: '900', textAlign: 'right', color: '#FFFFFF', letterSpacing: -0.5 },
+  brandTagline: { marginTop: 2, color: 'rgba(255,255,255,0.68)', fontSize: 10, textAlign: 'right' },
+  hero: { backgroundColor: mobileTheme.surface, padding: 24, borderRadius: mobileRadius.large, gap: 14, borderWidth: 1, borderColor: mobileTheme.lineDark },
+  eyebrow: { color: mobileTheme.accent, textAlign: 'right', fontSize: 12, fontWeight: '800' },
+  title: { color: '#FFFFFF', textAlign: 'right', fontSize: 31, fontWeight: '900', lineHeight: 43, letterSpacing: -1.2 },
+  heroBody: { color: mobileTheme.muted, textAlign: 'right', fontSize: 15, lineHeight: 26 },
+  titleOnDark: { color: mobileTheme.onDark, textAlign: 'right', fontSize: 25, fontWeight: '900', lineHeight: 35 },
+  bodyOnDark: { color: mobileTheme.muted, textAlign: 'right', fontSize: 15, lineHeight: 26 },
+  helperOnDark: { textAlign: 'right', color: mobileTheme.muted, fontSize: 13, lineHeight: 22 },
+  card: { backgroundColor: mobileTheme.paper, padding: 22, borderRadius: mobileRadius.large, gap: 14 },
+  cardEyebrow: { color: '#9E572E', textAlign: 'right', fontSize: 12, fontWeight: '900' },
+  cardTitle: { color: mobileTheme.ink, textAlign: 'right', fontSize: 23, fontWeight: '900', letterSpacing: -0.5 },
+  titleSmall: { color: mobileTheme.ink, textAlign: 'right', fontSize: 24, fontWeight: '900', lineHeight: 34, letterSpacing: -0.5 },
+  body: { color: mobileTheme.mutedInk, textAlign: 'right', fontSize: 15, lineHeight: 26 },
+  primaryButton: { backgroundColor: mobileTheme.inkStrong, paddingVertical: 15, paddingHorizontal: 18, borderRadius: mobileRadius.small, marginTop: 4 },
+  primaryButtonText: { color: '#FFFFFF', textAlign: 'center', fontWeight: '800', fontSize: 15 },
+  accentButton: { backgroundColor: mobileTheme.accentStrong, paddingVertical: 15, paddingHorizontal: 18, borderRadius: mobileRadius.small, marginTop: 4 },
+  accentButtonText: { color: mobileTheme.inkStrong, textAlign: 'center', fontWeight: '900', fontSize: 15 },
+  outlineButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', paddingVertical: 14, paddingHorizontal: 18, borderRadius: mobileRadius.small },
+  outlineButtonText: { color: '#FFFFFF', textAlign: 'center', fontWeight: '800', fontSize: 15 },
+  input: { borderWidth: 1, borderColor: mobileTheme.lineLight, borderRadius: mobileRadius.medium, padding: 14, fontSize: 16, color: mobileTheme.ink, backgroundColor: mobileTheme.field },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
-  label: { textAlign: 'right', color: '#20211f', fontWeight: '700', marginTop: 5 },
-  helper: { textAlign: 'right', color: '#84837c', fontSize: 13, lineHeight: 22 },
-  error: { textAlign: 'right', color: '#8a3430', backgroundColor: '#f9ecea', borderRadius: 12, padding: 12, lineHeight: 22 },
-  link: { textAlign: 'center', color: '#55564f', padding: 8 },
+  label: { textAlign: 'right', color: mobileTheme.ink, fontWeight: '800', marginTop: 5 },
+  helper: { textAlign: 'right', color: '#807269', fontSize: 13, lineHeight: 22 },
+  error: { textAlign: 'right', color: mobileTheme.danger, backgroundColor: mobileTheme.dangerSurface, borderRadius: mobileRadius.medium, padding: 12, lineHeight: 22 },
+  link: { textAlign: 'center', color: '#6F5E54', padding: 8, textDecorationLine: 'underline' },
   row: { flexDirection: 'row-reverse', gap: 10 },
   wrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
-  choice: { borderWidth: 1, borderColor: '#d8d5cd', paddingVertical: 11, paddingHorizontal: 15, borderRadius: 999, backgroundColor: '#ffffff' },
-  choiceSelected: { backgroundColor: '#e8ece4', borderColor: '#798272' },
-  choiceText: { color: '#44453f' },
-  choiceTextSelected: { color: '#20211f', fontWeight: '800' },
-  rule: { backgroundColor: '#f6f5f1', padding: 12, borderRadius: 12 },
-  ruleText: { color: '#40413c', textAlign: 'right', lineHeight: 23 },
-  logoutButton: { borderWidth: 1, borderColor: '#d8d5cd', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16 },
-  logoutText: { color: '#55564f', textAlign: 'center', fontWeight: '700' },
-  legalBox: { backgroundColor: '#ffffff', borderRadius: 16, padding: 14, gap: 10 },
+  choice: { borderWidth: 1, borderColor: mobileTheme.lineLight, paddingVertical: 11, paddingHorizontal: 15, borderRadius: 999, backgroundColor: '#FFF9F2' },
+  choiceSelected: { backgroundColor: '#F4D8BB', borderColor: mobileTheme.accentStrong },
+  choiceText: { color: '#5E5148' },
+  choiceTextSelected: { color: mobileTheme.inkStrong, fontWeight: '900' },
+  rule: { backgroundColor: '#F1E6DB', padding: 12, borderRadius: mobileRadius.medium, borderRightWidth: 3, borderRightColor: mobileTheme.accent },
+  ruleText: { color: '#4D4038', textAlign: 'right', lineHeight: 23 },
+  logoutButton: { borderWidth: 1, borderColor: mobileTheme.lineDark, borderRadius: mobileRadius.small, paddingVertical: 12, paddingHorizontal: 16 },
+  logoutText: { color: mobileTheme.muted, textAlign: 'center', fontWeight: '700' },
+  logoutTextOnDark: { color: mobileTheme.accentSoft, textAlign: 'right', fontWeight: '700' },
+  legalBox: { backgroundColor: mobileTheme.surface, borderRadius: mobileRadius.medium, padding: 14, gap: 10, borderWidth: 1, borderColor: mobileTheme.lineDark },
   legalBoxCompact: { marginHorizontal: 20, marginBottom: 8, paddingVertical: 10 },
-  legalTitle: { color: '#20211f', textAlign: 'right', fontSize: 13, fontWeight: '700' },
+  legalTitle: { color: mobileTheme.onDark, textAlign: 'right', fontSize: 13, fontWeight: '800' },
   legalRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 14 },
-  legalLink: { color: '#55564f', fontSize: 13, textDecorationLine: 'underline' },
-  disabled: { opacity: 0.35 },
+  legalLink: { color: mobileTheme.accentSoft, fontSize: 12, textDecorationLine: 'underline' },
+  disabled: { opacity: 0.4 },
 });

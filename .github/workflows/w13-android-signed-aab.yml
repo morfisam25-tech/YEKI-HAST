@@ -1,0 +1,109 @@
+name: W13 Signed Android AAB
+
+on:
+  push:
+    branches:
+      - w13/android-play-finalization-20260909
+    paths:
+      - '.w13-build-trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      CI: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify EAS authorization is present
+        run: |
+          test -n "$EXPO_TOKEN" || { echo 'EXPO_TOKEN is not configured'; exit 2; }
+
+      - name: Build signed production AAB with existing EAS credentials
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          npx eas-cli@latest build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json > /tmp/w13-eas-build.json
+          cp /tmp/w13-eas-build.json ../../w13-eas-build.json
+          cat ../../w13-eas-build.json
+
+      - name: Download EAS AAB
+        run: |
+          set -euo pipefail
+          BUILD_URL=$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end // empty' w13-eas-build.json)
+          BUILD_ID=$(jq -r 'if type == "array" then .[0].id else .id end // empty' w13-eas-build.json)
+          APP_BUILD_VERSION=$(jq -r 'if type == "array" then .[0].appBuildVersion else .appBuildVersion end // empty' w13-eas-build.json)
+          test -n "$BUILD_URL"
+          test -n "$BUILD_ID"
+          curl --fail --location --retry 3 "$BUILD_URL" --output yeki-hast-w13.aab
+          printf '%s\n' "$BUILD_ID" > w13-eas-build-id.txt
+          printf '%s\n' "$APP_BUILD_VERSION" > w13-eas-app-build-version.txt
+          sha256sum yeki-hast-w13.aab | tee w13-aab-sha256.txt
+          unzip -t yeki-hast-w13.aab | tee w13-aab-unzip-test.txt
+
+      - name: Verify signing certificate
+        run: |
+          set -euo pipefail
+          jarsigner -verify -verbose -certs yeki-hast-w13.aab | tee w13-aab-jarsigner.txt
+          keytool -printcert -jarfile yeki-hast-w13.aab | tee w13-aab-certificate.txt
+          grep -q 'jar verified' w13-aab-jarsigner.txt
+
+      - name: Inspect bundle manifest
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/google/bundletool/releases/download/1.18.1/bundletool-all-1.18.1.jar \
+            --output bundletool.jar
+          java -jar bundletool.jar dump manifest --bundle yeki-hast-w13.aab > w13-aab-manifest.xml
+          grep -o 'package="[^"]*"' w13-aab-manifest.xml | head -1 | tee w13-aab-package.txt
+          grep -o 'android:versionCode="[^"]*"' w13-aab-manifest.xml | head -1 | tee w13-aab-version-code.txt
+          grep -o 'android:targetSdkVersion="[^"]*"' w13-aab-manifest.xml | head -1 | tee w13-aab-target-sdk.txt
+          grep -q 'package="app.yekihast.mobile"' w13-aab-manifest.xml
+          grep -q 'android:targetSdkVersion="36"' w13-aab-manifest.xml
+
+      - name: Upload verified signed AAB evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w13-signed-aab-evidence
+          path: |
+            yeki-hast-w13.aab
+            w13-eas-build.json
+            w13-eas-build-id.txt
+            w13-eas-app-build-version.txt
+            w13-aab-sha256.txt
+            w13-aab-unzip-test.txt
+            w13-aab-jarsigner.txt
+            w13-aab-certificate.txt
+            w13-aab-manifest.xml
+            w13-aab-package.txt
+            w13-aab-version-code.txt
+            w13-aab-target-sdk.txt
+          if-no-files-found: error
+          retention-days: 7

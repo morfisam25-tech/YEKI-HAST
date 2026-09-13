@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import App from './App';
 import { getBootstrap, type BootstrapResponse } from './src/api';
+import { mobileRadius, mobileTheme } from './src/theme';
 
 type LegalConfig = {
   ready: boolean;
@@ -65,6 +66,9 @@ export default function RootApp() {
                 <Text style={styles.deleteLink}>حذف حساب</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity onPress={() => openExternal('https://yekihast.app/safety/children')}>
+              <Text style={styles.link}>ایمنی کودک</Text>
+            </TouchableOpacity>
             {legal?.supportEmail && (
               <TouchableOpacity onPress={() => openExternal(`mailto:${legal.supportEmail}`)}>
                 <Text style={styles.link}>پشتیبانی</Text>
@@ -78,19 +82,30 @@ export default function RootApp() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f5f3ee' },
+  root: { flex: 1, backgroundColor: mobileTheme.deep },
   app: { flex: 1 },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: '#dedbd3',
-    backgroundColor: '#fbfaf7',
+    borderTopColor: mobileTheme.lineDark,
+    backgroundColor: mobileTheme.surface,
     paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 6,
-    gap: 6,
+    paddingTop: 9,
+    paddingBottom: 7,
+    gap: 7,
   },
-  boundary: { color: '#77766f', fontSize: 10, lineHeight: 15, textAlign: 'right' },
-  links: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  link: { color: '#55564f', fontSize: 12, textDecorationLine: 'underline' },
-  deleteLink: { color: '#8a3430', fontSize: 12, textDecorationLine: 'underline', fontWeight: '700' },
+  boundary: { color: mobileTheme.muted, fontSize: 10, lineHeight: 16, textAlign: 'right' },
+  links: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 14 },
+  link: {
+    color: mobileTheme.accentSoft,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+    paddingVertical: mobileRadius.small / 2,
+  },
+  deleteLink: {
+    color: '#E5A39C',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+    fontWeight: '700',
+    paddingVertical: mobileRadius.small / 2,
+  },
 });

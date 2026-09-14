@@ -13,6 +13,7 @@ import {
   tokenHash,
 } from '../lib/security.ts';
 import { getEmailProvider, normalizeEmailAddress } from '../providers/email.ts';
+import { isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 
 const purpose = 'login_email';
 
@@ -136,7 +137,7 @@ export async function requestEmailOtp(req: IncomingMessage, res: ServerResponse)
     throw new HttpError(503, 'email_delivery_unavailable');
   }
 
-  const devExpose = process.env.NODE_ENV === 'development' && process.env.DEV_EXPOSE_OTP === 'true';
+  const devExpose = (process.env.NODE_ENV === 'development' || isInternalOwnerTestMode()) && process.env.DEV_EXPOSE_OTP === 'true';
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });
 }
 

@@ -1,3 +1,5 @@
+import { isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
+
 export interface SmsProvider {
   sendOtp(input: { phoneE164: string; code: string; ttlSeconds: number }): Promise<void>;
 }
@@ -157,9 +159,13 @@ class SmsIrProvider implements SmsProvider {
 }
 
 export function getSmsProvider(): SmsProvider {
-  const provider = process.env.SMS_PROVIDER?.trim() || (process.env.NODE_ENV === 'development' ? 'dev' : '');
+  // Real Production is untouched: isInternalOwnerTestMode() always returns false there.
+  // A genuinely isolated, fail-closed, token-gated Preview Internal Beta deployment may
+  // also use the dev provider, since Vercel Preview builds still run with NODE_ENV=production.
+  const ownerTestMode = isInternalOwnerTestMode();
+  const provider = process.env.SMS_PROVIDER?.trim() || ((process.env.NODE_ENV === 'development' || ownerTestMode) ? 'dev' : '');
   if (provider === 'dev') {
-    if (process.env.NODE_ENV !== 'development') throw new Error('sms_provider_not_configured');
+    if (process.env.NODE_ENV !== 'development' && !ownerTestMode) throw new Error('sms_provider_not_configured');
     return new DevSmsProvider();
   }
   if (provider === 'kavenegar') return new KavenegarSmsProvider();

@@ -1,3 +1,5 @@
+import { isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
+
 export interface CreateBridgeCallInput {
   // Stable idempotency key for the external bridge creation request.
   // Every production adapter MUST return the same logical bridge when this
@@ -25,7 +27,12 @@ export function validateTelephonyEnv(): void {
   const provider = process.env.TELEPHONY_PROVIDER?.trim();
   if (!provider) throw new Error('TELEPHONY_PROVIDER is required');
   if (provider === 'dev') {
-    if (process.env.NODE_ENV === 'production') throw new Error('dev telephony provider is forbidden in production');
+    // Real Production is untouched: isInternalOwnerTestMode() always returns false there.
+    // A genuinely isolated, fail-closed, token-gated Preview Internal Beta deployment may
+    // also use the dev provider, since Vercel Preview builds still run with NODE_ENV=production.
+    if (process.env.NODE_ENV === 'production' && !isInternalOwnerTestMode()) {
+      throw new Error('dev telephony provider is forbidden in production');
+    }
     return;
   }
   throw new Error(`Telephony provider not implemented: ${provider}`);

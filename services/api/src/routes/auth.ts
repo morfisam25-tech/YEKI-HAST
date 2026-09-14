@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import { getSmsProvider } from '../providers/sms.ts';
+import { isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { requireAuth, revokeCurrentSession } from '../lib/auth.ts';
 import { isAdminBootstrapWindowOpen } from '../lib/admin-bootstrap.ts';
@@ -125,7 +126,7 @@ export async function requestOtp(req: IncomingMessage, res: ServerResponse) {
     throw new HttpError(503, 'sms_delivery_unavailable');
   }
 
-  const devExpose = process.env.NODE_ENV === 'development' && process.env.DEV_EXPOSE_OTP === 'true';
+  const devExpose = (process.env.NODE_ENV === 'development' || isInternalOwnerTestMode()) && process.env.DEV_EXPOSE_OTP === 'true';
   sendJson(res, 202, { ok: true, expiresInSeconds: ttlSeconds, ...(devExpose ? { devCode: code } : {}) });
 }
 

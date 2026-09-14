@@ -10,7 +10,7 @@ PASS — see [Test results](#test-results) below for the exact commands and real
 - Base SHA (verified against `origin/w57/safe-internal-beta-preview-20260914`):
   `2ed5ed5daeaf98b5f1fb416f8686935880112006`
 - W58 branch: `w58/recording-core-foundation-20260914`
-- Final SHA: see the branch after the commit created by this task.
+- Final SHA: `c9334b07cecb5ecc2619fc338f9f88246b38697c`
 
 ## Locked product policy (unchanged, restated)
 

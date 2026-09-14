@@ -24,7 +24,7 @@ const ALLOWED_PATHS = [
   /^listener\/calls\/active$/,
   /^listener\/calls\/recent$/,
   new RegExp(`^calls\/${UUID}$`),
-  new RegExp(`^calls\/${UUID}\/voice\/(config|signals|heartbeat|end|safety-exit)$`),
+  new RegExp(`^calls\/${UUID}\/voice\/(config|signals|heartbeat|end|safety-exit|media-auth)$`),
   /^safety\/(report|block)$/,
 ];
 const MAX_PROXY_BODY_BYTES = 64 * 1024;

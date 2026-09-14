@@ -31,7 +31,7 @@ const ALLOWED_PATHS = [
   new RegExp(`^calls\/${UUID}$`),
   new RegExp(`^calls\/${UUID}\/feedback$`),
   new RegExp(`^calls\/${UUID}\/cancel$`),
-  new RegExp(`^calls\/${UUID}\/voice\/(start|config|signals|no-answer|extend|heartbeat|end|safety-exit)$`),
+  new RegExp(`^calls\/${UUID}\/voice\/(start|config|signals|no-answer|extend|heartbeat|end|safety-exit|media-auth)$`),
   new RegExp(`^calls\/${UUID}\/recording-consent$`),
   new RegExp(`^calls\/${UUID}\/recording-status$`),
   /^safety\/(report|block)$/,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRealtimeVoiceCall } from '../realtime-media';
 
 type Listener = {
   id: string;
@@ -30,11 +31,32 @@ type VoiceSignal = {
   payload: unknown;
 };
 
-type CallPhase = 'idle' | 'preparing' | 'ringing' | 'connecting' | 'connected' | 'ended';
+type CallPhase = 'idle' | 'preparing' | 'ringing' | 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'ended';
+
+// W63: which live-media transport this call actually uses, exactly mirroring
+// apps/mobile/src/internet-voice-api.ts#CallMediaProvider. 'realtimekit' is
+// the RealtimeKit web media migration path (this branch); 'legacy_p2p' is the
+// pre-existing RTCPeerConnection/custom-offer-answer/ICE-polling path, kept
+// working only for the Internal Preview technical-beta transport-mode until
+// it is fully retired (see docs/W60_REALTIMEKIT_MOBILE_MEDIA_MIGRATION.md
+// section 9 for the server-side rejection of legacy signal kinds once a call
+// is on the realtimekit path). The browser never chooses this itself -- it is
+// always read from the server's voice/start response.
+type CallMediaProvider = 'realtimekit' | 'legacy_p2p';
 
 type VoiceStart = {
+  mediaProvider: CallMediaProvider;
   noAnswerSeconds: number;
-  client: { iceServers: RTCIceServer[]; relayConfigured: boolean };
+  client: { iceServers: RTCIceServer[]; relayConfigured: boolean } | null;
+};
+
+type VoiceMediaAuth = {
+  ok: true;
+  callId: string;
+  role: 'caller' | 'listener';
+  provider: 'realtimekit';
+  meetingId: string;
+  authToken: string;
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -111,6 +133,8 @@ export default function TalkPage() {
   const seenSignalsRef = useRef(new Set<string>());
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const mediaConnectedSentRef = useRef(false);
+  const mediaProviderRef = useRef<CallMediaProvider | null>(null);
+  const realtimeCall = useRealtimeVoiceCall();
 
   const policiesReady = ageConfirmed && termsAccepted && safetyAccepted && recordingAcknowledged;
 
@@ -126,8 +150,10 @@ export default function TalkPage() {
     seenSignalsRef.current.clear();
     pendingCandidatesRef.current = [];
     mediaConnectedSentRef.current = false;
+    mediaProviderRef.current = null;
+    void realtimeCall.leave();
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
-  }, []);
+  }, [realtimeCall.leave]);
 
   const refreshMarketplace = useCallback(async () => {
     setError('');
@@ -170,7 +196,14 @@ export default function TalkPage() {
     let active = true;
     let running = false;
     const heartbeat = async () => {
-      if (!active || running || pcRef.current?.connectionState !== 'connected') return;
+      // Legacy path: gate on the real RTCPeerConnection state. RealtimeKit
+      // path: `phase` itself only reaches 'connected' from the hook's own
+      // genuine two-party connected state (see the realtimeCall.state effect
+      // above), so no separate live-media check is needed here.
+      const mediaLive = mediaProviderRef.current === 'realtimekit'
+        ? realtimeCall.remoteParticipantPresent
+        : pcRef.current?.connectionState === 'connected';
+      if (!active || running || !mediaLive) return;
       running = true;
       try {
         const result = await api<{
@@ -199,7 +232,7 @@ export default function TalkPage() {
     void heartbeat();
     const timer = setInterval(() => void heartbeat(), 5_000);
     return () => { active = false; clearInterval(timer); };
-  }, [callId, cleanupRtc, phase, refreshMarketplace]);
+  }, [callId, cleanupRtc, phase, refreshMarketplace, realtimeCall.remoteParticipantPresent]);
 
   const syncCallTiming = useCallback(async (id: string) => {
     const details = await api<{ status: string; connectedAt: string | null; maxBillableSeconds: number | null }>(`calls/${id}`);
@@ -208,8 +241,13 @@ export default function TalkPage() {
     return details.status;
   }, []);
 
-  const beginRtc = useCallback(async (id: string, voice: VoiceStart, stream: MediaStream) => {
+  // LEGACY_P2P_PREVIEW_ONLY: the pre-RealtimeKit path, kept working only for
+  // the Internal Preview technical-beta transport mode -- see the
+  // CallMediaProvider comment above. `voice.client` is guaranteed non-null by
+  // the only caller (startCall), which checks it before calling this.
+  const beginRtc = useCallback(async (id: string, voice: { noAnswerSeconds: number; client: { iceServers: RTCIceServer[]; relayConfigured: boolean } }, stream: MediaStream) => {
     cleanupRtc();
+    mediaProviderRef.current = 'legacy_p2p';
     localStreamRef.current = stream;
     setPhase('ringing');
     setNotice('در حال تماس با شنونده…');
@@ -332,6 +370,73 @@ export default function TalkPage() {
     }, Math.max(1, voice.noAnswerSeconds) * 1000);
   }, [cleanupRtc, refreshMarketplace, syncCallTiming]);
 
+  // W63: mints a short-lived RealtimeKit participant auth token for this exact
+  // call (server derives the caller's role from the call row itself -- never
+  // from client input, same invariant as the mobile media-auth route) and
+  // joins the shared meeting. Mirrors apps/mobile's CallerClosedBetaScreen
+  // realtimekit branch: this function never calls getUserMedia itself -- the
+  // RealtimeKit SDK acquires the microphone during join().
+  const beginRealtimeKit = useCallback(async (id: string, noAnswerSeconds: number) => {
+    cleanupRtc();
+    mediaProviderRef.current = 'realtimekit';
+    setPhase('ringing');
+    setNotice('در حال تماس با شنونده…');
+
+    const auth = await api<VoiceMediaAuth>(`calls/${id}/voice/media-auth`, { method: 'POST', body: '{}' });
+    await realtimeCall.join(auth.authToken);
+
+    noAnswerRef.current = setTimeout(() => {
+      void api<{ status: string }>(`calls/${id}/voice/no-answer`, { method: 'POST', body: '{}' })
+        .then(() => {
+          setPhase('ended');
+          setNotice('این شنونده پاسخ نداد. مبلغی از اعتبار کم نشده است.');
+          cleanupRtc();
+          void refreshMarketplace();
+        })
+        .catch(() => undefined);
+    }, Math.max(1, noAnswerSeconds) * 1000);
+  }, [cleanupRtc, realtimeCall.join, refreshMarketplace]);
+
+  const postRealtimeMediaConnected = useCallback(async () => {
+    if (!callId || mediaConnectedSentRef.current) return;
+    mediaConnectedSentRef.current = true;
+    try {
+      await api(`calls/${callId}/voice/signals`, {
+        method: 'POST',
+        body: JSON.stringify({ kind: 'media_connected', payload: { source: 'web_realtimekit' } }),
+      });
+    } catch {
+      mediaConnectedSentRef.current = false;
+    }
+  }, [callId]);
+
+  // Never declares 'connected' from a token existing, the SDK initializing,
+  // or join() resolving -- only from useRealtimeVoiceCall's own 'connected'
+  // state, which itself requires a genuine roomJoined event AND at least one
+  // other participant already present (see apps/web/app/realtime-media.ts).
+  useEffect(() => {
+    if (mediaProviderRef.current !== 'realtimekit' || !callId) return;
+    const rtState = realtimeCall.state;
+    if (rtState === 'connecting') {
+      setPhase('connecting');
+    } else if (rtState === 'waiting_for_other_participant') {
+      setPhase('ringing');
+      setNotice('در حال تماس با شنونده…');
+    } else if (rtState === 'connected') {
+      if (noAnswerRef.current) { clearTimeout(noAnswerRef.current); noAnswerRef.current = null; }
+      setPhase('connected');
+      setNotice('تماس وصل شد. هزینه فقط از زمان اتصال واقعی محاسبه می‌شود.');
+      void syncCallTiming(callId);
+      void postRealtimeMediaConnected();
+    } else if (rtState === 'reconnecting') {
+      setPhase('reconnecting');
+      setNotice('اتصال ضعیف شده؛ در حال تلاش برای برگشت…');
+    } else if (rtState === 'failed') {
+      setPhase('failed');
+      setError('اتصال صوتی قطع شد. تماس را پایان بده و دوباره تلاش کن.');
+    }
+  }, [realtimeCall.state, callId, postRealtimeMediaConnected, syncCallTiming]);
+
   async function startCall() {
     if (!selected || busy || !policiesReady) return;
     setBusy(true);
@@ -379,9 +484,18 @@ export default function TalkPage() {
 
       const voice = await api<VoiceStart>(`calls/${call.callId}/voice/start`, { method: 'POST', body: '{}' });
       voiceStarted = true;
-      if (!voice.client.relayConfigured && process.env.NODE_ENV === 'production') throw new Error('voice_relay_not_ready');
-      await beginRtc(call.callId, voice, preparedStream);
-      preparedStream = null;
+      if (voice.mediaProvider === 'realtimekit') {
+        // RealtimeKit acquires its own microphone during join(); stop the
+        // early permission-check stream instead of holding two mic handles.
+        preparedStream.getTracks().forEach((track) => track.stop());
+        preparedStream = null;
+        await beginRealtimeKit(call.callId, voice.noAnswerSeconds);
+      } else {
+        if (!voice.client) throw new Error('call_transport_not_configured');
+        if (!voice.client.relayConfigured && process.env.NODE_ENV === 'production') throw new Error('voice_relay_not_ready');
+        await beginRtc(call.callId, { noAnswerSeconds: voice.noAnswerSeconds, client: voice.client }, preparedStream);
+        preparedStream = null;
+      }
     } catch (cause) {
       if (createdCallId) {
         const path = voiceStarted ? `calls/${createdCallId}/voice/end` : `calls/${createdCallId}/cancel`;
@@ -497,7 +611,7 @@ export default function TalkPage() {
       {notice && <p className="helper" aria-live="polite">{notice}</p>}
       {safetyNotice && <p className="helper" aria-live="polite">{safetyNotice}</p>}
 
-      {phase === 'ended' && callId && (
+      {(phase === 'ended' || phase === 'failed') && callId && (
         <section className="call-setup" aria-labelledby="post-call-safety-title">
           <h2 id="post-call-safety-title">ایمنی بعد از تماس</h2>
           <p>فایل صوتی تماس وجود ندارد. می‌توانی رفتار نامناسب را گزارش کنی یا این شنونده را برای تماس‌های بعدی بلاک کنی.</p>
@@ -508,7 +622,7 @@ export default function TalkPage() {
         </section>
       )}
 
-      {(phase === 'idle' || phase === 'ended') ? (
+      {(phase === 'idle' || phase === 'ended' || phase === 'failed') ? (
         <>
           <section className="call-setup" aria-labelledby="rules-title">
             <p className="kicker">قبل از اولین تماس</p>
@@ -583,7 +697,7 @@ export default function TalkPage() {
         <section className="live-call" aria-labelledby="live-call-title">
           <p className="kicker">تماس فعال</p>
           <h2 id="live-call-title">{selected?.nickname ?? 'شنونده'}</h2>
-          <p>{phase === 'preparing' ? 'در حال آماده‌سازی میکروفن…' : phase === 'ringing' ? 'منتظر پاسخ شنونده…' : phase === 'connecting' ? 'در حال اتصال صدا…' : 'تماس وصل است.'}</p>
+          <p>{phase === 'preparing' ? 'در حال آماده‌سازی میکروفن…' : phase === 'ringing' ? 'منتظر پاسخ شنونده…' : phase === 'connecting' ? 'در حال اتصال صدا…' : phase === 'reconnecting' ? 'اتصال ضعیف شده؛ در حال تلاش برای برگشت…' : 'تماس وصل است.'}</p>
           {phase === 'connected' && remainingSeconds !== null && (
             <p className={warning ? 'error' : ''}>
               زمان باقی‌مانده: {faNumber(Math.floor(remainingSeconds / 60))}:{faNumber(remainingSeconds % 60).padStart(2, '۰')}

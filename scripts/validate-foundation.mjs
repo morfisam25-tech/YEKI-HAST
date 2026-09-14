@@ -24,6 +24,16 @@ const callMediaSession = await readFile(new URL('../services/api/src/services/ca
 const recordingRealtimeKit = await readFile(new URL('../services/api/src/providers/recording-realtimekit.ts', import.meta.url), 'utf8');
 const internetVoiceMediaRoute = await readFile(new URL('../services/api/src/routes/internet-voice-media.ts', import.meta.url), 'utf8');
 const migrateTs = await readFile(new URL('../packages/db/src/migrate.ts', import.meta.url), 'utf8');
+const webCallerPage = await readFile(new URL('../apps/web/app/talk/page.tsx', import.meta.url), 'utf8');
+const webListenerPage = await readFile(new URL('../apps/web/app/listener/work/page.tsx', import.meta.url), 'utf8');
+const webRealtimeMedia = await readFile(new URL('../apps/web/app/realtime-media.ts', import.meta.url), 'utf8');
+const webCallerProxy = await readFile(new URL('../apps/web/app/api/caller/[...path]/route.ts', import.meta.url), 'utf8');
+const webListenerProxy = await readFile(new URL('../apps/web/app/api/listener/[...path]/route.ts', import.meta.url), 'utf8');
+const webPackageJson = await readFile(new URL('../apps/web/package.json', import.meta.url), 'utf8');
+const mobileEasJson = await readFile(new URL('../apps/mobile/eas.json', import.meta.url), 'utf8');
+const mobileApiTs = await readFile(new URL('../apps/mobile/src/api.ts', import.meta.url), 'utf8');
+const verifyProductionDb = await readFile(new URL('../scripts/verify-production-db.mjs', import.meta.url), 'utf8');
+const deployProductionApiYml = await readFile(new URL('../.github/workflows/deploy-production-api.yml', import.meta.url), 'utf8');
 
 const checks = [
   ['no IRR-hardcoded money column suffixes', !/_irr\b/.test(sql)],
@@ -119,6 +129,42 @@ const checks = [
   ['recording start reuses the media session\'s meeting instead of creating a second Cloudflare meeting', callMediaSession.includes('providerImpl.prepareSession({ callSessionId })')],
   ['RealtimeKit path rejects legacy custom SDP offer/answer/ICE at the signaling endpoint (task section 10)', internetVoiceRoute.includes("throw new HttpError(409, 'legacy_signaling_disabled')")],
   ['media-provider readiness reuses the config module\'s exported guard rather than re-parsing Cloudflare env vars', callMediaConfig.includes("CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME")],
+
+  // W63 Web RealtimeKit migration
+  ['Web Caller and Listener join RealtimeKit via the official React SDK, never a hand-rolled client', webPackageJson.includes('"@cloudflare/realtimekit-react"') && webRealtimeMedia.includes("from '@cloudflare/realtimekit-react'")],
+  ['Web voice pages read mediaProvider from the server, never choose a transport themselves', webCallerPage.includes("voice.mediaProvider === 'realtimekit'") && webListenerPage.includes("config.mediaProvider === 'realtimekit'")],
+  ['Web RealtimeKit path never calls getUserMedia itself (the SDK acquires the microphone during join())',
+    (() => {
+      const callerRtkBlock = webCallerPage.slice(webCallerPage.indexOf('beginRealtimeKit = useCallback'), webCallerPage.indexOf('beginRealtimeKit = useCallback') + 800);
+      const listenerRtkBlock = webListenerPage.slice(webListenerPage.indexOf('async function answerRealtimeKit'), webListenerPage.indexOf('async function answerRealtimeKit') + 800);
+      return !callerRtkBlock.includes('getUserMedia') && !listenerRtkBlock.includes('getUserMedia');
+    })()],
+  ['Web media-ready never fires from a token, SDK init, or join() resolving alone -- only from useRealtimeVoiceCall\'s own connected state',
+    webRealtimeMedia.includes("setState(remoteParticipantCount(meeting) > 0 ? 'connected' : 'waiting_for_other_participant')")
+      && !webRealtimeMedia.includes("setState('connected')")],
+  ['Web proxies allow-list voice/media-auth but no unrelated path', webCallerProxy.includes('media-auth') && webListenerProxy.includes('media-auth')],
+  ['No Cloudflare RealtimeKit API secret is ever referenced from apps/web source', !/CLOUDFLARE_REALTIMEKIT_API_TOKEN/.test(webCallerPage) && !/CLOUDFLARE_REALTIMEKIT_API_TOKEN/.test(webListenerPage) && !/CLOUDFLARE_REALTIMEKIT_API_TOKEN/.test(webRealtimeMedia)],
+  ['Web legacy P2P path is retained only behind the mediaProvider branch, never the implicit default', webCallerPage.includes("mediaProviderRef.current = 'legacy_p2p'") && webListenerPage.includes("mediaProviderRef.current = 'legacy_p2p'")],
+  ['Web billing liveness (heartbeat) recognizes RealtimeKit connected state, not only a legacy RTCPeerConnection', webCallerPage.includes('realtimeCall.remoteParticipantPresent') && webListenerPage.includes('realtimeCall.remoteParticipantPresent')],
+  ['Web cleanup releases the RealtimeKit meeting (and microphone) on every exit path', webCallerPage.includes('void realtimeCall.leave()') && webListenerPage.includes('void realtimeCall.leave()')],
+
+  // W63 mobile Preview/Production API isolation fix (W61 P0-1 closure)
+  ['mobile Preview build profile no longer embeds the Production API origin literal',
+    (() => {
+      const eas = JSON.parse(mobileEasJson);
+      return eas.build.preview.env.EXPO_PUBLIC_API_BASE_URL === undefined
+        && eas.build.production.env.EXPO_PUBLIC_API_BASE_URL === 'https://yeki-hast-unique-6ff0.vercel.app';
+    })()],
+  ['mobile API base URL resolution fails closed in preview_internal_beta (missing or Production-pointing)', mobileApiTs.includes("required in preview_internal_beta") && mobileApiTs.includes('must not point at the Production API origin in preview_internal_beta')],
+  ['mobile eas.json build profiles carry an explicit EXPO_PUBLIC_APP_ENV identity', mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "preview_internal_beta"') && mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "production"')],
+
+  // W63 production release profile closure (W61 P0-2)
+  ['deploy-production-api.yml requires an explicit release_profile choice, Internal Beta first', /release_profile:[\s\S]*?type: choice[\s\S]*?options:\n\s*- internal_beta\n\s*- public_release/.test(deployProductionApiYml)],
+  ['deploy-production-api.yml wires the dispatch choice straight through and validates it before any deploy step runs', deployProductionApiYml.includes('PRODUCTION_RELEASE_PROFILE: ${{ github.event.inputs.release_profile }}') && deployProductionApiYml.includes('release_profile must be an explicit choice of internal_beta or public_release')],
+
+  // W63 production DB verifier closure (W61 P0-3)
+  ['production DB verifier checks W58 recording tables and W60 call_media_sessions, not only pre-W58 relations', ['app.call_recording_consents', 'private_data.call_recording_sessions', 'private_data.call_recording_segments', 'app.admin_capabilities', 'app.recording_playback_grants', 'app.call_media_sessions'].every((relation) => verifyProductionDb.includes(`'${relation}'`))],
+  ['production DB verifier checks the recording_state enum and the media/recording updated_at triggers across both app and private_data schemas', verifyProductionDb.includes('app.recording_state') && verifyProductionDb.includes("nspname IN ('app', 'private_data')") && verifyProductionDb.includes('call_media_sessions_set_updated_at')],
 ];
 
 let failed = 0;

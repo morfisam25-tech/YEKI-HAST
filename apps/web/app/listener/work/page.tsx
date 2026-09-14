@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRealtimeVoiceCall } from '../../realtime-media';
 
 type PresenceStatus = 'online' | 'offline' | 'paused';
 
@@ -55,14 +56,30 @@ type VoiceSignal = {
   payload: unknown;
 };
 
+// W63: which live-media transport this call actually uses -- mirrors
+// apps/mobile/src/internet-voice-api.ts#CallMediaProvider and
+// apps/web/app/talk/page.tsx's own CallMediaProvider exactly. Always read
+// from the server's voice/config response, never chosen client-side.
+type CallMediaProvider = 'realtimekit' | 'legacy_p2p';
+
 type VoiceConfig = {
   callId: string;
   transport: 'internet_voice';
   role: 'caller' | 'listener';
   status: string;
+  mediaProvider: CallMediaProvider;
   noAnswerSeconds: number;
-  client: { iceServers: RTCIceServer[]; relayConfigured: boolean };
+  client: { iceServers: RTCIceServer[]; relayConfigured: boolean } | null;
   readiness: { relayConfigured: boolean; iranDomesticPathConfigured: boolean };
+};
+
+type VoiceMediaAuth = {
+  ok: true;
+  callId: string;
+  role: 'caller' | 'listener';
+  provider: 'realtimekit';
+  meetingId: string;
+  authToken: string;
 };
 
 type VoiceTiming = {
@@ -178,6 +195,8 @@ export default function ListenerWorkPage() {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const mediaConnectedSentRef = useRef(false);
   const rtcCallIdRef = useRef<string | null>(null);
+  const mediaProviderRef = useRef<CallMediaProvider | null>(null);
+  const realtimeCall = useRealtimeVoiceCall();
 
   const applyPresence = useCallback((value: Presence) => {
     presenceRef.current = value;
@@ -197,11 +216,13 @@ export default function ListenerWorkPage() {
     pendingCandidatesRef.current = [];
     mediaConnectedSentRef.current = false;
     rtcCallIdRef.current = null;
+    mediaProviderRef.current = null;
+    void realtimeCall.leave();
     setVoiceReady(false);
     setRemainingSeconds(null);
     setWarning(null);
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
-  }, []);
+  }, [realtimeCall.leave]);
 
   const refreshPresence = useCallback(async () => {
     const value = await api<Presence>('listener/presence');
@@ -341,7 +362,10 @@ export default function ListenerWorkPage() {
     if (!activeCall || activeCall.status !== 'connected' || !voiceReady || rtcCallIdRef.current !== activeCall.callId) return;
     let running = false;
     const heartbeat = async () => {
-      if (running || pcRef.current?.connectionState !== 'connected') return;
+      const mediaLive = mediaProviderRef.current === 'realtimekit'
+        ? realtimeCall.remoteParticipantPresent
+        : pcRef.current?.connectionState === 'connected';
+      if (running || !mediaLive) return;
       running = true;
       try {
         const result = await api<{ terminal: boolean; capReached: boolean; timing: VoiceTiming }>(`calls/${activeCall.callId}/voice/heartbeat`, {
@@ -364,7 +388,7 @@ export default function ListenerWorkPage() {
     void heartbeat();
     const timer = setInterval(() => void heartbeat(), 5_000);
     return () => clearInterval(timer);
-  }, [activeCall, cleanupRtc, refreshActive, voiceReady]);
+  }, [activeCall, cleanupRtc, refreshActive, voiceReady, realtimeCall.remoteParticipantPresent]);
 
   async function changePresence(status: PresenceStatus) {
     if (busy) return;
@@ -462,6 +486,21 @@ export default function ListenerWorkPage() {
     }
   }, [refreshActive]);
 
+  // Never declares readiness from a token existing, the SDK initializing, or
+  // join() resolving -- only from useRealtimeVoiceCall's own 'connected'
+  // state (genuine roomJoined + at least one other participant present).
+  useEffect(() => {
+    if (mediaProviderRef.current !== 'realtimekit' || !activeCall) return;
+    const rtState = realtimeCall.state;
+    if (rtState === 'connected') {
+      void markMediaConnected(activeCall.callId);
+    } else if (rtState === 'reconnecting') {
+      setNotice('اتصال ضعیف شده؛ در حال تلاش برای برگشت…');
+    } else if (rtState === 'failed') {
+      setError('اتصال صوتی قطع شد. پایان تماس را بزن و وضعیت را تازه کن.');
+    }
+  }, [realtimeCall.state, activeCall, markMediaConnected]);
+
   const startSignalPolling = useCallback((callId: string, pc: RTCPeerConnection) => {
     if (signalPollRef.current) clearInterval(signalPollRef.current);
     let running = false;
@@ -486,6 +525,24 @@ export default function ListenerWorkPage() {
     void poll();
   }, [cleanupRtc, consumeCallerSignal, refreshActive]);
 
+  // W63: RealtimeKit path -- joins the exact same meeting the Caller's
+  // media-auth/join call attaches to (one call_session_id, one provider
+  // meeting, never a second independently-created meeting). Never calls
+  // getUserMedia itself; the SDK acquires the microphone during join().
+  async function answerRealtimeKit(callId: string) {
+    cleanupRtc();
+    mediaProviderRef.current = 'realtimekit';
+    rtcCallIdRef.current = callId;
+    const auth = await api<VoiceMediaAuth>(`calls/${callId}/voice/media-auth`, { method: 'POST', body: '{}' });
+    if (auth.role !== 'listener') throw new Error('invalid_voice_role');
+    await realtimeCall.join(auth.authToken);
+    setNotice('در حال اتصال صوتی امن…');
+    // No SDP/ICE signal polling on this path -- RealtimeKit's own meeting
+    // carries the media out of band. Terminal call states are still caught by
+    // the existing listener/calls/active polling effect above, which already
+    // calls cleanupRtc() when the active call disappears.
+  }
+
   async function answerInternetCall() {
     if (!activeCall || activeCall.status !== 'calling_listener' || activeCall.transport !== 'internet_voice' || voiceBusy) return;
     setVoiceBusy(true);
@@ -495,12 +552,21 @@ export default function ListenerWorkPage() {
     try {
       const config = await api<VoiceConfig>(`calls/${activeCall.callId}/voice/config`);
       if (config.role !== 'listener') throw new Error('invalid_voice_role');
+
+      if (config.mediaProvider === 'realtimekit') {
+        await answerRealtimeKit(activeCall.callId);
+        await refreshActive().catch(() => undefined);
+        return;
+      }
+
+      if (!config.client) throw new Error('call_transport_not_configured');
       if (process.env.NODE_ENV === 'production' && !config.client.relayConfigured) throw new Error('voice_relay_not_ready');
 
       stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       if (stream.getAudioTracks().length === 0) throw new DOMException('microphone_missing', 'NotFoundError');
 
       cleanupRtc();
+      mediaProviderRef.current = 'legacy_p2p';
       localStreamRef.current = stream;
       rtcCallIdRef.current = activeCall.callId;
       const pc = new RTCPeerConnection({ iceServers: config.client.iceServers });

@@ -14,7 +14,7 @@ test('Web Listener proxy keeps the session token server-side and allow-lists wor
   assert.match(listenerProxy, /listener\\\/presence\\\/heartbeat/);
   assert.match(listenerProxy, /listener\\\/calls\\\/active/);
   assert.match(listenerProxy, /listener\\\/calls\\\/recent/);
-  assert.match(listenerProxy, /voice\\\/\(config\|signals\|heartbeat\|end\|safety-exit\)/);
+  assert.match(listenerProxy, /voice\\\/\(config\|signals\|heartbeat\|end\|safety-exit\|media-auth\)/);
   assert.match(listenerProxy, /safety\\\/\(report\|block\)/);
   assert.doesNotMatch(listenerProxy, /localStorage|sessionStorage/);
 });

@@ -87,6 +87,14 @@ try {
     'private_data.email_otp_challenges',
     'private_data.report_details',
     'private_data.safety_event_details',
+    // W58 recording core foundation (0010_recording_core_foundation.sql).
+    'app.call_recording_consents',
+    'private_data.call_recording_sessions',
+    'private_data.call_recording_segments',
+    'app.admin_capabilities',
+    'app.recording_playback_grants',
+    // W60 RealtimeKit media migration (0011_call_media_sessions.sql).
+    'app.call_media_sessions',
   ];
   const relations = await pool.query(`
     SELECT r.relation_name, to_regclass(r.relation_name) IS NOT NULL AS present
@@ -155,11 +163,45 @@ try {
   if (w3.call_rating_columns !== true) throw new Error('Call rating schema incomplete');
   if (w3.favorite_columns !== true) throw new Error('Caller favorite schema incomplete');
 
+  const recordingSchema = await pool.query(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'app' AND t.typname = 'recording_state'
+      ) AS recording_state_enum,
+      (
+        SELECT count(*)::int FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'app' AND t.typname = 'recording_state'
+      ) AS recording_state_enum_values,
+      to_regclass('app.call_media_sessions') IS NOT NULL AS call_media_sessions,
+      EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'app' AND table_name = 'call_recording_consents'
+          AND constraint_type = 'UNIQUE'
+      ) AS call_recording_consents_unique,
+      EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'private_data' AND table_name = 'call_recording_sessions'
+          AND constraint_type = 'UNIQUE'
+      ) AS call_recording_sessions_unique
+  `);
+  const recordingRow = recordingSchema.rows[0] ?? {};
+  if (recordingRow.recording_state_enum !== true) throw new Error('app.recording_state enum missing');
+  if (Number(recordingRow.recording_state_enum_values ?? 0) !== 11) throw new Error('app.recording_state enum value count mismatch');
+  if (recordingRow.call_media_sessions !== true) throw new Error('app.call_media_sessions table missing');
+  if (recordingRow.call_recording_consents_unique !== true) throw new Error('app.call_recording_consents unique constraint missing');
+  if (recordingRow.call_recording_sessions_unique !== true) throw new Error('private_data.call_recording_sessions unique constraint missing');
+
   const criticalTriggers = [
     'listener_presence_set_updated_at',
     'payout_items_guard_mutation',
     'payouts_validate_total_before_processing',
     'payouts_guard_status_transition',
+    'call_recording_sessions_set_updated_at',
+    'call_recording_segments_set_updated_at',
+    'call_media_sessions_set_updated_at',
   ];
   const triggers = await pool.query(`
     SELECT t.tgname
@@ -167,7 +209,7 @@ try {
     JOIN pg_class c ON c.oid=t.tgrelid
     JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE NOT t.tgisinternal
-      AND n.nspname='app'
+      AND n.nspname IN ('app', 'private_data')
       AND t.tgname = ANY($1::text[])
   `, [criticalTriggers]);
   const triggerNames = new Set(triggers.rows.map((row) => row.tgname));

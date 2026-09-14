@@ -60,11 +60,19 @@ test('iOS export-compliance declaration matches the current SecureStore-only mob
   assert.equal(packageJson.dependencies?.['expo-crypto'], undefined, 'adding expo-crypto requires export-compliance review');
 });
 
-test('mobile preview build is internally distributable, explicit and uses production API origin', () => {
+test('mobile preview build is internally distributable, explicit, and never embeds the Production API origin', () => {
   assert.equal(easConfig.build.preview.distribution, 'internal');
   assert.equal(easConfig.build.preview.environment, 'preview');
   assert.equal(easConfig.build.preview.node, sdk57Node);
-  assert.equal(easConfig.build.preview.env.EXPO_PUBLIC_API_BASE_URL, productionApiOrigin);
+  assert.equal(easConfig.build.preview.env.EXPO_PUBLIC_APP_ENV, 'preview_internal_beta');
+  // W63 fix: Preview must never hardcode Production's API origin inline (it
+  // silently pointed Internal Beta builds at Production before this branch).
+  // The isolated Preview API origin must instead come from an EAS-hosted
+  // environment variable scoped to the "preview" environment -- never a
+  // literal in this file -- and apps/mobile/src/api.ts fails closed if it is
+  // ever missing or if it is ever set to the Production origin.
+  assert.equal(easConfig.build.preview.env.EXPO_PUBLIC_API_BASE_URL, undefined);
+  assert.doesNotMatch(JSON.stringify(easConfig.build.preview), new RegExp(productionApiOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('mobile production build is reproducible enough for store beta versioning', () => {
@@ -73,6 +81,7 @@ test('mobile production build is reproducible enough for store beta versioning',
   assert.equal(easConfig.build.production.environment, 'production');
   assert.equal(easConfig.build.production.node, sdk57Node);
   assert.equal(easConfig.build.production.autoIncrement, undefined);
+  assert.equal(easConfig.build.production.env.EXPO_PUBLIC_APP_ENV, 'production');
   assert.equal(easConfig.build.production.env.EXPO_PUBLIC_API_BASE_URL, productionApiOrigin);
   assert.equal(packageJson.engines.node, '22.x');
 });

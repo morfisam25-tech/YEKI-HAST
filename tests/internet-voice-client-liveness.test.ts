@@ -8,15 +8,21 @@ const mobileCaller = await readFile(new URL('../apps/mobile/src/CallerClosedBeta
 const mobileListener = await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8');
 
 test('every Internet Voice client sends billing liveness only while its peer connection is connected', () => {
-  assert.match(webCaller, /pcRef\.current\?\.connectionState !== 'connected'/);
-  assert.match(webListener, /pcRef\.current\?\.connectionState !== 'connected'/);
-  // W60: mobile now gates heartbeat liveness by transport
-  // (CALL_MEDIA_PROVIDER) -- LEGACY_P2P_PREVIEW_ONLY still requires the exact
-  // same real peer.connectionState==='connected' check; the RealtimeKit path
-  // requires useRealtimeVoiceCall's own genuine two-party 'connected' state
-  // (see apps/mobile/src/realtime-media.ts) instead of a peer connection that
-  // path never creates. Neither branch sends a heartbeat without a real,
+  // W63: web now gates heartbeat liveness by transport (mediaProviderRef),
+  // exactly mirroring W60's mobile pattern below -- LEGACY_P2P_PREVIEW_ONLY
+  // still requires the exact same real pcRef.current?.connectionState==='connected'
+  // check; the RealtimeKit path requires useRealtimeVoiceCall's own genuine
+  // two-party connected state (remoteParticipantPresent, derived only from a
+  // real roomJoined + another participant present -- see
+  // apps/web/app/realtime-media.ts) instead of a peer connection that path
+  // never creates. Neither branch sends a heartbeat without a real,
   // transport-verified connected state.
+  assert.match(webCaller, /realtimeCall\.remoteParticipantPresent\s*\n\s*: pcRef\.current\?\.connectionState === 'connected'/);
+  assert.match(webCaller, /if \(!active \|\| running \|\| !mediaLive\) return;/);
+  assert.match(webListener, /realtimeCall\.remoteParticipantPresent\s*\n\s*: pcRef\.current\?\.connectionState === 'connected'/);
+  assert.match(webListener, /if \(running \|\| !mediaLive\) return;/);
+  // W60: mobile gates heartbeat liveness by transport (CALL_MEDIA_PROVIDER)
+  // the exact same way.
   assert.match(mobileCaller, /peerRef\.current\?\.connectionState === 'connected'\s*\n\s*: realtimeCall\.state === 'connected'/);
   assert.match(mobileCaller, /if \(!mediaLive\) return;/);
   assert.match(mobileListener, /peerRef\.current\?\.connectionState === 'connected'\s*\n\s*: realtimeCall\.state === 'connected'/);

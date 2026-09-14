@@ -1,4 +1,39 @@
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast-unique-6ff0.vercel.app').replace(/\/$/, '');
+import { isProductionOrigin, resolveAppEnv } from './env.ts';
+
+export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-unique-6ff0.vercel.app';
+
+// W63: environment identity (EXPO_PUBLIC_APP_ENV), never a bare
+// EXPO_PUBLIC_API_BASE_URL fallback alone -- mirrors apps/web/app/api/_backend.ts's
+// backendBaseUrl() exactly. Preview (Internal Beta) builds must never silently
+// fall back to the Production API: a missing or Production-pointing Preview
+// origin fails closed instead of defaulting anywhere. See
+// docs/W63_WEB_REALTIMEKIT_RELEASE_P0_CLOSURE.md section 9.
+export function resolveApiBaseUrl(): string {
+  const env = resolveAppEnv();
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+  if (env === 'production') {
+    return (configured || PRODUCTION_API_BASE_URL).replace(/\/$/, '');
+  }
+
+  if (env === 'preview_internal_beta') {
+    if (!configured) {
+      throw new Error('EXPO_PUBLIC_API_BASE_URL is required in preview_internal_beta; Preview must never fall back to the Production API');
+    }
+    const normalized = configured.replace(/\/$/, '');
+    if (isProductionOrigin(normalized, PRODUCTION_API_BASE_URL)) {
+      throw new Error('EXPO_PUBLIC_API_BASE_URL must not point at the Production API origin in preview_internal_beta');
+    }
+    return normalized;
+  }
+
+  // local: no EAS build profile in play (bare `expo start`); an explicit
+  // override is honored, otherwise fall back to a local dev server -- never Production.
+  if (configured) return configured.replace(/\/$/, '');
+  return 'http://localhost:4000';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export type BootstrapLanguage = {
   code: string;

@@ -14,9 +14,9 @@ export const productConfig = {
   },
   iranBetaPricing: {
     currencyCode: 'IRR',
-    callerRatePerMinuteMinor: 31_000,
-    listenerRatePerMinuteMinor: 21_000,
-    platformGrossSpreadPerMinuteMinor: 10_000,
+    callerRatePerMinuteMinor: 40_000,
+    listenerRatePerMinuteMinor: 28_000,
+    platformGrossSpreadPerMinuteMinor: 12_000,
     billingIncrementSeconds: 1,
   },
   listenerKyc: { deleteExpiredDrafts: false },

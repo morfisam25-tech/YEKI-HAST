@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 const sql = await readFile(new URL('../packages/db/migrations/0001_initial.sql', import.meta.url), 'utf8');
+const internetVoiceSql = await readFile(new URL('../packages/db/migrations/0003_internet_voice_transport.sql', import.meta.url), 'utf8');
 const config = await readFile(new URL('../packages/config/src/index.ts', import.meta.url), 'utf8');
 const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 const server = await readFile(new URL('../services/api/src/server.ts', import.meta.url), 'utf8');
@@ -21,7 +22,14 @@ const checks = [
   ['presence updated_at trigger', sql.includes('CREATE TRIGGER listener_presence_set_updated_at')],
   ['final brand seed', sql.includes("VALUES ('yeki_hast', 'یکی هست', 'private_beta')")],
   ['human listening only seeded', sql.includes("VALUES ('human_listening', 'active')") && !sql.includes("VALUES ('language_conversation'")],
-  ['caller beta rate 31,000 IRR/min', sql.includes('31000, 21000, 1')],
+  ['initial migration retains its historical pricing seed', sql.includes('31000, 21000, 1')],
+  ['active Iran pricing is 40,000/28,000/12,000 IRR with one-second billing',
+    internetVoiceSql.includes('caller_rate_per_minute_minor=40000')
+      && internetVoiceSql.includes('listener_rate_per_minute_minor=28000')
+      && internetVoiceSql.includes('billing_increment_seconds=1')
+      && config.includes('callerRatePerMinuteMinor: 40_000')
+      && config.includes('listenerRatePerMinuteMinor: 28_000')
+      && config.includes('platformGrossSpreadPerMinuteMinor: 12_000')],
   ['global markets table', sql.includes('CREATE TABLE app.markets')],
   ['service-specific listener profile', sql.includes('CREATE TABLE app.listener_service_profiles')],
   ['caller age assertion', sql.includes('CREATE TABLE app.caller_age_assertions')],

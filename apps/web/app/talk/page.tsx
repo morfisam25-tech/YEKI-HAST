@@ -77,6 +77,8 @@ function messageFor(code: string): string {
     call_transport_not_configured: 'مسیر صوتی امن هنوز در این محیط آماده نیست.',
     voice_relay_not_ready: 'مسیر صوتی امن هنوز در این محیط آماده نیست.',
     caller_call_already_active: 'یک تماس فعال از قبل وجود دارد.',
+    recording_consent_required: 'برای شروع تماس باید اطلاع‌رسانی ضبط مکالمه را تأیید کنی.',
+    call_recording_not_configured: 'تنظیمات ضبط مکالمه در این محیط کامل نیست.',
   };
   return messages[code] ?? 'عملیات انجام نشد. دوباره تلاش کن.';
 }
@@ -89,6 +91,7 @@ export default function TalkPage() {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [safetyAccepted, setSafetyAccepted] = useState(false);
+  const [recordingAcknowledged, setRecordingAcknowledged] = useState(false);
   const [phase, setPhase] = useState<CallPhase>('idle');
   const [callId, setCallId] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
@@ -109,7 +112,7 @@ export default function TalkPage() {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const mediaConnectedSentRef = useRef(false);
 
-  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted;
+  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted && recordingAcknowledged;
 
   const cleanupRtc = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -369,6 +372,11 @@ export default function TalkPage() {
       setCallId(call.callId);
       setMaxBillableSeconds(call.maxBillableSeconds ?? capSeconds);
 
+      await api(`calls/${call.callId}/recording-consent`, {
+        method: 'POST',
+        body: JSON.stringify({ acknowledged: true, locale: 'fa-IR', clientVersion: 'web' }),
+      });
+
       const voice = await api<VoiceStart>(`calls/${call.callId}/voice/start`, { method: 'POST', body: '{}' });
       voiceStarted = true;
       if (!voice.client.relayConfigured && process.env.NODE_ENV === 'production') throw new Error('voice_relay_not_ready');
@@ -482,7 +490,7 @@ export default function TalkPage() {
           <p className="kicker">اعتبار قابل استفاده</p>
           <h1>{formatWallet(wallet)}</h1>
         </div>
-        <p>زمان انتخابی سقف تماس است. پیش از اتصال، مبلغ فقط موقتاً کنار گذاشته می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود. ضبط تماس توسط پلتفرم خاموش است.</p>
+        <p>زمان انتخابی سقف تماس است. پیش از اتصال، مبلغ فقط موقتاً کنار گذاشته می‌شود؛ هزینه از زمان اتصال واقعی حساب می‌شود. برای امنیت کاربران و رسیدگی به شکایت‌های احتمالی، این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود.</p>
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
@@ -517,6 +525,10 @@ export default function TalkPage() {
             <label className="age-check">
               <input type="checkbox" checked={safetyAccepted} onChange={(event) => setSafetyAccepted(event.target.checked)} />
               <span>می‌پذیرم محترمانه رفتار کنم؛ اینجا محل دوست‌یابی یا مشاوره تخصصی نیست و اطلاعات تماس شخصی ردوبدل نمی‌کنم.</span>
+            </label>
+            <label className="age-check">
+              <input type="checkbox" checked={recordingAcknowledged} onChange={(event) => setRecordingAcknowledged(event.target.checked)} />
+              <span>متوجه‌ام که برای امنیت کاربران و رسیدگی به شکایت‌های احتمالی، این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود؛ دسترسی به آن محدود و قابل پیگیری است.</span>
             </label>
           </section>
 

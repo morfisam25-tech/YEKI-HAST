@@ -138,6 +138,14 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && adminSafetyActionMatch) { ensureDatabaseReady(); const { actOnAdminSafetyCase } = await import('./routes/admin-safety.ts'); return await actOnAdminSafetyCase(req, res, adminSafetyActionMatch[1] === 'reports' ? 'report' : 'event', adminSafetyActionMatch[2]); }
     const adminSafetyLimitationMatch = url.pathname.match(/^\/v1\/admin\/users\/([^/]+)\/safety-limitation$/);
     if (method === 'POST' && adminSafetyLimitationMatch) { ensureDatabaseReady(); const { setAdminUserSafetyLimitation } = await import('./routes/admin-safety-enforcement.ts'); return await setAdminUserSafetyLimitation(req, res, adminSafetyLimitationMatch[1]); }
+    const adminRecordingForCaseMatch = url.pathname.match(/^\/v1\/admin\/safety-cases\/(reports|events)\/([^/]+)\/recording$/);
+    if (method === 'GET' && adminRecordingForCaseMatch) { ensureSensitiveDataReady(); const { getRecordingForSafetyCase } = await import('./routes/admin-recording.ts'); return await getRecordingForSafetyCase(req, res, adminRecordingForCaseMatch[1] === 'reports' ? 'report' : 'safety_event', adminRecordingForCaseMatch[2]); }
+    const adminRecordingPlaybackGrantMatch = url.pathname.match(/^\/v1\/admin\/recordings\/([^/]+)\/playback-grant$/);
+    if (method === 'POST' && adminRecordingPlaybackGrantMatch) { ensureSensitiveDataReady(); const { requestRecordingPlaybackGrant } = await import('./routes/admin-recording.ts'); return await requestRecordingPlaybackGrant(req, res, adminRecordingPlaybackGrantMatch[1]); }
+    const adminRecordingHoldMatch = url.pathname.match(/^\/v1\/admin\/recordings\/([^/]+)\/hold$/);
+    if (method === 'POST' && adminRecordingHoldMatch) { ensureSensitiveDataReady(); const { setRecordingHold } = await import('./routes/admin-recording.ts'); return await setRecordingHold(req, res, adminRecordingHoldMatch[1]); }
+    const adminRecordingHoldReleaseMatch = url.pathname.match(/^\/v1\/admin\/recordings\/([^/]+)\/hold\/release$/);
+    if (method === 'POST' && adminRecordingHoldReleaseMatch) { ensureSensitiveDataReady(); const { releaseRecordingHold } = await import('./routes/admin-recording.ts'); return await releaseRecordingHold(req, res, adminRecordingHoldReleaseMatch[1]); }
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) { ensureDatabaseReady(); const { getListenerKycForAdmin } = await import('./routes/admin-kyc.ts'); return await getListenerKycForAdmin(req, res, adminKycMatch[1]); }
     if (method === 'POST' && adminKycMatch) { ensureDatabaseReady(); const { reviewListenerKyc } = await import('./routes/admin-kyc.ts'); return await reviewListenerKyc(req, res, adminKycMatch[1]); }
@@ -149,6 +157,11 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && payoutDispatchMatch) { ensureKycReady(); const { dispatchPayout } = await import('./routes/payouts.ts'); return await dispatchPayout(req, res, payoutDispatchMatch[1]); }
     const payoutReconcileMatch = url.pathname.match(/^\/v1\/admin\/payouts\/([^/]+)\/reconcile$/);
     if (method === 'POST' && payoutReconcileMatch) { ensureDatabaseReady(); const { reconcilePayout } = await import('./routes/payouts.ts'); return await reconcilePayout(req, res, payoutReconcileMatch[1]); }
+
+    const recordingConsentMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/recording-consent$/);
+    if (method === 'POST' && recordingConsentMatch) { ensureDatabaseReady(); const { postCallRecordingConsent } = await import('./routes/call-recording.ts'); return await postCallRecordingConsent(req, res, recordingConsentMatch[1]); }
+    const recordingStatusMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/recording-status$/);
+    if (method === 'GET' && recordingStatusMatch) { ensureDatabaseReady(); const { getCallRecordingStatus } = await import('./routes/call-recording.ts'); return await getCallRecordingStatus(req, res, recordingStatusMatch[1]); }
 
     const voiceStartMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/start$/);
     if (method === 'POST' && voiceStartMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { startInternetVoiceCall } = await import('./routes/internet-voice.ts'); return await startInternetVoiceCall(req, res, voiceStartMatch[1]); }

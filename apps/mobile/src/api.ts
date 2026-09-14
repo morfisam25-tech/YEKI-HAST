@@ -486,6 +486,44 @@ export function getActiveCall(token: string): Promise<{ activeCall: CallResponse
   return request('/v1/calls/active', {}, token);
 }
 
+// W58 recording foundation: typed client for the per-call recording consent
+// endpoint. NOT yet wired into any live call screen -- the actual pre-call
+// recording disclosure UI and the point in the call flow where this gets
+// called are part of the follow-up RealtimeKit mobile signaling migration
+// (after the W54 live PoC), which this branch intentionally does not touch.
+// See docs/W58_RECORDING_CORE_FOUNDATION.md.
+export type CallRecordingConsentResponse = {
+  ok: true;
+  callId: string;
+  role: 'caller' | 'listener';
+  policyVersion: string;
+  bothPartiesConsented: boolean;
+};
+
+export type CallRecordingStatusResponse = {
+  ok: true;
+  callId: string;
+  required: boolean;
+  policyVersion: string | null;
+  callerConsented: boolean;
+  listenerConsented: boolean;
+};
+
+export function acknowledgeCallRecordingConsent(
+  token: string,
+  callId: string,
+  input: { locale: string; clientVersion?: string },
+): Promise<CallRecordingConsentResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/recording-consent`, {
+    method: 'POST',
+    body: JSON.stringify({ acknowledged: true, locale: input.locale, clientVersion: input.clientVersion ?? null }),
+  }, token);
+}
+
+export function getCallRecordingStatus(token: string, callId: string): Promise<CallRecordingStatusResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/recording-status`, {}, token);
+}
+
 export function dispatchCall(token: string, callId: string): Promise<CallResponse> {
   return request(`/v1/calls/${encodeURIComponent(callId)}/dispatch`, { method: 'POST' }, token);
 }

@@ -1,5 +1,6 @@
 import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { previewCallSettlementBigInt } from '../../../../packages/domain/src/billing.ts';
+import { stopRecordingForCall } from './recording-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -26,7 +27,7 @@ export async function settleInternetVoiceCall(input: {
   assertCallId(input.callId);
   const endedReason = (input.endedReason?.trim() || (input.safety ? 'internet_voice_safety_exit' : 'internet_voice_completed')).slice(0, 120);
 
-  return withTransaction(async (client) => {
+  const settlement = await withTransaction(async (client) => {
     const call = await client.query<{
       id: string;
       status: string;
@@ -42,6 +43,7 @@ export async function settleInternetVoiceCall(input: {
       authorized_minor: string;
       max_billable_seconds: number | null;
       connected_at: string | null;
+      billing_started_at: string | null;
       connected_seconds: number;
       billable_seconds: number;
       caller_charge_minor: string;
@@ -55,10 +57,21 @@ export async function settleInternetVoiceCall(input: {
              listener_rate_per_minute_minor::text listener_rate,
              authorized_minor::text, max_billable_seconds,
              connected_at::text,
+             billing_started_at::text,
+             -- Billed time is measured from billing_started_at, not
+             -- connected_at: for a recording-required call these can now
+             -- legitimately differ (see postInternetVoiceSignal's
+             -- media_connected billing gate in routes/internet-voice.ts). A
+             -- call that connected but whose recording never became
+             -- authoritatively active has billing_started_at NULL and is
+             -- billed zero seconds, never a positive amount. For every
+             -- non-recording-required call the two timestamps are set
+             -- together, so this is unchanged from the prior connected_at-
+             -- anchored behavior.
              CASE
-               WHEN connected_at IS NULL THEN 0
+               WHEN billing_started_at IS NULL THEN 0
                ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (
-                 LEAST(now(), COALESCE($2::timestamptz, now())) - connected_at
+                 LEAST(now(), COALESCE($2::timestamptz, now())) - billing_started_at
                )))::int)
              END AS connected_seconds,
              billable_seconds, caller_charge_minor::text,
@@ -240,4 +253,14 @@ export async function settleInternetVoiceCall(input: {
       idempotent: false,
     };
   });
+
+  if (!settlement.idempotent) {
+    // Outside the settlement transaction, same external-I/O-after-commit
+    // pattern as the recording start call site. Idempotent on the provider
+    // side and on our own state machine, so a retry of an already-terminal
+    // call intentionally skips this rather than re-issuing a stop.
+    await stopRecordingForCall(settlement.callId).catch(() => undefined);
+  }
+
+  return settlement;
 }

@@ -248,9 +248,20 @@ test('voice routes await short-lived TURN credentials and fail closed before ret
 test('billing connection begins only after both Internet Voice participants report media connected', () => {
   const connectedIndex = voiceSource.indexOf("kind === 'media_connected'");
   const bothRolesIndex = voiceSource.indexOf("roles.has('caller') && roles.has('listener')", connectedIndex);
-  const billingIndex = voiceSource.indexOf('billing_started_at=COALESCE(billing_started_at,now())', bothRolesIndex);
+  const billingIndex = voiceSource.indexOf('billing_started_at=CASE WHEN $2::boolean THEN COALESCE(billing_started_at,now())', bothRolesIndex);
   assert.ok(connectedIndex >= 0 && bothRolesIndex > connectedIndex && billingIndex > bothRolesIndex);
   assert.match(voiceSource, /reason: 'both_sides_media_connected'/);
+});
+
+// W58: for a recording-required call, both-sides-media-connected alone is no longer
+// sufficient -- billing_started_at additionally requires a fresh, authoritative
+// confirmRecordingActiveForBilling() result inside the same transaction.
+test('recording-required billing additionally requires a confirmed active recording state', () => {
+  const bothRolesIndex = voiceSource.indexOf("roles.has('caller') && roles.has('listener')");
+  const gateIndex = voiceSource.indexOf('confirmRecordingActiveForBilling(client, rawCallId)', bothRolesIndex);
+  const billingIndex = voiceSource.indexOf('billing_started_at=CASE WHEN $2::boolean', gateIndex);
+  assert.ok(bothRolesIndex >= 0 && gateIndex > bothRolesIndex && billingIndex > gateIndex);
+  assert.match(voiceSource, /recordingGate\.active/);
 });
 
 test('90-second no-answer path releases hold, auto-offlines listener, and charges zero', () => {

@@ -7,6 +7,7 @@ import { resolveCallerMarketContext, type SqlRunner } from '../lib/caller-market
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { requireCurrentCallerAgeAssertion } from './caller.ts';
 import { INTERNAL_OWNER_TEST_LISTENER_ID, isInternalOwnerTestCaller } from '../lib/internal-owner-test.ts';
+import { currentRecordingPolicy } from '../lib/recording-config.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_CALL_STATUSES = ['requested', 'routing', 'calling_caller', 'caller_answered', 'calling_listener', 'connected'];
@@ -58,9 +59,23 @@ function snapshot(row: {
   };
 }
 
+function resolveRecordingModeForNewCall(): 'all_with_consent' | 'none' {
+  let policy: ReturnType<typeof currentRecordingPolicy>;
+  try {
+    policy = currentRecordingPolicy();
+  } catch {
+    // Fail closed: a recording-required environment with missing/invalid
+    // recording configuration must refuse to create new calls rather than
+    // silently create one that can never become billable.
+    throw new HttpError(503, 'call_recording_not_configured');
+  }
+  return policy.required ? 'all_with_consent' : 'none';
+}
+
 export async function requestCallerCall(req: IncomingMessage, res: ServerResponse) {
   const { userId } = await requireAuth(req);
   await requireCurrentCallerAgeAssertion(userId);
+  const recordingMode = resolveRecordingModeForNewCall();
   const body = await readJson<{
     clientRequestId?: unknown;
     listenerId?: unknown;
@@ -259,9 +274,9 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
         requested_listener_gender, requested_language_id, caller_mood, topic_code,
         pricing_plan_id, currency_code, caller_rate_per_minute_minor,
         listener_rate_per_minute_minor, listener_currency_code,
-        authorized_minor, max_billable_seconds
+        authorized_minor, max_billable_seconds, recording_mode
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,'routing',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+        $1,$2,$3,$4,$5,$6,$7,'routing',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::app.recording_mode
       )
       RETURNING id::text, status::text, listener_user_id::text, currency_code,
                 authorized_minor::text, max_billable_seconds, pricing_plan_id::text,
@@ -285,6 +300,7 @@ export async function requestCallerCall(req: IncomingMessage, res: ServerRespons
       context.listenerBase.currencyCode,
       authorization.authorizedMinor.toString(),
       authorization.maxBillableSeconds,
+      recordingMode,
     ]);
     const row = inserted.rows[0];
 

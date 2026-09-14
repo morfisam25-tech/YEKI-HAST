@@ -389,7 +389,7 @@ export default function BookingCallPage() {
       <div className={styles.shell}>
         <header className={styles.header}>
           <h1 className={styles.title}>تماس رزروشده</h1>
-          <p className={styles.lead}>تماس زنده با یک شنونده انسانی است. ضبط تماس توسط پلتفرم خاموش است. میکروفن ابتدا آماده می‌شود و رزرو موقت اعتبار فقط هنگام ساخت تماس ایجاد می‌شود.</p>
+          <p className={styles.lead}>تماس زنده با یک شنونده انسانی است. برای امنیت کاربران و رسیدگی به شکایت‌های احتمالی، این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود. میکروفن ابتدا آماده می‌شود و رزرو موقت اعتبار فقط هنگام ساخت تماس ایجاد می‌شود.</p>
           <nav className={styles.nav}>
             <a className={styles.link} href="/booking">رزروهای من</a>
             <a className={styles.link} href="/talk">تماس فوری</a>

@@ -18,10 +18,10 @@ These are source-backed preparation notes only. Data Safety, sign-in details, ta
 
 - Microphone permission: **Yes**, for live WebRTC voice.
 - Camera permission: **No** for the call flow.
-- Platform recording: **Off**.
+- Platform recording (W58, source-only — see docs/W58_RECORDING_CORE_FOUNDATION.md): **On at public launch**, locked product policy. Both participants are informed before media connects. Audio files are collected/shared with: no one outside the platform (not sold, not shared with advertisers, not used for AI training, no public playback, no user download). Purpose: app functionality (safety/complaint investigation, enforcement review) only. Data is encrypted in transit and access is limited to authorized safety-admin review of a linked case; retention has a configurable operational default and users can request deletion via the existing account-deletion flow subject to the same open-case/legal-hold exceptions as other account data. Internal technical Preview may still have recording explicitly disabled pre-W54/W60.
 - TURN: may relay encrypted WebRTC packets and observe technical connection metadata.
-- Application-server media termination/decryption: **not implemented**.
-- Alternate call-audio upload/storage: **not found**.
+- Application-server media termination/decryption: recording-required calls only, via the Cloudflare RealtimeKit server-side recording path (W58); the live P2P WebRTC media path itself is unchanged pending the separate W54/W60 mobile signaling migration.
+- Alternate call-audio upload/storage: **not found** (no client-side or independent-participant upload path; platform recording is server-side only).
 
 Any Data Safety selection must be checked against the exact future AAB, active runtime, dependencies, providers, and current Play definitions before submission. No answer in this file has been filed.
 
@@ -36,6 +36,6 @@ The account-deletion route and bootstrap URL exist in source. This document does
 
 ## Outstanding Play policy gate
 
-Written confirmation is still required for the prepaid wallet/external payment-gateway structure. The underlying live one-to-one unrecorded human service is not currently treated as a proven Play Billing blocker.
+Written confirmation is still required for the prepaid wallet/external payment-gateway structure. The underlying live one-to-one human-listening service (platform-recorded for safety per W58, not unrecorded) is not currently treated as a proven Play Billing blocker.
 
 See `GOOGLE_PLAY_FINAL_PACKET.md` and canonical `STORE_RELEASE_CURRENT.md`.

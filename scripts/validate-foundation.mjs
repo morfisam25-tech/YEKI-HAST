@@ -12,6 +12,11 @@ const security = await readFile(new URL('../services/api/src/lib/security.ts', i
 const listenerRoute = await readFile(new URL('../services/api/src/routes/listener.ts', import.meta.url), 'utf8');
 const billing = await readFile(new URL('../packages/domain/src/billing.ts', import.meta.url), 'utf8');
 const dbClient = await readFile(new URL('../packages/db/src/client.ts', import.meta.url), 'utf8');
+const recordingSql = await readFile(new URL('../packages/db/migrations/0010_recording_core_foundation.sql', import.meta.url), 'utf8');
+const recordingDomain = await readFile(new URL('../packages/domain/src/recording.ts', import.meta.url), 'utf8');
+const recordingConfig = await readFile(new URL('../services/api/src/lib/recording-config.ts', import.meta.url), 'utf8');
+const internetVoiceRoute = await readFile(new URL('../services/api/src/routes/internet-voice.ts', import.meta.url), 'utf8');
+const internetVoiceLifecycle = await readFile(new URL('../services/api/src/services/internet-voice-lifecycle.ts', import.meta.url), 'utf8');
 
 const checks = [
   ['no IRR-hardcoded money column suffixes', !/_irr\b/.test(sql)],
@@ -76,6 +81,21 @@ const checks = [
   ['encryption key ids cannot contain delimiter', security.includes('keyIdPattern') && security.includes('/^[A-Za-z0-9_-]{1,64}$/')],
   ['config language mode disabled', config.includes('languageConversationEnabled: false')],
   ['README final name', readme.startsWith('# یکی هست')],
+
+  // W58 recording core foundation
+  ['recording state machine table is additive only (no ALTER of app.call_sessions or app.consents)',
+    !/ALTER TABLE app\.call_sessions/.test(recordingSql) && !/ALTER TABLE app\.consents/.test(recordingSql)],
+  ['recording consent is call-scoped, not just user-scoped', recordingSql.includes('CREATE TABLE IF NOT EXISTS app.call_recording_consents') && recordingSql.includes('UNIQUE (call_session_id, user_id)')],
+  ['recording evidence metadata supports multiple segments per call', recordingSql.includes('CREATE TABLE IF NOT EXISTS private_data.call_recording_segments') && recordingSql.includes('recording_session_id uuid NOT NULL REFERENCES private_data.call_recording_sessions(id)')],
+  ['legal hold requires a reason and a linked case', recordingSql.includes('CHECK (NOT legal_hold OR legal_hold_reason_code IS NOT NULL)') && recordingSql.includes('CHECK (NOT legal_hold OR (legal_hold_case_kind IS NOT NULL AND legal_hold_case_id IS NOT NULL))')],
+  ['admin recording capability is a separate grant, not part of admin_role', recordingSql.includes('CREATE TABLE IF NOT EXISTS app.admin_capabilities')],
+  ['every playback authorization is audited with an expiry', recordingSql.includes('CREATE TABLE IF NOT EXISTS app.recording_playback_grants') && recordingSql.includes('CHECK (expires_at > authorized_at)')],
+  ['only a confirmed RECORDING state counts as billing-active, not merely "starting"',
+    recordingDomain.includes("return state === 'recording';")],
+  ['production recording policy requires an explicit true, not merely non-false', recordingConfig.includes('resolveRecordingRequirement') ],
+  ['production cannot silently downgrade required recording to OFF', /if \(input\.recordingRequiredFlag !== true\)/.test(recordingDomain)],
+  ['billing_started_at gate re-confirms recording state inside the media_connected transaction, not merely trusting the start call', internetVoiceRoute.includes('confirmRecordingActiveForBilling(client, rawCallId)')],
+  ['settlement bills from billing_started_at, not merely connected_at, so unconfirmed recording cannot accrue charge', internetVoiceLifecycle.includes('WHEN billing_started_at IS NULL THEN 0')],
 ];
 
 let failed = 0;

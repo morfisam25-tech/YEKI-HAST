@@ -40,8 +40,9 @@ test('current Expo framework line matches the recorded 2026 Store platform basel
 test('privacy policy covers the public 18+ human-listening and live WebRTC runtime', () => {
   for (const marker of [
     'وب و اپ موبایل', '۱۸ سال و بالاتر', 'شنونده انسانی', 'نام مستعار', 'زبان‌های خوداظهاری',
-    'معرفی کوتاه', 'SecureStore', 'WebRTC', 'TURN', 'ضبط تماس توسط پلتفرم خاموش است',
-    'تماس‌ها پایش یا شنود نمی‌شوند', 'دوره‌های نهایی',
+    'معرفی کوتاه', 'SecureStore', 'WebRTC', 'TURN',
+    // W58: recording is ON, access is limited/audited, not "off".
+    'ضبط و به‌صورت امن نگهداری می‌کند', 'دسترسی فقط برای بررسی شکایت یا ایمنی', 'دوره‌های نهایی',
   ]) assert.match(privacyPage, new RegExp(marker));
 });
 
@@ -77,6 +78,8 @@ test('store answers remain explicitly unsubmitted and require exact future-binar
   assert.match(submissionPacket, /No answer in this file has been filed/);
   assert.match(submissionPacket, /exact future AAB/);
   assert.match(submissionPacket, /Microphone permission: \*\*Yes\*\*/);
-  assert.match(submissionPacket, /Platform recording: \*\*Off\*\*/);
+  // W58: platform recording is locked product policy ON at public launch, not off.
+  assert.match(submissionPacket, /Platform recording \(W58, source-only[^)]*\): \*\*On at public launch\*\*/);
+  assert.doesNotMatch(submissionPacket, /Platform recording: \*\*Off\*\*/);
   assert.match(submissionPacket, /written confirmation is still required/i);
 });

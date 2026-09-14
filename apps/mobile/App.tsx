@@ -344,7 +344,7 @@ export default function App({ legal }: { legal: PublicLegalConfig | null }) {
               <Text style={styles.title}>دلت می‌خواد با یکی حرف بزنی؟</Text>
               <Text style={styles.heroBody}>
                 {callerBetaEnabled
-                  ? 'تماس با شنونده انسانی در این محیط فعال است. سرویس فقط برای ۱۸ سال به بالا است، تماس زنده از اینترنت برقرار می‌شود و ضبط توسط پلتفرم خاموش است.'
+                  ? 'تماس با شنونده انسانی در این محیط فعال است. سرویس فقط برای ۱۸ سال به بالا است، تماس زنده از اینترنت برقرار می‌شود و برای امنیت کاربران، مکالمه توسط پلتفرم ضبط و امن نگهداری می‌شود.'
                   : 'بخش تماس عمومی در این محیط فعلاً فعال نیست.'}
               </Text>
               <TouchableOpacity style={styles.secondaryButton} onPress={beginCallerAuth}>

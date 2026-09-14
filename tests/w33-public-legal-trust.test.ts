@@ -19,18 +19,25 @@ const mobileRoot = await read('apps/mobile/RootApp.tsx');
 test('terms locks the public product, 18+, billing, recording and profile truth', () => {
   for (const marker of [
     'فقط برای افراد ۱۸ سال و بالاتر', 'شنونده انسانی', 'روان‌درمانی', 'دوست‌یابی', 'اسکورت',
-    'سرویس اضطراری نیست', 'ضبط تماس توسط پلتفرم', 'WebRTC', 'TURN', 'اتصال واقعی',
-    'هزینه‌ای کسر نمی‌شود', 'خوداظهاری‌اند', 'صدای تماس ضبط نمی‌شود',
+    'سرویس اضطراری نیست', 'WebRTC', 'TURN', 'اتصال واقعی',
+    'هزینه‌ای کسر نمی‌شود', 'خوداظهاری‌اند',
+    // W58: recording is ON at public launch, not off -- both participants are informed,
+    // access is limited/audited, and independent recording/rebroadcast stays prohibited.
+    'این مکالمه را ضبط و به‌صورت امن نگهداری می‌کند', 'مستقل مکالمه توسط کاربران، از جمله شنونده، ممنوع است',
   ]) assert.match(terms, new RegExp(marker));
   assert.doesNotMatch(terms, /بعداً به‌صراحت ارائه شود|هر زمان تماس صوتی/);
+  assert.doesNotMatch(terms, /ضبط تماس توسط پلتفرم در زمان عرضه خاموش است|صدای تماس ضبط نمی‌شود/);
 });
 
-test('privacy discloses runtime data without audio monitoring or invented retention periods', () => {
+test('privacy discloses runtime data with a limited, audited recording posture and no invented retention periods', () => {
   for (const marker of [
-    'اجازه میکروفون', 'WebRTC', 'TURN', 'فراداده تماس', 'کیف پول', 'دفتر مالی',
-    'گزارش', 'بلاک', 'ضبط تماس توسط پلتفرم خاموش است', 'تماس‌ها پایش یا شنود نمی‌شوند',
+    'اجازه میکروفون', 'WebRTC', 'TURN', 'فراداده نشست', 'کیف پول', 'دفتر مالی',
+    'گزارش', 'بلاک',
+    // W58: recording is ON, access is limited/audited/not routine, not "off".
+    'ضبط و به‌صورت امن نگهداری می‌کند', 'آموزش هوش مصنوعی استفاده نمی‌شود', 'دسترسی فقط برای بررسی شکایت یا ایمنی',
   ]) assert.match(privacy, new RegExp(marker));
   assert.doesNotMatch(privacy, /صددرصد محرمانه|تضمین امنیت/);
+  assert.doesNotMatch(privacy, /ضبط تماس توسط پلتفرم خاموش است/);
 });
 
 test('public Caller age policy fails closed unless it is exactly 18 and versions force fresh consent', () => {
@@ -53,7 +60,8 @@ test('talk and booking require explicit 18+, terms and safety consent', () => {
 
 test('immediate and booked calls expose recording notice, Safety Exit, report and block', () => {
   for (const source of [talk, bookingCall]) {
-    assert.match(source, /ضبط تماس توسط پلتفرم خاموش است/);
+    // W58: both surfaces now disclose that recording is ON, not off.
+    assert.match(source, /این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود/);
     assert.match(source, /safety\/report/);
     assert.match(source, /safety\/block/);
   }
@@ -68,9 +76,11 @@ test('public trust, safety, child-safety and FAQ routes exist with non-audio mod
     read('apps/web/app/safety/page.tsx'),
     read('apps/web/app/faq/page.tsx'),
   ]);
-  assert.match(trust, /صدای ضبط‌شده‌ای برای بررسی وجود ندارد/);
-  assert.match(safety, /نه از صدای تماس/);
-  assert.match(childSafety, /صدای تماس برای بررسی وجود ندارد/);
+  // W58: each surface now discloses limited, audited recording access instead of
+  // claiming no recorded audio exists.
+  assert.match(trust, /پلتفرم مکالمه را جداگانه ضبط و به‌صورت امن/);
+  assert.match(safety, /نه از شنود زنده تماس/);
+  assert.match(childSafety, /برای امنیت کاربران، پلتفرم تماس‌ها را ضبط می‌کند/);
   assert.match(faq, /فقط افراد ۱۸ سال و بالاتر/);
 });
 

@@ -1,0 +1,155 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  canTransitionRecordingState,
+  hasBothPartyRecordingConsent,
+  isPurgeEligible,
+  isRecordingActiveForBilling,
+  isRecordingTerminallyFailed,
+  purgeEligibleAt,
+  resolveRecordingRequirement,
+} from '../packages/domain/src/recording.ts';
+
+test('only a confirmed recording state counts as active for billing', () => {
+  assert.equal(isRecordingActiveForBilling('recording'), true);
+  assert.equal(isRecordingActiveForBilling('starting'), false);
+  assert.equal(isRecordingActiveForBilling('ready'), false);
+  assert.equal(isRecordingActiveForBilling('stored'), false);
+});
+
+test('recording state machine rejects invalid transitions', () => {
+  assert.equal(canTransitionRecordingState('not_requested', 'ready'), true);
+  assert.equal(canTransitionRecordingState('not_requested', 'recording'), false);
+  assert.equal(canTransitionRecordingState('recording', 'ready'), false);
+  assert.equal(canTransitionRecordingState('starting', 'recording'), true);
+  assert.equal(canTransitionRecordingState('purged', 'ready'), false);
+  assert.equal(canTransitionRecordingState('purged', 'purged'), true);
+});
+
+test('failed recording state can be held but never resumes recording directly', () => {
+  assert.equal(isRecordingTerminallyFailed('failed'), true);
+  assert.equal(canTransitionRecordingState('failed', 'held'), true);
+  assert.equal(canTransitionRecordingState('failed', 'recording'), false);
+});
+
+test('both-party consent requires an unrevoked row per role at the exact policy version', () => {
+  const v = 'rec-2026-09-14';
+  assert.equal(hasBothPartyRecordingConsent([
+    { role: 'caller', policyVersion: v, revokedAt: null },
+    { role: 'listener', policyVersion: v, revokedAt: null },
+  ], v), true);
+});
+
+test('a caller-only consent is not sufficient', () => {
+  const v = 'rec-2026-09-14';
+  assert.equal(hasBothPartyRecordingConsent([
+    { role: 'caller', policyVersion: v, revokedAt: null },
+  ], v), false);
+});
+
+test('a stale (wrong policy version) consent does not satisfy the current requirement', () => {
+  const current = 'rec-2026-09-14';
+  assert.equal(hasBothPartyRecordingConsent([
+    { role: 'caller', policyVersion: current, revokedAt: null },
+    { role: 'listener', policyVersion: 'rec-2026-01-01', revokedAt: null },
+  ], current), false);
+});
+
+test('a revoked consent does not satisfy the requirement even at the right version', () => {
+  const v = 'rec-2026-09-14';
+  assert.equal(hasBothPartyRecordingConsent([
+    { role: 'caller', policyVersion: v, revokedAt: null },
+    { role: 'listener', policyVersion: v, revokedAt: '2026-09-14T00:00:00.000Z' },
+  ], v), false);
+});
+
+test('production requires an explicit recordingRequiredFlag=true, not merely non-false', () => {
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'production',
+    recordingRequiredFlag: null,
+    provider: 'cloudflare_realtimekit',
+    policyVersion: 'v1',
+  }), /must_be_explicitly_true/);
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'production',
+    recordingRequiredFlag: false,
+    provider: 'cloudflare_realtimekit',
+    policyVersion: 'v1',
+  }), /must_be_explicitly_true/);
+});
+
+test('production with required=true but missing provider/policy fails closed', () => {
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'production',
+    recordingRequiredFlag: true,
+    provider: null,
+    policyVersion: 'v1',
+  }), /not_configured/);
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'production',
+    recordingRequiredFlag: true,
+    provider: 'cloudflare_realtimekit',
+    policyVersion: null,
+  }), /not_configured/);
+});
+
+test('production cannot silently downgrade required recording to OFF via missing config', () => {
+  // A production deployment that forgets to set CALL_RECORDING_REQUIRED (or
+  // sets it to false, or sets it true without a provider) must fail closed --
+  // never fall back to "recording not required".
+  for (const flag of [null, false] as const) {
+    assert.throws(() => resolveRecordingRequirement({
+      environment: 'production',
+      recordingRequiredFlag: flag,
+      provider: null,
+      policyVersion: null,
+    }));
+  }
+});
+
+test('production fully configured resolves to required=true', () => {
+  const policy = resolveRecordingRequirement({
+    environment: 'production',
+    recordingRequiredFlag: true,
+    provider: 'cloudflare_realtimekit',
+    policyVersion: 'rec-2026-09-14',
+  });
+  assert.deepEqual(policy, { required: true, provider: 'cloudflare_realtimekit', policyVersion: 'rec-2026-09-14' });
+});
+
+test('preview_internal_beta may explicitly disable recording (technical-beta exception)', () => {
+  const policy = resolveRecordingRequirement({
+    environment: 'preview_internal_beta',
+    recordingRequiredFlag: false,
+    provider: null,
+    policyVersion: null,
+  });
+  assert.deepEqual(policy, { required: false, provider: null, policyVersion: null });
+});
+
+test('preview_internal_beta with the flag unset (not explicitly false) fails closed too', () => {
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'preview_internal_beta',
+    recordingRequiredFlag: null,
+    provider: null,
+    policyVersion: null,
+  }), /not_configured/);
+});
+
+test('preview_internal_beta opting in to required=true must be fully configured or fail closed', () => {
+  assert.throws(() => resolveRecordingRequirement({
+    environment: 'preview_internal_beta',
+    recordingRequiredFlag: true,
+    provider: null,
+    policyVersion: null,
+  }));
+});
+
+test('purge eligibility respects legal hold and the retention window', () => {
+  const start = new Date('2026-01-01T00:00:00.000Z');
+  const eligible = purgeEligibleAt(start, 90);
+  assert.equal(eligible.toISOString(), '2026-04-01T00:00:00.000Z');
+  assert.equal(isPurgeEligible(new Date('2026-03-01T00:00:00.000Z'), eligible, false), false);
+  assert.equal(isPurgeEligible(new Date('2026-05-01T00:00:00.000Z'), eligible, false), true);
+  assert.equal(isPurgeEligible(new Date('2026-05-01T00:00:00.000Z'), eligible, true), false);
+});

@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { encryptPrivateText } from '../lib/security.ts';
 import { settleInternetVoiceCall } from '../services/internet-voice-lifecycle.ts';
+import { stopRecordingForCall } from '../services/recording-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PRE_CONNECTED_STATUSES = new Set(['routing', 'calling_listener']);
@@ -273,6 +274,11 @@ export async function endInternetVoiceCall(
   }
 
   if (prepared.kind === 'preconnected_finalized') {
+    // A listener 'answer' signal (status='calling_listener') can already have
+    // kicked off provider recording before a Safety Exit/cancel lands here,
+    // pre-'connected'. Stop is idempotent/no-op when nothing was ever
+    // started.
+    await stopRecordingForCall(rawCallId).catch(() => undefined);
     sendJson(res, 200, {
       ok: true,
       callId: rawCallId,

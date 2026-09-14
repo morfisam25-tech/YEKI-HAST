@@ -493,7 +493,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Text style={styles.title}>تماس اینترنتی با شنونده انسانی</Text>
-      <Text style={styles.note}>ویژه ۱۸ سال و بالاتر · تماس زنده WebRTC · ضبط توسط پلتفرم خاموش است. این سرویس درمانی، پزشکی، دوست‌یابی یا اضطراری نیست.</Text>
+      <Text style={styles.note}>ویژه ۱۸ سال و بالاتر · تماس زنده WebRTC · برای امنیت کاربران، مکالمه توسط پلتفرم ضبط و امن نگهداری می‌شود. این سرویس درمانی، پزشکی، دوست‌یابی یا اضطراری نیست.</Text>
 
       {!recoveryComplete && <View style={styles.card}><Text style={styles.heading}>بررسی تماس جاری</Text><Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text></View>}
 

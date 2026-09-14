@@ -13,8 +13,7 @@ in Production.
 - Base SHA (verified against `origin/w58/recording-core-foundation-20260914` after
   `git fetch`): `76d74b22f7a11666175010b2eb2271ce2bf377a6`
 - W60 branch: `w60/realtimekit-mobile-media-migration-20260914`
-- Final SHA: `<recorded in the follow-up "record final commit SHA" commit, matching
-  the repo's own W57/W58 convention>`
+- Final SHA: `a5d8f6d365b9cbc264ec0363fa3994f6a132afa6`
 
 ## 1. Verified current stack (before any edit)
 

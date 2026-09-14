@@ -9,7 +9,7 @@ PASS — see [Success criteria](#success-criteria) at the end of this document.
 - Base branch: `w55/final-rc-clean-qa-20260914`
 - Base SHA (verified against `origin/w55/final-rc-clean-qa-20260914`): `88c6d8ade29da304688c932d77ffc6e6d1bd20fc`
 - W57 branch: `w57/safe-internal-beta-preview-20260914`
-- Final SHA: _(filled in after the W57 commit — see [Commit / push](#commit--push))_
+- Final SHA: `ed0758615ea4e51b94c5dea933e576f447fcc7a1`
 
 ## What W56 actually found, verified against source
 

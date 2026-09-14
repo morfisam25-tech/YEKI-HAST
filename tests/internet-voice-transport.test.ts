@@ -240,7 +240,15 @@ test('caller request uses primary call transport while legacy PSTN dispatch keep
 test('voice routes await short-lived TURN credentials and fail closed before returning client configuration', () => {
   assert.match(voiceSource, /await getInternetVoiceClientConfig\(\)/);
   assert.match(voiceSource, /internet_voice_turn_credentials_unavailable/);
-  const credentialsIndex = voiceSource.indexOf('const voiceClient = await getVoiceClientConfigOr503()', voiceSource.indexOf('startInternetVoiceCall'));
+  // W60: TURN/ICE resolution is now scoped to the legacy_p2p media provider
+  // only -- RealtimeKit handles its own relay and never calls
+  // getVoiceClientConfigOr503() at all (task section 9/18). The ordering
+  // invariant this test protects (resolve external transport config before
+  // mutating call state) still holds for whichever branch actually runs.
+  const credentialsIndex = voiceSource.indexOf(
+    "const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;",
+    voiceSource.indexOf('startInternetVoiceCall'),
+  );
   const transactionIndex = voiceSource.indexOf('const result = await withTransaction', voiceSource.indexOf('startInternetVoiceCall'));
   assert.ok(credentialsIndex >= 0 && transactionIndex > credentialsIndex);
 });

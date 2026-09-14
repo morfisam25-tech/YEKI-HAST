@@ -53,6 +53,14 @@ const migrationSources: MigrationSource[] = [
     filename: '0009_booking_reservation_sweeper.sql',
     path: join(migrationsDir, '0009_booking_reservation_sweeper.sql'),
   },
+  {
+    filename: '0010_recording_core_foundation.sql',
+    path: join(migrationsDir, '0010_recording_core_foundation.sql'),
+  },
+  {
+    filename: '0011_call_media_sessions.sql',
+    path: join(migrationsDir, '0011_call_media_sessions.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

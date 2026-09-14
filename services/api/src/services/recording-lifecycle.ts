@@ -1,4 +1,3 @@
-import type { QueryResultRow } from 'pg';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
 import {
   canTransitionRecordingState,
@@ -12,18 +11,14 @@ import {
 import { getRecordingProvider, RecordingProviderError } from '../providers/recording.ts';
 import { currentRecordingPolicy, recordingRetentionDays } from '../lib/recording-config.ts';
 import { HttpError } from '../lib/http.ts';
+import type { SqlClient } from '../lib/sql-client.ts';
+import { ensureCallMediaSession } from './call-media-session.ts';
 
-// Deliberately narrower than PoolClient's real (overloaded) `query` type: a
-// plain PoolClient and the shared `query` helper each satisfy this single
-// signature structurally, which is what lets confirmRecordingActiveForBilling
-// and requireParticipantRecordingConsent accept either a transaction's
-// PoolClient or the top-level `query` function interchangeably.
-export interface SqlClient {
-  query<T extends QueryResultRow = QueryResultRow>(
-    text: string,
-    values?: unknown[],
-  ): Promise<{ rows: T[]; rowCount: number | null }>;
-}
+// Re-exported for existing call sites that imported SqlClient from this
+// module before W60 extracted it into lib/sql-client.ts (so
+// services/call-media-session.ts could use it without importing this module
+// back and creating a cycle).
+export type { SqlClient };
 
 export const RECORDING_CONFIRMATION_TIMEOUT_SECONDS = (() => {
   const raw = process.env.CALL_RECORDING_CONFIRMATION_TIMEOUT_SECONDS?.trim();
@@ -204,10 +199,15 @@ export async function startRecordingForCall(callSessionId: string, maxSeconds: n
 
     const provider = await getRecordingProvider(session.provider);
     try {
+      // W60: reuse the exact same meeting a media-auth participant call
+      // (routes/internet-voice-media.ts) already created/will create for
+      // this call, instead of each independently calling
+      // provider.prepareSession -- otherwise recording would attach to a
+      // second, empty Cloudflare meeting that no participant ever joins.
       let providerMeetingId = session.provider_meeting_id;
       if (!providerMeetingId) {
-        const prepared = await provider.prepareSession({ callSessionId });
-        providerMeetingId = prepared.providerMeetingId;
+        const mediaSession = await ensureCallMediaSession(client, callSessionId, session.provider);
+        providerMeetingId = mediaSession.providerMeetingId;
       }
       const started = await provider.startRecording({ providerMeetingId, maxSeconds });
       const normalized = provider.normalizeStatus(started.providerStatus);

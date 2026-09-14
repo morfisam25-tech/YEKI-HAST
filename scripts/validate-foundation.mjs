@@ -17,6 +17,13 @@ const recordingDomain = await readFile(new URL('../packages/domain/src/recording
 const recordingConfig = await readFile(new URL('../services/api/src/lib/recording-config.ts', import.meta.url), 'utf8');
 const internetVoiceRoute = await readFile(new URL('../services/api/src/routes/internet-voice.ts', import.meta.url), 'utf8');
 const internetVoiceLifecycle = await readFile(new URL('../services/api/src/services/internet-voice-lifecycle.ts', import.meta.url), 'utf8');
+const callMediaSql = await readFile(new URL('../packages/db/migrations/0011_call_media_sessions.sql', import.meta.url), 'utf8');
+const callMediaDomain = await readFile(new URL('../packages/domain/src/call-media.ts', import.meta.url), 'utf8');
+const callMediaConfig = await readFile(new URL('../services/api/src/lib/call-media-config.ts', import.meta.url), 'utf8');
+const callMediaSession = await readFile(new URL('../services/api/src/services/call-media-session.ts', import.meta.url), 'utf8');
+const recordingRealtimeKit = await readFile(new URL('../services/api/src/providers/recording-realtimekit.ts', import.meta.url), 'utf8');
+const internetVoiceMediaRoute = await readFile(new URL('../services/api/src/routes/internet-voice-media.ts', import.meta.url), 'utf8');
+const migrateTs = await readFile(new URL('../packages/db/src/migrate.ts', import.meta.url), 'utf8');
 
 const checks = [
   ['no IRR-hardcoded money column suffixes', !/_irr\b/.test(sql)],
@@ -96,6 +103,22 @@ const checks = [
   ['production cannot silently downgrade required recording to OFF', /if \(input\.recordingRequiredFlag !== true\)/.test(recordingDomain)],
   ['billing_started_at gate re-confirms recording state inside the media_connected transaction, not merely trusting the start call', internetVoiceRoute.includes('confirmRecordingActiveForBilling(client, rawCallId)')],
   ['settlement bills from billing_started_at, not merely connected_at, so unconfirmed recording cannot accrue charge', internetVoiceLifecycle.includes('WHEN billing_started_at IS NULL THEN 0')],
+
+  // W60 RealtimeKit mobile media migration
+  ['call_media_sessions is additive only (no ALTER of app.call_sessions)', !/ALTER TABLE app\.call_sessions/.test(callMediaSql)],
+  ['call media session is one meeting per call, ever', callMediaSql.includes('call_session_id uuid PRIMARY KEY REFERENCES app.call_sessions(id)')],
+  ['migrate.ts and the manifest actually register 0010 and 0011 (fixes a pre-existing W58 gap where 0010 was never wired into either)',
+    migrateTs.includes("'0010_recording_core_foundation.sql'") && migrateTs.includes("'0011_call_media_sessions.sql'")],
+  ['CALL_MEDIA_PROVIDER is fail-closed in Production: only an explicit realtimekit is accepted', /if \(normalized !== 'realtimekit'\)/.test(callMediaDomain)],
+  ['CALL_MEDIA_PROVIDER has no implicit default outside Production either', callMediaDomain.includes("throw new Error('call_media_provider_not_configured')")],
+  ['ensureCallReady() blocks legacy TURN validation once RealtimeKit is the active provider (Production is never blocked on unused legacy TURN infra)',
+    handler.includes("mediaProvider === 'legacy_p2p'") && handler.includes('requireCloudflareRealtimeKitConfig()')],
+  ['media-auth route derives participant role from the call row itself, never from client input', internetVoiceMediaRoute.includes('row.caller_user_id === userId') && internetVoiceMediaRoute.includes('row.listener_user_id === userId')],
+  ['media-auth requires this participant\'s own recording consent when recording is required', internetVoiceMediaRoute.includes("row.recording_mode === 'all_with_consent'") && internetVoiceMediaRoute.includes('requireParticipantRecordingConsent(client, rawCallId, userId)')],
+  ['RealtimeKit participant auth never returns the Cloudflare API token, only the short-lived participant token', !/apiToken/.test(internetVoiceMediaRoute) && recordingRealtimeKit.includes('return { participantId: data.id, token: data.token };')],
+  ['recording start reuses the media session\'s meeting instead of creating a second Cloudflare meeting', callMediaSession.includes('providerImpl.prepareSession({ callSessionId })')],
+  ['RealtimeKit path rejects legacy custom SDP offer/answer/ICE at the signaling endpoint (task section 10)', internetVoiceRoute.includes("throw new HttpError(409, 'legacy_signaling_disabled')")],
+  ['media-provider readiness reuses the config module\'s exported guard rather than re-parsing Cloudflare env vars', callMediaConfig.includes("CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME")],
 ];
 
 let failed = 0;

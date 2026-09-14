@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
 import { getCallTransportReadiness, getInternetVoiceClientConfig, parseIceServers } from '../providers/call-transport.ts';
 import { isInternalOwnerTestCaller, isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
+import { currentCallMediaProvider } from '../lib/call-media-config.ts';
 import {
   confirmRecordingActiveForBilling,
   requireParticipantRecordingConsent,
@@ -79,9 +80,13 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
   const { userId } = await requireAuth(req);
   const readiness = isInternalOwnerTestCaller(userId) ? { primary: 'internet_voice' as const } : getCallTransportReadiness();
   if (readiness.primary !== 'internet_voice') throw new HttpError(409, 'internet_voice_not_primary');
-  // Resolve short-lived TURN credentials before mutating call state. If the external TURN
-  // control plane is unavailable, the call stays in routing rather than becoming half-started.
-  const voiceClient = await getVoiceClientConfigOr503();
+  // W60: RealtimeKit handles its own signaling/relay -- the legacy TURN/ICE
+  // `client` config only applies to the Preview-only legacy_p2p path (task
+  // section 10). Resolved before mutating call state either way: if the
+  // legacy TURN control plane is unavailable, the call stays in routing
+  // rather than becoming half-started.
+  const mediaProvider = currentCallMediaProvider();
+  const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{
@@ -145,6 +150,7 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     callId: rawCallId,
     status: result.status,
     transport: 'internet_voice',
+    mediaProvider,
     noAnswerSeconds: NO_ANSWER_SECONDS,
     client: voiceClient,
     idempotent: result.idempotent,
@@ -175,12 +181,14 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
     return { role, status: row.status };
   });
 
-  const voiceClient = await getVoiceClientConfigOr503();
+  const mediaProvider = currentCallMediaProvider();
+  const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;
   sendJson(res, 200, {
     callId: rawCallId,
     transport: 'internet_voice',
     role: result.role,
     status: result.status,
+    mediaProvider,
     noAnswerSeconds: NO_ANSWER_SECONDS,
     client: voiceClient,
     readiness: {
@@ -199,6 +207,18 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
   const body = await readJson<{ kind?: unknown; payload?: unknown }>(req);
   const kind = assertSignalKind(body.kind);
   const payload = normalizeSignalPayload(body.payload);
+
+  // W60 signaling retirement boundary (task section 10): RealtimeKit handles
+  // its own SDP/ICE signaling entirely -- a call on the RealtimeKit media
+  // path must never carry custom offer/answer/ICE through this legacy
+  // endpoint, even from a stale/misbehaving client. `media_connected`/
+  // `reconnecting`/`reconnected` stay valid on both paths: they are generic
+  // call-state signals, not SDP/ICE payloads, and postInternetVoiceSignal's
+  // `media_connected` handling below is exactly what the RealtimeKit mobile
+  // client now also relies on (see routes/internet-voice-media.ts).
+  if ((kind === 'offer' || kind === 'answer' || kind === 'ice') && currentCallMediaProvider() === 'realtimekit') {
+    throw new HttpError(409, 'legacy_signaling_disabled');
+  }
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{

@@ -7,6 +7,8 @@ import { isInternalOwnerTestMode } from './lib/internal-owner-test.ts';
 import { validatePrimaryCallTransportEnv } from './providers/call-transport.ts';
 import { validateTelephonyEnv } from './providers/telephony.ts';
 import { validateEmailProviderEnv } from './providers/email.ts';
+import { currentCallMediaProvider } from './lib/call-media-config.ts';
+import { requireCloudflareRealtimeKitConfig } from './providers/recording-realtimekit.ts';
 import { HttpError, sendJson } from './lib/http.ts';
 
 function ensureDatabaseReady(): void {
@@ -39,8 +41,23 @@ function ensureKycReady(): void {
 function ensureCallReady(): void {
   ensureDatabaseReady();
   if (isInternalOwnerTestMode()) return;
-  try { validatePrimaryCallTransportEnv(); }
-  catch { throw new HttpError(503, 'call_transport_not_configured'); }
+  // W60: which live-media transport a call actually needs ready is now
+  // provider-dependent. The legacy TURN/ICE relay (call-transport.ts) is
+  // Preview-only infrastructure once RealtimeKit is the active provider (task
+  // section 9/18) -- Production running RealtimeKit must not be blocked by a
+  // legacy TURN relay it no longer uses, and must not silently accept a call
+  // with neither transport configured.
+  let mediaProvider: 'realtimekit' | 'legacy_p2p';
+  try { mediaProvider = currentCallMediaProvider(); }
+  catch { throw new HttpError(503, 'call_media_not_configured'); }
+
+  if (mediaProvider === 'legacy_p2p') {
+    try { validatePrimaryCallTransportEnv(); }
+    catch { throw new HttpError(503, 'call_transport_not_configured'); }
+    return;
+  }
+  try { requireCloudflareRealtimeKitConfig(); }
+  catch { throw new HttpError(503, 'call_media_not_configured'); }
 }
 function ensureTelephonyReady(): void {
   ensureDatabaseReady();
@@ -174,6 +191,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && voiceNoAnswerMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { expireInternetVoiceNoAnswer } = await import('./routes/internet-voice.ts'); return await expireInternetVoiceNoAnswer(req, res, voiceNoAnswerMatch[1]); }
     const voiceExtendMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/extend$/);
     if (method === 'POST' && voiceExtendMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { extendInternetVoiceCall } = await import('./routes/internet-voice-extension.ts'); return await extendInternetVoiceCall(req, res, voiceExtendMatch[1]); }
+    const voiceMediaAuthMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/media-auth$/);
+    if (method === 'POST' && voiceMediaAuthMatch) { ensureCallReady(); const { postInternetVoiceMediaAuth } = await import('./routes/internet-voice-media.ts'); return await postInternetVoiceMediaAuth(req, res, voiceMediaAuthMatch[1]); }
     const voiceHeartbeatMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/heartbeat$/);
     if (method === 'POST' && voiceHeartbeatMatch) { ensureDatabaseReady(); const { heartbeatInternetVoiceCall } = await import('./routes/internet-voice-heartbeat.ts'); return await heartbeatInternetVoiceCall(req, res, voiceHeartbeatMatch[1]); }
     const voiceEndMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/end$/);

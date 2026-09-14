@@ -14,10 +14,19 @@
 # 0009 hits the same "cron.database_name not configured" guard registering the
 # booking-reservation sweeper job) and neither is available on plain local
 # PostgreSQL binaries -- this script applies every OTHER migration (0001-0005,
-# 0007, 0008, 0010) in order and skips 0006/0009. 0009 adds no table/column/
-# type (confirmed: it only registers a cron job), so skipping it changes no
-# schema this suite depends on. No recording test in this suite depends on
+# 0007, 0008, 0010, 0011) in order and skips 0006/0009. 0009 adds no table/
+# column/type (confirmed: it only registers a cron job), so skipping it changes
+# no schema this suite depends on. No recording test in this suite depends on
 # anything 0006 adds either.
+#
+# W60 note: 0011 (app.call_media_sessions) was added here because
+# services/recording-lifecycle.ts#startRecordingForCall now creates a fresh
+# provider meeting via services/call-media-session.ts#ensureCallMediaSession
+# (shared with the mobile media migration's participant-auth path) instead of
+# calling provider.prepareSession directly -- that function queries
+# app.call_media_sessions unconditionally, so this suite's "missing provider
+# credentials" / "provider failure" tests (which exercise the fresh-meeting
+# path) fail with "relation app.call_media_sessions does not exist" without it.
 #
 # Usage:  bash scripts/run-recording-runtime-db-test.sh
 set -euo pipefail
@@ -60,12 +69,12 @@ echo "== provisioning isolated PostgreSQL 16 cluster in $WORK_DIR =="
 "${PGRUN[@]}" "$PG_BINDIR/pg_ctl" -D "$PGDATA" -l "$WORK_DIR/postgres.log" -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=" -w start
 "${PGRUN[@]}" "$PG_BINDIR/createdb" -h 127.0.0.1 -p "$PORT" -U postgres "$DBNAME"
 
-echo "== applying migrations 0001-0005, 0007, 0008, 0010 (0006/0009 need Neon pg_cron; skipped, see header) =="
+echo "== applying migrations 0001-0005, 0007, 0008, 0010, 0011 (0006/0009 need Neon pg_cron; skipped, see header) =="
 node "$ROOT_DIR/scripts/materialize-migration.mjs" >/dev/null
 for f in 0001_initial.sql 0002_email_auth.sql 0003_internet_voice_transport.sql \
          0004_booking.sql 0005_no_answer_hold_idempotency.sql \
          0007_global_caller_market_feedback.sql 0008_caller_quote_bindings.sql \
-         0010_recording_core_foundation.sql; do
+         0010_recording_core_foundation.sql 0011_call_media_sessions.sql; do
   echo "  -> $f"
   cat "$ROOT_DIR/packages/db/migrations/$f" \
     | "${PGRUN[@]}" "$PG_BINDIR/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d "$DBNAME" -v ON_ERROR_STOP=1 >/dev/null

@@ -15,9 +15,8 @@ see [Remaining live steps](#remaining-live-steps) for the exact list.
   before any edit): `5df1157c3f1e2bb49523a6a9769cf48711b2724e` — matched the task's
   stated SHA exactly.
 - W63 branch: `w63/web-realtimekit-release-p0-closure-20260914`
-- Final SHA: recorded in a follow-up commit after this report, per this repo's
-  own convention (see `git log` for `docs(wNN): record final commit SHA`
-  commits on W53/W55/W57/W58/W60).
+- Final SHA (main W63 commit, before this final-SHA record commit):
+  `17961d5c0bab089fdcc880eacd1998dac0a73875`
 
 Locked prior work (W57 Preview architecture, W58 recording foundation, W60
 RealtimeKit mobile migration + server media sessions) was reused as-is and not

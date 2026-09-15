@@ -3,7 +3,7 @@
 ## 0. SHAs
 
 - **Base (W63 HEAD, `origin/w65/final-integrated-preview-rc-20260915` as received):** `c64308edb71533fdcea915eb884f38303021c096`
-- **Final W65 SHA:** recorded in a follow-up commit on this branch after this document lands (`docs(w65): record final commit SHA`), per this repo's established pattern (see `c64308e`, `5df1157`, `76d74b2`).
+- **Final W65 SHA (main W65 commit, before this final-SHA record commit):** `e9b81bd1e9485c491dc5fd3694d4dee7a81a554c`
 - Branch verified against `origin` before any edit: `git rev-parse origin/w65/final-integrated-preview-rc-20260915` == the W63 base above, byte-identical tree (`git diff --stat` empty). Not recreated from `main`.
 
 ## 1. Final integration invariant

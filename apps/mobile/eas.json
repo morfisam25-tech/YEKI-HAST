@@ -13,6 +13,17 @@
         "EXPO_PUBLIC_APP_ENV": "preview_internal_beta"
       }
     },
+    "closedTest": {
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "node": "22.23.1",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "closed_test"
+      }
+    },
     "production": {
       "node": "22.23.1",
       "environment": "production",

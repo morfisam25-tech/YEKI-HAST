@@ -20,6 +20,15 @@
         {
           "microphonePermission": "برای تماس صوتی اینترنتی، یکی هست به میکروفون نیاز دارد."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "targetSdkVersion": 36,
+            "compileSdkVersion": 36
+          }
+        }
       ]
     ],
     "android": {

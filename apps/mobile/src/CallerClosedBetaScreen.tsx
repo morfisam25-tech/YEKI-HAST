@@ -45,7 +45,7 @@ import {
   type InternetVoiceTiming,
   type PeerConnectionWithLegacyEvents,
 } from './internet-voice-api';
-import { useRealtimeVoiceCall } from './realtime-media';
+import { classifyMicrophoneError, useRealtimeVoiceCall } from './realtime-media';
 import CallerWalletCard from './CallerWalletCard';
 import CallerRecentCallsCard from './CallerRecentCallsCard';
 
@@ -88,6 +88,8 @@ function messageFor(code: string): string {
     call_media_not_configured: 'مسیر صوتی این تماس در این محیط هنوز آماده نیست.',
     call_media_provider_not_realtimekit: 'مسیر صوتی این تماس در این محیط هنوز آماده نیست.',
     internet_voice_client_config_missing: 'اتصال صوتی این تماس آماده نشد؛ دوباره امتحان کن.',
+    microphone_permission_denied: 'دسترسی به میکروفون رد شد. برای شروع تماس، دسترسی میکروفون این برنامه را از تنظیمات گوشی فعال کن.',
+    microphone_unavailable: 'میکروفون در دسترس نیست. مطمئن شو برنامه دیگری از آن استفاده نمی‌کند و دوباره امتحان کن.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'عملیات انجام نشد.';
@@ -207,9 +209,13 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
   async function ensureMicrophone(): Promise<MediaStream> {
     if (localStreamRef.current) return localStreamRef.current;
-    const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-    localStreamRef.current = stream;
-    return stream;
+    try {
+      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      return stream;
+    } catch (cause) {
+      throw new Error(classifyMicrophoneError(cause));
+    }
   }
 
   // Microphone mute/unmute (task section 15): the RealtimeKit path uses the
@@ -475,7 +481,10 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         throw new Error('internet_voice_client_config_missing');
       }
     } catch (cause) {
-      const code = getInternetVoiceErrorCode(cause) === 'network_error' ? getErrorCode(cause) : getInternetVoiceErrorCode(cause);
+      const micCode = cause instanceof Error && (cause.message === 'microphone_permission_denied' || cause.message === 'microphone_unavailable')
+        ? cause.message
+        : null;
+      const code = micCode ?? (getInternetVoiceErrorCode(cause) === 'network_error' ? getErrorCode(cause) : getInternetVoiceErrorCode(cause));
       if (requested) {
         try {
           if (voiceStarted) await endInternetVoiceCall(token, requested.callId, 'mobile_start_failed');
@@ -525,7 +534,10 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       }
       if (config.status === 'calling_listener') setNoAnswerDeadlineMs(Date.now() + config.noAnswerSeconds * 1_000);
     } catch (cause) {
-      setError(messageFor(getInternetVoiceErrorCode(cause)));
+      const micCode = cause instanceof Error && (cause.message === 'microphone_permission_denied' || cause.message === 'microphone_unavailable')
+        ? cause.message
+        : null;
+      setError(messageFor(micCode ?? getInternetVoiceErrorCode(cause)));
       cleanupRtc();
     } finally { setBusy(false); }
   }

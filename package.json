@@ -21,6 +21,7 @@
     "test:safety-runtime-db": "bash scripts/run-safety-admin-runtime-db-test.sh",
     "test:recording-runtime-db": "bash scripts/run-recording-runtime-db-test.sh",
     "admin:recording-capability": "node --experimental-strip-types scripts/manage-recording-admin-capability.ts",
+    "recording:purge-archive": "node --experimental-strip-types scripts/purge-recording-archives.ts",
     "prevalidate:foundation": "node scripts/materialize-migration.mjs",
     "validate:foundation": "node scripts/validate-foundation.mjs",
     "verify:security-config": "node scripts/verify-production-security-config.mjs",

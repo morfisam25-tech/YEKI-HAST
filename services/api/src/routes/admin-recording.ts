@@ -104,8 +104,10 @@ export async function getRecordingForSafetyCase(
       // post-closure policy. null while the case remains open, or when there
       // is no active hold. Never auto-acted on -- see legalHoldReviewDueAt's
       // own doc comment.
+      // Non-null assertion is safe here: legalHoldReviewDueAt only returns
+      // null for a null input, and caseResolvedAt is already checked above.
       legalHoldReviewDueAt: row.legal_hold && caseResolvedAt
-        ? legalHoldReviewDueAt(new Date(caseResolvedAt)).toISOString()
+        ? legalHoldReviewDueAt(new Date(caseResolvedAt))!.toISOString()
         : null,
       failureCode: row.failure_code,
     },

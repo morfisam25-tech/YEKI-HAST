@@ -149,7 +149,7 @@ export async function executeListenerKycVerification(userId: string): Promise<{ 
 
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
-      VALUES ($1, $2, 'listener_kyc', $1, jsonb_build_object('provider', $3, 'checks', $4::jsonb))
+      VALUES ($1::uuid, $2, 'listener_kyc', $1::text, jsonb_build_object('provider', $3::text, 'checks', $4::jsonb))
     `, [
       userId,
       allVerified ? 'listener_kyc_field_checks_verified' : 'listener_kyc_field_checks_incomplete',

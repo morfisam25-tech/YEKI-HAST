@@ -274,7 +274,7 @@ async function verifyAndFinalizeAttempt(
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
       VALUES ($1,'payment_verified','payment_attempt',$2,
-              jsonb_build_object('provider',$3,'providerReference',$4,'providerCode',$5,'amountMinor',$6,'currencyCode',$7))
+              jsonb_build_object('provider',$3::text,'providerReference',$4::text,'providerCode',$5::int,'amountMinor',$6::text,'currencyCode',$7::text))
     `, [
       current.user_id,
       current.id,

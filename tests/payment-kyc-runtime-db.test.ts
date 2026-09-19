@@ -42,6 +42,8 @@ function makeRes() {
   const res = {
     statusCode: 0,
     body: '',
+    headers: {} as Record<string, string>,
+    setHeader(name: string, value: string) { this.headers[name] = value; return this; },
     writeHead(status: number) { this.statusCode = status; return this; },
     end(chunk?: string) { this.body = chunk ?? ''; return this; },
   };
@@ -101,7 +103,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     const mock = mockFetchSequence([{ status: 200, json: { result: 100, trackId: 700001 } }]);
     let created: ReturnType<typeof makeRes>;
     try {
-      const req = makeReq(token, { amountMinor: 50000, idempotencyKey: 'topup-1' });
+      const req = makeReq(token, { amountMinor: 50000, idempotencyKey: 'topup-001' });
       created = makeRes();
       await createWalletTopup(req, created);
     } finally { mock.restore(); }
@@ -159,7 +161,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     let created: ReturnType<typeof makeRes>;
     try {
       created = makeRes();
-      await createWalletTopup(makeReq(token, { amountMinor: 12000, idempotencyKey: 'topup-2' }), created);
+      await createWalletTopup(makeReq(token, { amountMinor: 12000, idempotencyKey: 'topup-002' }), created);
     } finally { mock.restore(); }
     const attemptId = jsonOf(created).attemptId;
 
@@ -191,7 +193,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     let created: ReturnType<typeof makeRes>;
     try {
       created = makeRes();
-      await createWalletTopup(makeReq(token, { amountMinor: 30000, idempotencyKey: 'topup-3' }), created);
+      await createWalletTopup(makeReq(token, { amountMinor: 30000, idempotencyKey: 'topup-003' }), created);
     } finally { mock.restore(); }
     const attemptId = jsonOf(created).attemptId;
 
@@ -231,7 +233,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     let created: ReturnType<typeof makeRes>;
     try {
       created = makeRes();
-      await createWalletTopup(makeReq(token, { amountMinor: 15000, idempotencyKey: 'topup-4' }), created);
+      await createWalletTopup(makeReq(token, { amountMinor: 15000, idempotencyKey: 'topup-004' }), created);
     } finally { mock.restore(); }
     const attemptId = jsonOf(created).attemptId;
 
@@ -259,7 +261,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     let created: ReturnType<typeof makeRes>;
     try {
       created = makeRes();
-      await createWalletTopup(makeReq(token, { amountMinor: 8000, idempotencyKey: 'topup-5' }), created);
+      await createWalletTopup(makeReq(token, { amountMinor: 8000, idempotencyKey: 'topup-005' }), created);
     } finally { mock.restore(); }
     const attemptId = jsonOf(created).attemptId;
 
@@ -279,7 +281,7 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     let created: ReturnType<typeof makeRes>;
     try {
       created = makeRes();
-      await createWalletTopup(makeReq(token, { amountMinor: 9000, idempotencyKey: 'topup-6' }), created);
+      await createWalletTopup(makeReq(token, { amountMinor: 9000, idempotencyKey: 'topup-006' }), created);
     } finally { mock.restore(); }
     const attemptId = jsonOf(created).attemptId;
 
@@ -333,8 +335,11 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
   // row directly, the same state a later config regression could leave behind.
   await t.test('KYC provider not configured: execution records every required check as an explicit error, never verified', async () => {
     const userId = (await query<{ id: string }>('INSERT INTO app.users DEFAULT VALUES RETURNING id::text')).rows[0].id;
-    const nationalId = '0499370899';
-    const iban = 'IR820540102680020817909002';
+    // Distinct from the other KYC tests' national IDs -- raw SQL insert
+    // bypasses submitListenerKyc's own checksum validation, so uniqueness
+    // (not checksum validity) is all that matters here.
+    const nationalId = '9999999999';
+    const iban = 'IR820540102680020817909009';
     await query(`
       INSERT INTO private_data.listener_kyc(user_id, status, legal_name_ciphertext, national_id_ciphertext, national_id_hash, date_of_birth, bank_iban_ciphertext, bank_iban_hash, bank_account_holder_ciphertext)
       VALUES ($1,'pending',$2,$3,$4,'1991-08-12',$5,$6,$7)
@@ -416,12 +421,12 @@ test('W78 payment + KYC runtime DB', { skip }, async (t) => {
     await query("INSERT INTO private_data.auth_sessions(user_id, token_hash, expires_at) VALUES ($1,$2, now() + interval '1 hour')", [userId, sha256Hex(token)]);
 
     const mock = mockFetchSequence([
-      { status: 200, json: { code: 200, error: null, fee: 0, fee_irr: 0, inq_balance: 0, inq_balance_irr: 0, data: { inq: 'ok', inq_desc: 'ok', inq_id: 556, national_id: '0499370899', jalali_birth: '1370-05-21', match: false, first_name: 'a', last_name: 'b', father_name: 'c', is_alive: 1 } } },
+      { status: 200, json: { code: 200, error: null, fee: 0, fee_irr: 0, inq_balance: 0, inq_balance_irr: 0, data: { inq: 'ok', inq_desc: 'ok', inq_id: 556, national_id: '0013546759', jalali_birth: '1370-05-21', match: false, first_name: 'a', last_name: 'b', father_name: 'c', is_alive: 1 } } },
       { status: 200, json: { code: 200, error: null, fee: 0, fee_irr: 0, inq_balance: 0, inq_balance_irr: 0, data: { sheba_ok: true } } },
     ]);
     let res: ReturnType<typeof makeRes>;
     try {
-      res = await submitKyc(userId, token);
+      res = await submitKyc(userId, token, { nationalId: '0013546759' });
     } finally { mock.restore(); }
     assert.equal(jsonOf(res).status, 'pending');
 

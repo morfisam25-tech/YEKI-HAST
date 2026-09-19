@@ -34,6 +34,16 @@ test('admin recordings UI never renders a raw storage reference, provider secret
   assert.doesNotMatch(page, /<a[^>]+href=\{.*playbackUrl/);
 });
 
+test('admin recordings UI shows a controlled unavailable status instead of a fake Play action when playback cannot be resolved', () => {
+  assert.match(page, /playback\.status === 'available'/);
+  assert.match(page, /پخش در حال حاضر در دسترس نیست/);
+  assert.doesNotMatch(page, />\s*پخش\s*</, 'must never render a bare "Play" action');
+});
+
+test('admin recordings UI surfaces the legal hold post-closure review-due date, informational only', () => {
+  assert.match(page, /legalHoldReviewDueAt/);
+});
+
 test('every admin recording route the UI calls requires the recording_admin capability', () => {
   assert.match(routes, /requireAdminCapability\(req, RECORDING_CAPABILITY\)/);
   const grants = routes.match(/requireAdminCapability\(req, RECORDING_CAPABILITY\)/g) ?? [];

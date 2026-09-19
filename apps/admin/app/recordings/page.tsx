@@ -12,8 +12,13 @@ type RecordingMetadata = {
   retentionUntil: string | null;
   legalHold: boolean;
   legalHoldReasonCode: string | null;
+  legalHoldReviewDueAt: string | null;
   failureCode: string | null;
 };
+
+type PlaybackStatus =
+  | { status: 'available'; expiresAt: string }
+  | { status: 'unavailable'; reason: string };
 
 type PlaybackGrant = {
   grantId: string;
@@ -21,7 +26,13 @@ type PlaybackGrant = {
   authorizedAt: string;
   expiresAt: string;
   playbackUrl: string | null;
-  playbackUrlNote: string | null;
+  playback: PlaybackStatus;
+};
+
+const playbackUnavailableReasonLabels: Record<string, string> = {
+  archival_storage_not_provisioned: 'یکپارچه‌سازی ذخیره‌سازی آرشیوی هنوز راه‌اندازی نشده است.',
+  playback_resolver_not_supported: 'این ارائه‌دهنده ضبط پشتیبانی نمی‌شود.',
+  playback_resolution_failed: 'خطا در بازیابی پخش.',
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -209,6 +220,9 @@ export default function RecordingsPage() {
                   <p><b>پایان:</b> {recording.endedAt ? new Date(recording.endedAt).toLocaleString('fa-IR') : '—'}</p>
                   <p><b>نگهداری تا:</b> {recording.retentionUntil ? new Date(recording.retentionUntil).toLocaleString('fa-IR') : '—'}</p>
                   <p><b>Legal Hold:</b> {recording.legalHold ? `بله (${recording.legalHoldReasonCode ?? '—'})` : 'خیر'}</p>
+                  {recording.legalHold && recording.legalHoldReviewDueAt && (
+                    <p><b>موعد بازبینی Hold:</b> {new Date(recording.legalHoldReviewDueAt).toLocaleString('fa-IR')}</p>
+                  )}
                   {recording.failureCode && <p><b>خطا:</b> {recording.failureCode}</p>}
                 </div>
 
@@ -223,7 +237,13 @@ export default function RecordingsPage() {
                   <div className="safeNotice" style={{ marginTop: 14 }}>
                     <p><b>مجوز پخش صادر شد.</b> این دسترسی ممیزی شده است و کوتاه‌مدت است.</p>
                     <p className="muted">Grant: {short(grant.grantId)} · انقضا: {new Date(grant.expiresAt).toLocaleString('fa-IR')}</p>
-                    <p className="muted">{grant.playbackUrl ?? grant.playbackUrlNote ?? 'پخش هنوز از طریق این مسیر در دسترس نیست.'}</p>
+                    {grant.playback.status === 'available'
+                      ? <p className="muted">پخش تا {new Date(grant.playback.expiresAt).toLocaleString('fa-IR')} در دسترس است.</p>
+                      : (
+                        <p className="muted">
+                          پخش در حال حاضر در دسترس نیست: {playbackUnavailableReasonLabels[grant.playback.reason] ?? grant.playback.reason}
+                        </p>
+                      )}
                   </div>
                 )}
               </>

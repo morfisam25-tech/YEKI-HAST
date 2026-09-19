@@ -24,4 +24,13 @@ export async function readJson<T>(req: IncomingMessage, maxBytes = 32_768): Prom
   if (!chunks.length) return {} as T;
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as T; } catch { throw new HttpError(400, 'invalid_json'); }
 }
+// Exact bytes as received, for callers that must verify a signature over the
+// raw body (e.g. routes/recording-webhook.ts) -- re-serializing parsed JSON
+// before verifying would change the signed bytes on any whitespace/key-order
+// difference.
+export async function readRawBody(req: IncomingMessage, maxBytes = 65_536): Promise<Buffer> {
+  const chunks: Buffer[] = []; let total = 0;
+  for await (const chunk of req) { const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); total += buffer.byteLength; if (total > maxBytes) throw new HttpError(413, 'payload_too_large'); chunks.push(buffer); }
+  return Buffer.concat(chunks);
+}
 export function requireString(value: unknown, field: string, min = 1, max = 500): string { if (typeof value !== 'string') throw new HttpError(400, 'invalid_field'); const normalized = value.trim(); if (normalized.length < min || normalized.length > max) throw new HttpError(400, 'invalid_field'); return normalized; }

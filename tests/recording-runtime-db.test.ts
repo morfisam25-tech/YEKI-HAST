@@ -71,10 +71,12 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
   } = await import('../services/api/src/services/recording-lifecycle.ts');
   const { __resetRecordingProviderCacheForTests } = await import('../services/api/src/providers/recording.ts');
   const {
+    getRecordingForSafetyCase,
     requestRecordingPlaybackGrant,
     setRecordingHold,
     releaseRecordingHold,
   } = await import('../services/api/src/routes/admin-recording.ts');
+  const { recordingPlaybackGrantTtlSeconds } = await import('../services/api/src/lib/recording-config.ts');
 
   t.after(async () => { await closePool(); });
   t.beforeEach(() => { __resetRecordingProviderCacheForTests(); });
@@ -428,5 +430,120 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
       () => requestRecordingPlaybackGrant(makeReq(token, { caseKind: 'report', caseId: unrelatedReport.id, reasonCode: 'complaint_review' }), res as never, recordingSessionId),
       /recording_case_mismatch/,
     );
+  });
+
+  // --- W81A additions: playback resolver boundary, capability audit depth,
+  // reason-code/expiry validation, and no-secret-leakage. -----------------
+
+  async function seedRecordingWithReport(): Promise<{ recordingSessionId: string; reportId: string; token: string }> {
+    const { callId } = await seedCall('all_with_consent');
+    await query(`
+      INSERT INTO private_data.call_recording_sessions(call_session_id, provider, state, consent_policy_version)
+      VALUES ($1,'cloudflare_realtimekit','stored','v1')
+    `, [callId]);
+    const recordingSessionId = (await query<{ id: string }>(
+      'SELECT id::text FROM private_data.call_recording_sessions WHERE call_session_id=$1', [callId],
+    )).rows[0].id;
+    const reporterId = (await query<{ id: string }>('INSERT INTO app.users DEFAULT VALUES RETURNING id::text')).rows[0].id;
+    const report = (await query<{ id: string }>(
+      'INSERT INTO app.reports(reporter_user_id, category, call_session_id) VALUES ($1,$2,$3) RETURNING id::text',
+      [reporterId, 'harassment', callId],
+    )).rows[0];
+    const { token } = await seedAdmin('recording_admin');
+    return { recordingSessionId, reportId: report.id, token };
+  }
+
+  await t.test('provider playback unavailable resolves to a controlled fail-closed result, never a fabricated URL', async () => {
+    const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+    const res = makeRes();
+    await requestRecordingPlaybackGrant(
+      makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'complaint_review' }), res as never, recordingSessionId,
+    );
+    assert.equal(res.statusCode, 201);
+    const payload = JSON.parse(res.body);
+    assert.equal(payload.playbackUrl, null);
+    assert.deepEqual(payload.playback, { status: 'unavailable', reason: 'archival_storage_not_provisioned' });
+
+    const resolvedAudit = await query(
+      "SELECT metadata FROM app.audit_logs WHERE action='admin_recording_playback_resolved' AND entity_id=$1", [recordingSessionId],
+    );
+    assert.equal(resolvedAudit.rowCount, 1, 'the resolution attempt itself must be audited');
+    assert.equal(resolvedAudit.rows[0].metadata.status, 'unavailable');
+
+    const grantRow = await query<{ accessed_at: string | null }>(
+      'SELECT accessed_at::text FROM app.recording_playback_grants WHERE id=$1', [payload.grantId],
+    );
+    assert.ok(grantRow.rows[0].accessed_at, 'a resolved playback attempt must record an access event');
+  });
+
+  await t.test('no provider token or secret ever appears in the playback grant API output', async () => {
+    await withEnv({ CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'super-secret-token-should-never-leak' }, async () => {
+      const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+      const res = makeRes();
+      await requestRecordingPlaybackGrant(
+        makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'complaint_review' }), res as never, recordingSessionId,
+      );
+      assert.equal(res.statusCode, 201);
+      assert.doesNotMatch(res.body, /super-secret-token-should-never-leak/);
+      assert.doesNotMatch(res.body, /CLOUDFLARE_REALTIMEKIT_API_TOKEN/i);
+    });
+  });
+
+  await t.test('a playback grant expires recordingPlaybackGrantTtlSeconds after authorization', async () => {
+    await withEnv({ CALL_RECORDING_PLAYBACK_TTL_SECONDS: '120' }, async () => {
+      const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+      const res = makeRes();
+      await requestRecordingPlaybackGrant(
+        makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'complaint_review' }), res as never, recordingSessionId,
+      );
+      const payload = JSON.parse(res.body);
+      const deltaSeconds = (Date.parse(payload.expiresAt) - Date.parse(payload.authorizedAt)) / 1000;
+      assert.equal(Math.round(deltaSeconds), recordingPlaybackGrantTtlSeconds());
+      assert.equal(recordingPlaybackGrantTtlSeconds(), 120);
+    });
+  });
+
+  await t.test('a reason code is required for a playback grant and for setting a legal hold', async () => {
+    const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+    await assert.rejects(
+      () => requestRecordingPlaybackGrant(makeReq(token, { caseKind: 'report', caseId: reportId }), makeRes() as never, recordingSessionId),
+      /invalid_reason_code/,
+    );
+    await assert.rejects(
+      () => setRecordingHold(makeReq(token, { caseKind: 'report', caseId: reportId }), makeRes() as never, recordingSessionId),
+      /invalid_reason_code/,
+    );
+    await assert.rejects(
+      () => setRecordingHold(makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'NOT VALID!' }), makeRes() as never, recordingSessionId),
+      /invalid_reason_code/,
+    );
+  });
+
+  await t.test('setting and releasing a legal hold are both audited', async () => {
+    const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+    await setRecordingHold(makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'open_investigation' }), makeRes() as never, recordingSessionId);
+    const holdAudit = await query("SELECT 1 FROM app.audit_logs WHERE action='admin_recording_hold_set' AND entity_id=$1", [recordingSessionId]);
+    assert.ok(holdAudit.rowCount, 'setting a legal hold must be audited');
+
+    await releaseRecordingHold(makeReq(token, {}), makeRes() as never, recordingSessionId);
+    const releaseAudit = await query("SELECT 1 FROM app.audit_logs WHERE action='admin_recording_hold_released' AND entity_id=$1", [recordingSessionId]);
+    assert.ok(releaseAudit.rowCount, 'releasing a legal hold must be audited');
+  });
+
+  await t.test('legal hold review-due date is surfaced once the linked case closes, and withheld while it is open', async () => {
+    const { recordingSessionId, reportId, token } = await seedRecordingWithReport();
+    await setRecordingHold(makeReq(token, { caseKind: 'report', caseId: reportId, reasonCode: 'open_investigation' }), makeRes() as never, recordingSessionId);
+
+    const openRes = makeRes();
+    await getRecordingForSafetyCase(makeReq(token, {}), openRes as never, 'reports', reportId);
+    const openPayload = JSON.parse(openRes.body);
+    assert.equal(openPayload.recording.legalHold, true);
+    assert.equal(openPayload.recording.legalHoldReviewDueAt, null, 'an open case has no review-due date yet');
+
+    await query("UPDATE app.reports SET status='resolved', resolved_at=$2 WHERE id=$1", [reportId, '2026-01-01T00:00:00.000Z']);
+    const closedRes = makeRes();
+    await getRecordingForSafetyCase(makeReq(token, {}), closedRes as never, 'reports', reportId);
+    const closedPayload = JSON.parse(closedRes.body);
+    assert.equal(closedPayload.recording.legalHoldReviewDueAt, '2026-06-30T00:00:00.000Z');
   });
 });

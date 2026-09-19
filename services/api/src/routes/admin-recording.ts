@@ -1,12 +1,18 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { query, withTransaction } from '../../../../packages/db/src/client.ts';
+import { legalHoldReviewDueAt } from '../../../../packages/domain/src/recording.ts';
 import { requireAdminCapability } from '../lib/admin.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
+import { RECORDING_ADMIN_CAPABILITY as RECORDING_CAPABILITY } from '../lib/recording-admin-capability.ts';
 import { recordingPlaybackGrantTtlSeconds } from '../lib/recording-config.ts';
+import {
+  getPlaybackResolver,
+  PlaybackResolverError,
+  type PlaybackResolutionResult,
+} from '../providers/recording-playback-resolver.ts';
 import { releaseRecordingLegalHold, setRecordingLegalHold } from '../services/recording-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const RECORDING_CAPABILITY = 'recording_admin';
 const REASON_CODE_RE = /^[a-z0-9][a-z0-9_-]{1,79}$/;
 
 function assertId(value: string, code: string): string {
@@ -26,14 +32,26 @@ function reasonCodeFrom(value: unknown): string {
 }
 
 async function resolveCaseCallSessionId(caseKind: 'report' | 'safety_event', caseId: string): Promise<string> {
+  const { callSessionId } = await resolveSafetyCase(caseKind, caseId);
+  return callSessionId;
+}
+
+// Also surfaces the case's own resolved_at (set by routes/admin-safety.ts
+// when a report/safety_event moves to 'resolved'/'dismissed') so the legal
+// hold review-due date (see packages/domain/src/recording.ts
+// legalHoldReviewDueAt) can be computed without a second round trip.
+async function resolveSafetyCase(
+  caseKind: 'report' | 'safety_event',
+  caseId: string,
+): Promise<{ callSessionId: string; caseResolvedAt: string | null }> {
   const table = caseKind === 'report' ? 'app.reports' : 'app.safety_events';
-  const result = await query<{ call_session_id: string | null }>(
-    `SELECT call_session_id::text FROM ${table} WHERE id=$1`,
+  const result = await query<{ call_session_id: string | null; resolved_at: string | null }>(
+    `SELECT call_session_id::text, resolved_at::text FROM ${table} WHERE id=$1`,
     [caseId],
   );
-  const callSessionId = result.rows[0]?.call_session_id;
-  if (!callSessionId) throw new HttpError(404, 'safety_case_not_found');
-  return callSessionId;
+  const row = result.rows[0];
+  if (!row?.call_session_id) throw new HttpError(404, 'safety_case_not_found');
+  return { callSessionId: row.call_session_id, caseResolvedAt: row.resolved_at };
 }
 
 // Metadata only -- recording ID, lifecycle state, retention/hold. Never a
@@ -48,7 +66,7 @@ export async function getRecordingForSafetyCase(
   await requireAdminCapability(req, RECORDING_CAPABILITY);
   const caseKind = caseKindFrom(rawCaseKind);
   const caseId = assertId(rawCaseId, 'invalid_safety_case');
-  const callSessionId = await resolveCaseCallSessionId(caseKind, caseId);
+  const { callSessionId, caseResolvedAt } = await resolveSafetyCase(caseKind, caseId);
 
   const result = await query<{
     id: string;
@@ -81,17 +99,26 @@ export async function getRecordingForSafetyCase(
       retentionUntil: row.retention_until,
       legalHold: row.legal_hold,
       legalHoldReasonCode: row.legal_hold_reason_code,
+      // Informational only (Mission E): when the linked case is closed, the
+      // date a still-active hold is due for admin review under the 180-day
+      // post-closure policy. null while the case remains open, or when there
+      // is no active hold. Never auto-acted on -- see legalHoldReviewDueAt's
+      // own doc comment.
+      legalHoldReviewDueAt: row.legal_hold && caseResolvedAt
+        ? legalHoldReviewDueAt(new Date(caseResolvedAt)).toISOString()
+        : null,
       failureCode: row.failure_code,
     },
   });
 }
 
-// Short-lived, case-linked, reason-coded, fully audited authorization. Does
-// NOT itself return a signed playback URL -- that step requires the archival
-// storage integration this branch intentionally does not provision (see
-// docs/W58_RECORDING_CORE_FOUNDATION.md, storage/archive interface). This
-// grant is the auditable authorization boundary a future storage integration
-// plugs a short-lived, server-generated URL into.
+// Short-lived, case-linked, reason-coded, fully audited authorization,
+// immediately followed by an attempt to resolve an actual playback URL
+// through the provider-neutral resolver boundary (providers/
+// recording-playback-resolver.ts). Never returns a long-lived provider token
+// or an unrestricted URL -- see that module's header for why the Cloudflare
+// RealtimeKit resolver fails closed today (no verified archival-storage
+// integration exists in this repo yet).
 export async function requestRecordingPlaybackGrant(
   req: IncomingMessage,
   res: ServerResponse,
@@ -107,8 +134,14 @@ export async function requestRecordingPlaybackGrant(
   const callSessionId = await resolveCaseCallSessionId(caseKind, caseId);
 
   const grant = await withTransaction(async (client) => {
-    const session = await client.query<{ id: string; call_session_id: string }>(`
-      SELECT id::text, call_session_id::text
+    const session = await client.query<{
+      id: string;
+      call_session_id: string;
+      provider: string;
+      provider_meeting_id: string | null;
+      provider_recording_id: string | null;
+    }>(`
+      SELECT id::text, call_session_id::text, provider, provider_meeting_id, provider_recording_id
       FROM private_data.call_recording_sessions
       WHERE id=$1
       FOR UPDATE
@@ -132,7 +165,44 @@ export async function requestRecordingPlaybackGrant(
       ))
     `, [admin.userId, recordingSessionId, caseKind, caseId, reasonCode]);
 
-    return inserted.rows[0];
+    // Fail-closed resolution: any resolver error becomes an 'unavailable'
+    // result (with an internal-only code, never surfaced to the client body)
+    // rather than a raw 500 or a fabricated URL.
+    let resolution: PlaybackResolutionResult;
+    try {
+      const resolver = await getPlaybackResolver(sessionRow.provider);
+      resolution = await resolver.resolvePlayback({
+        recordingSessionId,
+        provider: sessionRow.provider,
+        providerMeetingId: sessionRow.provider_meeting_id,
+        providerRecordingId: sessionRow.provider_recording_id,
+        ttlSeconds,
+      });
+    } catch (error) {
+      const code = error instanceof PlaybackResolverError ? error.code : 'playback_resolution_failed';
+      resolution = { status: 'unavailable', reason: code };
+    }
+
+    // Audit the resolution attempt itself (Mission C: "actual playback
+    // resolution/access event where practical"), and mark the grant as
+    // accessed -- deliberately never includes the URL/token, only status.
+    await client.query(`
+      UPDATE app.recording_playback_grants SET accessed_at=now() WHERE id=$1
+    `, [inserted.rows[0].id]);
+    await client.query(`
+      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1,'admin_recording_playback_resolved','recording_session',$2,jsonb_build_object(
+        'grantId',$3::text,'status',$4::text,'reason',$5::text
+      ))
+    `, [
+      admin.userId,
+      recordingSessionId,
+      inserted.rows[0].id,
+      resolution.status,
+      resolution.status === 'unavailable' ? resolution.reason : null,
+    ]);
+
+    return { ...inserted.rows[0], resolution };
   });
 
   sendJson(res, 201, {
@@ -141,8 +211,13 @@ export async function requestRecordingPlaybackGrant(
     recordingSessionId,
     authorizedAt: grant.authorized_at,
     expiresAt: grant.expires_at,
-    playbackUrl: null,
-    playbackUrlNote: 'archival storage integration not yet provisioned; see docs/W58_RECORDING_CORE_FOUNDATION.md',
+    // playbackUrl stays for existing callers: null unless the resolver
+    // actually produced a short-lived URL. `playback` is the structured,
+    // fail-closed-aware status new callers (apps/admin) should read instead.
+    playbackUrl: grant.resolution.status === 'available' ? grant.resolution.playbackUrl : null,
+    playback: grant.resolution.status === 'available'
+      ? { status: 'available', expiresAt: grant.resolution.expiresAt }
+      : { status: 'unavailable', reason: grant.resolution.reason },
   });
 }
 

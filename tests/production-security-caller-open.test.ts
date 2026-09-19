@@ -45,6 +45,7 @@ function baseEnv(): NodeJS.ProcessEnv {
     CHILD_SAFETY_URL: 'https://example.test/safety/children',
     SUPPORT_EMAIL: 'support@example.test',
     CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'legacy_p2p',
     CLOUDFLARE_TURN_KEY_ID: 'turnkey12345678',
     CLOUDFLARE_TURN_API_TOKEN: 'server-only-test-token',
     CLOUDFLARE_TURN_TTL_SECONDS: '14400',
@@ -135,4 +136,70 @@ test('caller-open production security config rejects a per-instance pool above t
   const result = runVerifier(env);
   assert.notEqual(result.status, 0);
   assert.match(`${result.stderr}\n${result.stdout}`, /DB_POOL_MAX is invalid/);
+});
+
+test('caller-open production security config fails closed on an unrecognized CALL_MEDIA_PROVIDER (no implicit default)', () => {
+  const env = baseEnv();
+  delete env.CALL_MEDIA_PROVIDER;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /CALL_MEDIA_PROVIDER must be realtimekit or legacy_p2p/);
+});
+
+test('caller-open production security config accepts RealtimeKit fully configured and never demands legacy TURN for it', () => {
+  const env = baseEnv();
+  env.CALL_MEDIA_PROVIDER = 'realtimekit';
+  delete env.CLOUDFLARE_TURN_KEY_ID;
+  delete env.CLOUDFLARE_TURN_API_TOKEN;
+  delete env.CLOUDFLARE_TURN_TTL_SECONDS;
+  env.INTERNET_VOICE_ICE_SERVERS_JSON = '';
+  env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID = 'acc';
+  env.CLOUDFLARE_REALTIMEKIT_APP_ID = 'app';
+  env.CLOUDFLARE_REALTIMEKIT_API_TOKEN = 'realtimekit-token';
+  env.CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME = 'voice-preset';
+  env.CALL_RECORDING_REQUIRED = 'true';
+  env.CALL_RECORDING_PROVIDER = 'cloudflare_realtimekit';
+  env.CALL_RECORDING_CONSENT_POLICY_VERSION = 'rec-2026-09-14';
+  const result = runVerifier(env);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /production security config verified/);
+});
+
+test('caller-open production security config fails closed when RealtimeKit identifiers are incomplete', () => {
+  const env = baseEnv();
+  env.CALL_MEDIA_PROVIDER = 'realtimekit';
+  env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID = 'acc';
+  delete env.CLOUDFLARE_REALTIMEKIT_APP_ID;
+  delete env.CLOUDFLARE_REALTIMEKIT_API_TOKEN;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID, CLOUDFLARE_REALTIMEKIT_APP_ID, and CLOUDFLARE_REALTIMEKIT_API_TOKEN are required/);
+});
+
+test('caller-open production security config fails closed when RealtimeKit is configured but recording is not required', () => {
+  const env = baseEnv();
+  env.CALL_MEDIA_PROVIDER = 'realtimekit';
+  env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID = 'acc';
+  env.CLOUDFLARE_REALTIMEKIT_APP_ID = 'app';
+  env.CLOUDFLARE_REALTIMEKIT_API_TOKEN = 'realtimekit-token';
+  env.CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME = 'voice-preset';
+  env.CALL_RECORDING_REQUIRED = 'false';
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /CALL_RECORDING_REQUIRED=true when CALL_MEDIA_PROVIDER=realtimekit/);
+});
+
+test('caller-open production security config fails closed when RealtimeKit recording provider or policy version is missing', () => {
+  const env = baseEnv();
+  env.CALL_MEDIA_PROVIDER = 'realtimekit';
+  env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID = 'acc';
+  env.CLOUDFLARE_REALTIMEKIT_APP_ID = 'app';
+  env.CLOUDFLARE_REALTIMEKIT_API_TOKEN = 'realtimekit-token';
+  env.CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME = 'voice-preset';
+  env.CALL_RECORDING_REQUIRED = 'true';
+  delete env.CALL_RECORDING_PROVIDER;
+  delete env.CALL_RECORDING_CONSENT_POLICY_VERSION;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}\n${result.stdout}`, /CALL_RECORDING_PROVIDER is required/);
 });

@@ -7,6 +7,7 @@ import {
   INTERNAL_OWNER_TEST_LISTENER_ID,
   isInternalOwnerTestMode,
   requireInternalOwnerTestAuthorization,
+  __resetInternalBetaRuntimeCacheForTests,
 } from '../services/api/src/lib/internal-owner-test.ts';
 import { HttpError } from '../services/api/src/lib/http.ts';
 
@@ -26,6 +27,7 @@ const MANAGED_ENV = [
 function withEnv(values: Record<string,string|undefined>, run: () => void) {
   const keys = [...new Set([...MANAGED_ENV, ...Object.keys(values)])];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  __resetInternalBetaRuntimeCacheForTests();
   try {
     for (const key of keys) delete process.env[key];
     for (const [key,value] of Object.entries(values)) {
@@ -37,6 +39,7 @@ function withEnv(values: Record<string,string|undefined>, run: () => void) {
       const value = previous[key];
       if (value === undefined) delete process.env[key]; else process.env[key]=value;
     }
+    __resetInternalBetaRuntimeCacheForTests();
   }
 }
 
@@ -171,6 +174,83 @@ test('internal beta never falls back to a normal/production database and rejects
   }, () => assert.equal(errorCode(() => isInternalOwnerTestMode()), 'internal_beta_database_must_be_isolated'));
 });
 
+test('a malformed dedicated Preview database URL fails closed', () => {
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:'not-a-postgres-url',
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => {
+    assert.equal(errorCode(() => isInternalOwnerTestMode()), 'internal_beta_database_url_invalid');
+  });
+});
+
+test('repeated isInternalOwnerTestMode calls stay bound to the isolated database instead of rejecting their own prior rebind', () => {
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:INTERNAL_LOCAL_DB,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => {
+    assert.equal(isInternalOwnerTestMode(), true);
+    assert.equal(process.env.DATABASE_URL, INTERNAL_LOCAL_DB);
+
+    // Second and third calls re-run initialization against a DATABASE_URL
+    // that now equals the dedicated database because of the first call's
+    // own rebind -- this must remain valid, not be treated as a fresh
+    // "normal DB equals dedicated" conflict.
+    assert.equal(isInternalOwnerTestMode(), true);
+    assert.equal(process.env.DATABASE_URL, INTERNAL_LOCAL_DB);
+    assert.equal(isInternalOwnerTestMode(), true);
+    assert.equal(process.env.DATABASE_URL, INTERNAL_LOCAL_DB);
+  });
+});
+
+test('a genuine conflict is still rejected even after a different dedicated database was already bound in this runtime', () => {
+  const remote = 'postgresql://same:same@db.example.invalid:5432/yeki_hast';
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:INTERNAL_LOCAL_DB,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => {
+    assert.equal(isInternalOwnerTestMode(), true);
+
+    // A different dedicated database is now configured (e.g. rotated) and
+    // happens to equal the current DATABASE_URL -- this must still fail
+    // closed even though some dedicated identity was already bound earlier
+    // in this same runtime.
+    process.env.INTERNAL_BETA_DATABASE_URL = remote;
+    process.env.DATABASE_URL = remote;
+    assert.equal(errorCode(() => isInternalOwnerTestMode()), 'internal_beta_database_must_be_isolated');
+  });
+});
+
+test('Production can never activate owner-test mode even mid-runtime after a Preview rebind already happened', () => {
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:INTERNAL_LOCAL_DB,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => {
+    assert.equal(isInternalOwnerTestMode(), true);
+  });
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:INTERNAL_LOCAL_DB,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'production',
+    NODE_ENV:'production',
+    DATABASE_URL:INTERNAL_LOCAL_DB,
+  }, () => {
+    assert.equal(isInternalOwnerTestMode(), false);
+  });
+});
+
 test('synthetic session path is bound to isolated database and production auth does not accept token format alone', async () => {
   withEnv({
     INTERNAL_BETA_OWNER_TEST_MODE:'1',
@@ -243,7 +323,7 @@ test('legacy production-runtime hydration path is removed', async () => {
   const source = await readFile(new URL('../services/api/src/lib/internal-owner-test.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /INTERNAL_BETA_RUNTIME_ENV_B64/);
   assert.doesNotMatch(source, /Buffer\.from\([^)]*base64/);
-  assert.match(source, /process\.env\.DATABASE_URL = dedicatedDatabaseUrl/);
+  assert.match(source, /process\.env\.DATABASE_URL = dedicated\.raw/);
 });
 
 test('Home freeze blobs remain exact', async () => {

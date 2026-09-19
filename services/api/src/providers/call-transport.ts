@@ -1,4 +1,7 @@
 import { validateTelephonyEnv } from './telephony.ts';
+import { currentCallMediaProvider, realtimeKitVoicePresetName } from '../lib/call-media-config.ts';
+import { currentRecordingPolicy, resolveRecordingEnvironment } from '../lib/recording-config.ts';
+import { requireCloudflareRealtimeKitConfig } from './recording-realtimekit.ts';
 
 export type CallTransportKind = 'internet_voice' | 'masked_pstn';
 export type InternetVoiceCredentialMode = 'none' | 'static' | 'cloudflare_short_lived';
@@ -211,13 +214,27 @@ export function validatePrimaryCallTransportEnv(): void {
     return;
   }
 
-  // Local development may exercise signaling/state logic without a relay. Public production
-  // must have a TURN relay because direct peer-to-peer connectivity is not reliable enough
-  // to be treated as an operational launch transport.
-  if (process.env.NODE_ENV === 'production') {
-    if (!readiness.internetVoice.configured) throw new Error('internet_voice_not_configured');
-    if (!readiness.internetVoice.relayConfigured) throw new Error('internet_voice_turn_required');
+  // Local development may exercise signaling/state logic without a relay. Any real
+  // deployment (Preview or Production -- Vercel sets NODE_ENV=production for both)
+  // must have a working call-media path configured end to end.
+  if (process.env.NODE_ENV !== 'production') return;
+
+  // RealtimeKit owns signaling/media relay on this path: it must never be held to the
+  // legacy TURN/static-ICE contract, which it doesn't use and can't satisfy meaningfully.
+  // legacy_p2p is the only path that still relies on this module's own TURN relay.
+  if (currentCallMediaProvider() === 'realtimekit') {
+    requireCloudflareRealtimeKitConfig();
+    realtimeKitVoicePresetName();
+    // Recording is a separate, independently fail-closed requirement (see
+    // packages/domain/src/recording.ts) -- only enforced for real Production,
+    // since Preview may still run the explicit CALL_RECORDING_REQUIRED=false
+    // technical-beta exception even while using realtimekit for media.
+    if (resolveRecordingEnvironment() === 'production') currentRecordingPolicy();
+    return;
   }
+
+  if (!readiness.internetVoice.configured) throw new Error('internet_voice_not_configured');
+  if (!readiness.internetVoice.relayConfigured) throw new Error('internet_voice_turn_required');
 }
 
 export async function getInternetVoiceClientConfig(input?: { iranDomestic?: boolean }): Promise<InternetVoiceClientConfig> {

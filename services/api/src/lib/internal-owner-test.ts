@@ -32,6 +32,21 @@ function isLocalDatabase(url: URL): boolean {
   return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
 }
 
+// initializeInternalBetaRuntime() below re-points process.env.DATABASE_URL at
+// the dedicated isolated database on every successful call, and
+// isInternalOwnerTestMode() is designed to be called many times per request
+// (see services/api/src/lib/env.ts#validateDatabaseEnv) and across warm
+// serverless invocations of the same process. Without this memo, the
+// DATABASE_URL-equality check below would deterministically self-trip on the
+// second call onward: DATABASE_URL now equals INTERNAL_BETA_DATABASE_URL
+// because THIS module set it that way a moment ago, not because of any real
+// misconfiguration. Keyed by the dedicated URL itself (not a bare boolean) so
+// a change in INTERNAL_BETA_DATABASE_URL is still re-verified, and so this
+// cannot mask a case where DATABASE_URL was equal to the dedicated URL
+// before this module ever ran (that still throws on the first call, exactly
+// as tests/internal-owner-test-mode.test.ts's isolation tests require).
+const selfInitializedDedicatedDatabaseUrls = new Set<string>();
+
 function requireDedicatedInternalBetaDatabase(): string {
   const dedicated = parseDatabaseUrl('INTERNAL_BETA_DATABASE_URL', process.env.INTERNAL_BETA_DATABASE_URL);
   const production = process.env.PRODUCTION_DATABASE_URL?.trim();
@@ -43,13 +58,14 @@ function requireDedicatedInternalBetaDatabase(): string {
   }
 
   const normal = process.env.DATABASE_URL?.trim();
-  if (normal) {
+  if (normal && !selfInitializedDedicatedDatabaseUrls.has(dedicated.raw)) {
     const parsedNormal = parseDatabaseUrl('DATABASE_URL', normal);
     if (!isLocalDatabase(dedicated.url)
       && databaseIdentity(parsedNormal.url) === databaseIdentity(dedicated.url)) {
       throw new HttpError(503, 'internal_beta_database_must_be_isolated');
     }
   }
+  selfInitializedDedicatedDatabaseUrls.add(dedicated.raw);
   return dedicated.raw;
 }
 

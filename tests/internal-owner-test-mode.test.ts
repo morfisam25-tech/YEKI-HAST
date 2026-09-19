@@ -171,6 +171,42 @@ test('internal beta never falls back to a normal/production database and rejects
   }, () => assert.equal(errorCode(() => isInternalOwnerTestMode()), 'internal_beta_database_must_be_isolated'));
 });
 
+test('W86B: isInternalOwnerTestMode() stays true across repeated calls in the same process instead of self-tripping on its own DATABASE_URL mutation', () => {
+  // Regression for a real Preview deployment bug: env.ts#validateDatabaseEnv
+  // (and other call sites) call isInternalOwnerTestMode() multiple times per
+  // request and across warm serverless invocations. The very first success
+  // re-points process.env.DATABASE_URL at the dedicated URL -- a naive
+  // repeat of the DATABASE_URL-equality check would then see DATABASE_URL
+  // now equal to INTERNAL_BETA_DATABASE_URL and (wrongly) throw
+  // internal_beta_database_must_be_isolated on the second call onward.
+  const dedicated = 'postgresql://repeat-call:repeat-call@db.example.invalid:5432/yeki_hast_repeat_call_regression';
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:dedicated,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => {
+    for (let call = 0; call < 5; call += 1) {
+      assert.equal(isInternalOwnerTestMode(), true);
+      assert.equal(process.env.DATABASE_URL, dedicated);
+    }
+  });
+
+  // A DIFFERENT dedicated URL that this module has never self-applied must
+  // still fail closed the first time DATABASE_URL is pre-set to match it --
+  // proves the memo is keyed per-URL, not a blanket bypass of the guard.
+  const neverSelfApplied = 'postgresql://never-self-applied:never-self-applied@db.example.invalid:5432/yeki_hast';
+  withEnv({
+    INTERNAL_BETA_OWNER_TEST_MODE:'1',
+    INTERNAL_BETA_DATABASE_URL:neverSelfApplied,
+    INTERNAL_BETA_OWNER_TEST_AUTH_TOKEN:VALID_OWNER_TOKEN,
+    DATABASE_URL:neverSelfApplied,
+    VERCEL_ENV:'preview',
+    NODE_ENV:'production',
+  }, () => assert.equal(errorCode(() => isInternalOwnerTestMode()), 'internal_beta_database_must_be_isolated'));
+});
+
 test('synthetic session path is bound to isolated database and production auth does not accept token format alone', async () => {
   withEnv({
     INTERNAL_BETA_OWNER_TEST_MODE:'1',

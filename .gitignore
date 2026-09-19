@@ -11,3 +11,6 @@ dist-api
 *.log
 coverage
 apps/mobile/assets/generated/
+
+.vercel
+.env*

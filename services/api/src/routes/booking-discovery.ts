@@ -121,7 +121,7 @@ export async function browseBookableListeners(req: IncomingMessage, res: ServerR
       id: row.listener_user_id,
       nickname: row.nickname,
       gender: row.gender,
-      verified: true,
+      workEligible: true,
       reliabilityScore: row.reliability_score,
       shortIntro: row.short_intro,
       listeningStyle: row.style_text,

@@ -180,6 +180,11 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && recordingConsentMatch) { ensureDatabaseReady(); const { postCallRecordingConsent } = await import('./routes/call-recording.ts'); return await postCallRecordingConsent(req, res, recordingConsentMatch[1]); }
     const recordingStatusMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/recording-status$/);
     if (method === 'GET' && recordingStatusMatch) { ensureDatabaseReady(); const { getCallRecordingStatus } = await import('./routes/call-recording.ts'); return await getCallRecordingStatus(req, res, recordingStatusMatch[1]); }
+    // W81A: RealtimeKit `recording.statusUpdate` webhook. Not admin-session
+    // authenticated -- Cloudflare calls this directly; authenticity is the
+    // rtk-signature verification inside the handler itself (see
+    // routes/recording-webhook.ts).
+    if (method === 'POST' && url.pathname === '/v1/webhooks/realtimekit/recording') { ensureDatabaseReady(); const { handleRealtimeKitRecordingWebhook } = await import('./routes/recording-webhook.ts'); return await handleRealtimeKitRecordingWebhook(req, res); }
 
     const voiceStartMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/start$/);
     if (method === 'POST' && voiceStartMatch) { requireCallerClosedBetaEnabled(); ensureCallReady(); const { startInternetVoiceCall } = await import('./routes/internet-voice.ts'); return await startInternetVoiceCall(req, res, voiceStartMatch[1]); }

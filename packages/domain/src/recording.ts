@@ -132,3 +132,26 @@ export function isPurgeEligible(now: Date, eligibleAt: Date | null, legalHold: b
   if (!eligibleAt) return false;
   return now.getTime() >= eligibleAt.getTime();
 }
+
+// W81A: locked policy (see tests/recording-config.test.ts) is that a legal
+// hold tied to a safety/complaint case may stay active through the case's
+// full lifecycle, then for up to this many more days after the case's final
+// closure -- not indefinitely. This computes only a review-due date for
+// admin visibility (surfaced in getRecordingForSafetyCase, apps/admin/app/
+// recordings/page.tsx); nothing in this codebase reads it to auto-release a
+// hold. Release stays an explicit, audited admin action (see
+// services/api/src/routes/admin-recording.ts releaseRecordingHold) because no
+// case-lifecycle scheduler/sweep exists in this repo to drive an automatic
+// one, and inventing one is out of scope here.
+export const LEGAL_HOLD_POST_CLOSURE_REVIEW_DAYS = 180;
+
+export function legalHoldReviewDueAt(
+  caseResolvedAt: Date | null,
+  postClosureReviewDays: number = LEGAL_HOLD_POST_CLOSURE_REVIEW_DAYS,
+): Date | null {
+  if (!caseResolvedAt) return null;
+  if (!Number.isFinite(postClosureReviewDays) || postClosureReviewDays <= 0) {
+    throw new Error('postClosureReviewDays must be a positive number');
+  }
+  return new Date(caseResolvedAt.getTime() + postClosureReviewDays * 24 * 60 * 60 * 1000);
+}

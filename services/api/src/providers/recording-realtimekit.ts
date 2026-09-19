@@ -8,25 +8,42 @@ import {
   type RecordingStopResult,
 } from './recording.ts';
 
-// Cloudflare RealtimeKit REST API, current as of this branch (verified against
-// developers.cloudflare.com/realtime/realtimekit/ -- recording-guide/,
-// rest-api/resources/meetings, rest-api/resources/recordings). Do not change
-// these paths/fields without re-checking the live docs: this repo has no
-// automated contract test against the real API (no live credentials exist
-// yet -- see docs/W58_RECORDING_CORE_FOUNDATION.md, "remaining W54/W60
-// dependency").
+// Cloudflare RealtimeKit REST API. Re-verified W81A (2026-09-19) against the
+// live current docs: developers.cloudflare.com/realtime/realtimekit/ --
+// recording-guide/, recording-guide/monitor-status/, api/resources/
+// realtime_kit/subresources/recordings/methods/{start_recordings,
+// get_one_recording}/, and realtime/realtimekit/webhooks/ (see
+// recording-webhook.ts). Do not change these paths/fields without
+// re-checking the live docs: this repo still has no automated contract test
+// against a live Cloudflare account/credentials (see
+// docs/W58_RECORDING_CORE_FOUNDATION.md, "remaining W54/W60 dependency") --
+// everything here is verified against Cloudflare's published API reference,
+// not exercised against a real account.
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4/accounts';
 const REQUEST_TIMEOUT_MS = 8_000;
 
-// Cloudflare's own vocabulary for recording.status, as documented on the
-// recordings REST resource page. Anything not in this list is treated as
-// unrecognized (see normalizeStatus below) rather than guessed at.
+// Opt-in only (W81A): adding audio_config changes what Cloudflare actually
+// records/stores for every future recording, which this branch has no live
+// account to observe the real effect of (storage/cost/format). Defaults to
+// the pre-W81A behavior (no audio_config, exactly as before) unless an
+// operator explicitly turns it on after reviewing that live effect.
+function audioExportEnabled(): boolean {
+  return process.env.CALL_RECORDING_AUDIO_EXPORT_ENABLED?.trim().toLowerCase() === 'true';
+}
+
+// Cloudflare's own vocabulary for recording.status. Re-verified W81A
+// (2026-09-19) against the live current docs: developers.cloudflare.com/
+// realtime/realtimekit/recording-guide/monitor-status/ ("Recording states")
+// and the Fetch-details-of-a-recording REST resource's full status enum
+// (six members: INVOKED, RECORDING, UPLOADING, UPLOADED, ERRORED, PAUSED).
+// 'STARTED' and 'STOPPED' -- present in this set before W81A -- are NOT part
+// of that documented enum and have been removed; anything Cloudflare sends
+// that is not one of these six is unrecognized (see normalizeStatus below)
+// and fails closed rather than being guessed at.
 const KNOWN_PROVIDER_STATUSES = new Set([
   'INVOKED',
-  'STARTED',
   'RECORDING',
   'PAUSED',
-  'STOPPED',
   'UPLOADING',
   'UPLOADED',
   'ERRORED',
@@ -101,13 +118,10 @@ function normalizeStatus(providerStatus: string): RecordingState {
   if (!KNOWN_PROVIDER_STATUSES.has(providerStatus)) return 'failed';
   switch (providerStatus) {
     case 'INVOKED':
-    case 'STARTED':
       return 'starting';
     case 'RECORDING':
     case 'PAUSED':
       return 'recording';
-    case 'STOPPED':
-      return 'stopping';
     case 'UPLOADING':
       return 'uploading';
     case 'UPLOADED':
@@ -138,6 +152,11 @@ export function createCloudflareRealtimeKitProvider(): RecordingProvider {
       const data = await callCloudflareApi<{ id: string; status: string }>(config, 'POST', '/recordings', {
         meeting_id: input.providerMeetingId,
         max_seconds: Math.min(Math.max(input.maxSeconds, 60), 86_400),
+        // audio_config schema verified W81A against the Start-Recording REST
+        // resource (channel: "mono"|"stereo", codec: "MP3"|"AAC",
+        // export_file: boolean). See audioExportEnabled()'s doc comment for
+        // why this stays opt-in.
+        ...(audioExportEnabled() ? { audio_config: { channel: 'mono', codec: 'MP3', export_file: true } } : {}),
       });
       if (!data?.id || !data.status) throw new RecordingProviderError('cloudflare_realtimekit_start_failed');
       return { providerRecordingId: data.id, providerStatus: data.status };
@@ -178,6 +197,75 @@ export function createCloudflareRealtimeKitProvider(): RecordingProvider {
     },
 
     normalizeStatus,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// W81A: typed, fully-normalized recording details. A superset of
+// getRecordingStatus above (kept as-is for existing callers/tests) -- this is
+// for callers that need the fields the "Fetch details of a recording" REST
+// resource returns beyond just status/started/stopped: file size, duration,
+// output file name, session id, and the *transient* (RealtimeKit-hosted,
+// 7-day) download URLs. Field names verified W81A against that REST
+// resource's current schema (see this file's header comment).
+//
+// The transient*Url fields are exactly that: transient. They are NOT this
+// platform's durable archive reference (private_data.call_recording_segments
+// .storage_reference_ciphertext) -- RealtimeKit deletes its own copy after 7
+// days, well inside this platform's 30-day normal retention policy, so they
+// must never be persisted or returned to an admin as if they were a stable
+// playback source. See providers/recording-playback-resolver.ts for why
+// admin playback stays fail-closed until a real archive integration exists.
+// ---------------------------------------------------------------------------
+
+export interface CloudflareRealtimeKitRecordingDetails {
+  providerRecordingId: string;
+  providerStatus: string;
+  sessionId: string | null;
+  outputFileName: string | null;
+  invokedAt: string | null;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  recordingDurationSeconds: number | null;
+  fileSizeBytes: number | null;
+  transientDownloadUrl: string | null;
+  transientAudioDownloadUrl: string | null;
+  transientDownloadUrlExpiry: string | null;
+}
+
+export async function getCloudflareRealtimeKitRecordingDetails(
+  providerRecordingId: string,
+): Promise<CloudflareRealtimeKitRecordingDetails> {
+  const config = requireCloudflareRealtimeKitConfig();
+  const data = await callCloudflareApi<{
+    id: string;
+    status: string;
+    session_id?: string | null;
+    output_file_name?: string | null;
+    invoked_time?: string | null;
+    started_time?: string | null;
+    stopped_time?: string | null;
+    recording_duration?: number | null;
+    file_size?: number | null;
+    download_url?: string | null;
+    audio_download_url?: string | null;
+    download_url_expiry?: string | null;
+  }>(config, 'GET', `/recordings/${encodeURIComponent(providerRecordingId)}`);
+  if (!data?.id || !data.status) throw new RecordingProviderError('cloudflare_realtimekit_status_unavailable');
+
+  return {
+    providerRecordingId: data.id,
+    providerStatus: data.status,
+    sessionId: data.session_id ?? null,
+    outputFileName: data.output_file_name ?? null,
+    invokedAt: data.invoked_time ?? null,
+    startedAt: data.started_time ?? null,
+    stoppedAt: data.stopped_time ?? null,
+    recordingDurationSeconds: data.recording_duration ?? null,
+    fileSizeBytes: data.file_size ?? null,
+    transientDownloadUrl: data.download_url ?? null,
+    transientAudioDownloadUrl: data.audio_download_url ?? null,
+    transientDownloadUrlExpiry: data.download_url_expiry ?? null,
   };
 }
 

@@ -6,6 +6,8 @@ import {
   isPurgeEligible,
   isRecordingActiveForBilling,
   isRecordingTerminallyFailed,
+  LEGAL_HOLD_POST_CLOSURE_REVIEW_DAYS,
+  legalHoldReviewDueAt,
   purgeEligibleAt,
   resolveRecordingRequirement,
 } from '../packages/domain/src/recording.ts';
@@ -152,4 +154,16 @@ test('purge eligibility respects legal hold and the retention window', () => {
   assert.equal(isPurgeEligible(new Date('2026-03-01T00:00:00.000Z'), eligible, false), false);
   assert.equal(isPurgeEligible(new Date('2026-05-01T00:00:00.000Z'), eligible, false), true);
   assert.equal(isPurgeEligible(new Date('2026-05-01T00:00:00.000Z'), eligible, true), false);
+});
+
+test('legal hold review-due date is 180 days after the case closes, and null while it is still open', () => {
+  assert.equal(LEGAL_HOLD_POST_CLOSURE_REVIEW_DAYS, 180);
+  assert.equal(legalHoldReviewDueAt(null), null);
+  const dueAt = legalHoldReviewDueAt(new Date('2026-01-01T00:00:00.000Z'));
+  assert.equal(dueAt?.toISOString(), '2026-06-30T00:00:00.000Z');
+});
+
+test('legal hold review-due date rejects a non-positive window instead of silently no-op-ing', () => {
+  assert.throws(() => legalHoldReviewDueAt(new Date('2026-01-01T00:00:00.000Z'), 0), /postClosureReviewDays/);
+  assert.throws(() => legalHoldReviewDueAt(new Date('2026-01-01T00:00:00.000Z'), -5), /postClosureReviewDays/);
 });

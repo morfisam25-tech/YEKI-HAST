@@ -95,15 +95,25 @@ test('W87 admin approval UI shows field-level KYC evidence and gates final decis
   assert.match(adminProxy, /browserMutationAllowed/);
 });
 
-test('W87 Listener agreement is a real explicit UI action, not silent consent', () => {
-  const page = source('apps/web/app/listener/agreement/page.tsx');
-  const layout = source('apps/web/app/listener/layout.tsx');
-  const proxy = source('apps/web/app/api/listener/[...path]/route.ts');
+test('W87 Listener agreement is an explicit action on Web and Mobile, never silent consent', () => {
+  const webPage = source('apps/web/app/listener/agreement/page.tsx');
+  const webLayout = source('apps/web/app/listener/layout.tsx');
+  const webProxy = source('apps/web/app/api/listener/[...path]/route.ts');
+  const mobileKyc = source('apps/mobile/src/ListenerKycScreen.tsx');
+  const mobileTraining = source('apps/mobile/src/ListenerTrainingScreen.tsx');
+  const mobileAgreementApi = source('apps/mobile/src/listener-agreement-api.ts');
 
-  assert.match(page, /type="checkbox"/);
-  assert.match(page, /accepted: true/);
-  assert.match(page, /terms-2026-09-13/);
-  assert.match(page, /listener\/agreement/);
-  assert.match(layout, /agreement_pending/);
-  assert.match(proxy, /\^listener\\\/agreement\$/);
+  assert.match(webPage, /type="checkbox"/);
+  assert.match(webPage, /accepted: true/);
+  assert.match(webPage, /terms-2026-09-13/);
+  assert.match(webPage, /listener\/agreement/);
+  assert.match(webLayout, /agreement_pending/);
+  assert.match(webProxy, /\^listener\\\/agreement\$/);
+
+  assert.match(mobileTraining, /'agreement_pending'/);
+  assert.match(mobileTraining, /return <ListenerKycScreen token=\{token\}/);
+  assert.match(mobileKyc, /accessibilityRole="checkbox"/);
+  assert.match(mobileKyc, /terms-2026-09-13/);
+  assert.match(mobileKyc, /acceptListenerAgreement\(token\)/);
+  assert.match(mobileAgreementApi, /body: JSON\.stringify\(\{ accepted: true \}\)/);
 });

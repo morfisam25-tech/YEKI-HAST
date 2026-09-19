@@ -76,8 +76,7 @@ const checks = [
   ['OTP has IP and global request limits', authRoute.includes('OTP_IP_LIMIT_PER_15M') && authRoute.includes('OTP_GLOBAL_LIMIT_PER_15M')],
   ['OTP request rate-limit section is concurrency serialized', authRoute.includes("pg_advisory_xact_lock(hashtextextended('yeki_hast:otp_request_rate_limit', 0))")],
   ['all stored money values use bigint', !/(?:balance|reserved|authorized|amount|charge|earning|spread|cost|rate)[a-z_]*_minor\s+(?:integer|int|smallint)\b/i.test(sql)],
-  ['optional payout source FKs are safe under MATCH SIMPLE', /currency_code char\(3\) NOT NULL/.test(sql) && sql.includes("CHECK ((earning_id IS NULL) <> (guarantee_assignment_id IS NULL))") && !/FOREIGN KEY \(earning_id, currency_code\)[^;\
-]*MATCH FULL/i.test(sql)],
+  ['optional payout source FKs are safe under MATCH SIMPLE', /currency_code char\(3\) NOT NULL/.test(sql) && sql.includes("CHECK ((earning_id IS NULL) <> (guarantee_assignment_id IS NULL))") && !/FOREIGN KEY \(earning_id, currency_code\)[^;\n]*MATCH FULL/i.test(sql)],
   ['DEV OTP fails closed', authRoute.includes("process.env.NODE_ENV === 'development'")],
   ['auth rejects suspended users', authLib.includes("u.status='active'")],
   ['listener terminal applications locked', listenerRoute.includes("WHERE existing.status IN ('exploring','training','assessment')")],
@@ -127,7 +126,7 @@ const checks = [
   ['media-auth route derives participant role from the call row itself, never from client input', internetVoiceMediaRoute.includes('row.caller_user_id === userId') && internetVoiceMediaRoute.includes('row.listener_user_id === userId')],
   ['media-auth requires this participant\'s own recording consent when recording is required', internetVoiceMediaRoute.includes("row.recording_mode === 'all_with_consent'") && internetVoiceMediaRoute.includes('requireParticipantRecordingConsent(client, rawCallId, userId)')],
   ['RealtimeKit participant auth never returns the Cloudflare API token, only the short-lived participant token', !/apiToken/.test(internetVoiceMediaRoute) && recordingRealtimeKit.includes('return { participantId: data.id, token: data.token };')],
-  ['recording start reuses the media session\'s meeting instead of creating a second Cloudflare meeting', callMediaSession.includes('providerImpl.prepareSession({ callSessionId })'],
+  ['recording start reuses the media session\'s meeting instead of creating a second Cloudflare meeting', callMediaSession.includes('providerImpl.prepareSession({ callSessionId })')],
   ['RealtimeKit path rejects legacy custom SDP offer/answer/ICE at the signaling endpoint (task section 10)', internetVoiceRoute.includes("throw new HttpError(409, 'legacy_signaling_disabled')")],
   ['media-provider readiness reuses the config module\'s exported guard rather than re-parsing Cloudflare env vars', callMediaConfig.includes("CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME")],
 
@@ -168,9 +167,7 @@ const checks = [
   ['mobile eas.json build profiles carry an explicit EXPO_PUBLIC_APP_ENV identity', mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "preview_internal_beta"') && mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "production"')],
 
   // W63 production release profile closure (W61 P0-2)
-  ['deploy-production-api.yml requires an explicit release_profile choice, Internal Beta first', /release_profile:[\s\S]*?type: choice[\s\S]*?options:\
-\s*- internal_beta\
-\s*- public_release/.test(deployProductionApiYml)],
+  ['deploy-production-api.yml requires an explicit release_profile choice, Internal Beta first', /release_profile:[\s\S]*?type: choice[\s\S]*?options:\n\s*- internal_beta\n\s*- public_release/.test(deployProductionApiYml)],
   ['deploy-production-api.yml wires the dispatch choice straight through and validates it before any deploy step runs', deployProductionApiYml.includes('PRODUCTION_RELEASE_PROFILE: ${{ github.event.inputs.release_profile }}') && deployProductionApiYml.includes('release_profile must be an explicit choice of internal_beta or public_release')],
 
   // W63 production DB verifier closure (W61 P0-3)

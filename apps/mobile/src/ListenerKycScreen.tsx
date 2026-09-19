@@ -18,7 +18,7 @@ function messageFor(code: string): string {
     kyc_not_configured: 'ثبت امن اطلاعات هویتی هنوز روی این محیط فعال نشده.',
     kyc_provider_not_configured: 'سرویس استعلام واقعی احراز هویت هنوز روی این محیط فعال نشده.',
     kyc_not_available: 'مرحله احراز هویت هنوز برای این درخواست باز نشده.',
-    kyc_already_verified: 'احراز هویت قبلاً تأیید شده است.',
+    kyc_already_verified: 'موارد لازم برای این حساب قبلاً با موفقیت بررسی شده‌اند.',
     kyc_pending_review: 'اطلاعات احراز هویت قبلاً ثبت شده و هنوز در حال بررسی است.',
     invalid_legal_name: 'نام و نام خانوادگی را مطابق مدرک هویتی وارد کن.',
     invalid_national_id: 'کد ملی معتبر نیست.',
@@ -31,6 +31,19 @@ function messageFor(code: string): string {
   };
   return messages[code] ?? 'خطایی رخ داد. دوباره امتحان کن.';
 }
+
+const kycCheckLabels: Record<string, string> = {
+  national_id_dob_match: 'تطبیق کد ملی و تاریخ تولد',
+  iban_inquiry: 'استعلام شبا/حساب بانکی',
+};
+
+const kycCheckStatusLabels: Record<string, string> = {
+  not_checked: 'هنوز بررسی نشده',
+  pending: 'در حال بررسی',
+  verified: 'با موفقیت انجام شد',
+  failed: 'ناموفق',
+  error: 'خطای سرویس، نامشخص',
+};
 
 function normalizeDigits(value: string): string {
   return value
@@ -107,8 +120,13 @@ export default function ListenerKycScreen({ token, onDone }: Props) {
   if (status.status === 'verified') {
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>احراز هویت تأیید شد</Text>
-        <Text style={styles.body}>اطلاعات واقعی تو خصوصی می‌ماند. مرحله بعدی قرارداد و بررسی نهایی است.</Text>
+        <Text style={styles.title}>موارد لازم بررسی شدند</Text>
+        {status.checks.map((check) => (
+          <Text key={check.checkKind} style={styles.body}>
+            {kycCheckLabels[check.checkKind] ?? check.checkKind}: {kycCheckStatusLabels[check.status] ?? check.status}
+          </Text>
+        ))}
+        <Text style={styles.body}>این فقط همین موارد مشخص را تأیید می‌کند، نه احراز هویت کامل یا تصویر مدرک. اطلاعات واقعی تو خصوصی می‌ماند. مرحله بعدی قرارداد و بررسی نهایی است.</Text>
         <TouchableOpacity style={styles.secondaryButton} onPress={onDone}><Text style={styles.secondaryText}>برگشت</Text></TouchableOpacity>
       </View>
     );

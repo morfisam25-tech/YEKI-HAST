@@ -41,12 +41,28 @@ type Application = {
   };
 };
 
+type KycCheck = { checkKind: string; status: string; resolvedAt: string | null };
+
 type KycStatus = {
   applicationStatus: string;
   status: KycState;
   verifiedAt: string | null;
   rejectedReasonCode: string | null;
   updatedAt: string | null;
+  checks: KycCheck[];
+};
+
+const kycCheckLabels: Record<string, string> = {
+  national_id_dob_match: 'تطبیق کد ملی و تاریخ تولد',
+  iban_inquiry: 'استعلام شبا/حساب بانکی',
+};
+
+const kycCheckStatusLabels: Record<string, string> = {
+  not_checked: 'هنوز بررسی نشده',
+  pending: 'در حال بررسی',
+  verified: 'با موفقیت انجام شد',
+  failed: 'ناموفق',
+  error: 'خطای سرویس، نامشخص',
 };
 
 const trainingModules: Array<{ key: TrainingModuleKey; title: string; body: string }> = [
@@ -227,7 +243,7 @@ function messageFor(code: string): string {
     kyc_not_configured: 'ثبت امن اطلاعات هویتی در این محیط هنوز فعال نشده است.',
     kyc_provider_not_configured: 'سرویس استعلام واقعی احراز هویت هنوز در این محیط فعال نشده است.',
     kyc_not_available: 'مرحله احراز هویت هنوز برای این درخواست باز نشده است.',
-    kyc_already_verified: 'احراز هویت قبلاً تأیید شده است.',
+    kyc_already_verified: 'موارد لازم برای این حساب قبلاً با موفقیت بررسی شده‌اند.',
     kyc_pending_review: 'اطلاعات احراز هویت قبلاً ثبت شده و هنوز در حال بررسی است.',
     invalid_legal_name: 'نام و نام خانوادگی را مطابق مدرک وارد کن.',
     invalid_national_id: 'کد ملی معتبر نیست.',
@@ -663,8 +679,15 @@ export default function ListenerOnboardingPage() {
 
           {kycStatus?.status === 'verified' && (
             <div className="status-notice">
-              <strong>احراز هویت تأیید شده است.</strong>
-              <span>اگر حساب هنوز Approved نشده، مرحله بررسی نهایی/قرارداد باقی مانده است.</span>
+              <strong>موارد زیر از طریق سرویس بیرونی بررسی و تأیید شدند:</strong>
+              <ul>
+                {kycStatus.checks.map((check) => (
+                  <li key={check.checkKind}>
+                    {kycCheckLabels[check.checkKind] ?? check.checkKind}: {kycCheckStatusLabels[check.status] ?? check.status}
+                  </li>
+                ))}
+              </ul>
+              <span>این فقط همین موارد مشخص را تأیید می‌کند، نه احراز هویت کامل یا تصویر مدرک. اگر حساب هنوز Approved نشده، مرحله بررسی نهایی/قرارداد باقی مانده است.</span>
             </div>
           )}
 

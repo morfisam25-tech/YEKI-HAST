@@ -110,12 +110,15 @@ export type ListenerApplicationResponse = {
   };
 };
 
+export type ListenerKycCheck = { checkKind: string; status: string; resolvedAt: string | null };
+
 export type ListenerKycStatusResponse = {
   applicationStatus: string;
   status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
   verifiedAt: string | null;
   rejectedReasonCode: string | null;
   updatedAt: string | null;
+  checks: ListenerKycCheck[];
 };
 
 export type ListenerPresenceResponse = {

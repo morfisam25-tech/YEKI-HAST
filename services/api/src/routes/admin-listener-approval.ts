@@ -79,6 +79,9 @@ async function activateApprovedProfile(
 ): Promise<void> {
   await client.query("INSERT INTO app.user_roles(user_id, role) VALUES ($1,'listener') ON CONFLICT DO NOTHING", [application.user_id]);
 
+  // `is_verified` is a legacy schema column. In this workflow it is only the
+  // internal approved/work-eligible account gate. Public discovery exposes
+  // `workEligible`, never a generic identity-verification claim.
   // `reliability_score` deliberately uses the schema default on first insert;
   // approval does not invent or reset a quality score.
   await client.query(`
@@ -111,6 +114,25 @@ async function activateApprovedProfile(
   `, [application.id, application.user_id]);
 }
 
+async function deactivateRejectedProfile(
+  client: SqlClient,
+  application: { user_id: string; service_id: string },
+): Promise<void> {
+  // Normally an admin_review applicant has no sellable profile yet. These
+  // updates are a fail-closed backstop for stale/manual/pre-W87 rows: rejecting
+  // an application must never leave an anomalous public profile eligible.
+  await client.query(`
+    UPDATE app.listener_service_profiles
+    SET is_public=false, updated_at=now()
+    WHERE listener_user_id=$1 AND service_id=$2 AND is_public=true
+  `, [application.user_id, application.service_id]);
+  await client.query(`
+    UPDATE app.listener_profiles
+    SET is_verified=false, updated_at=now()
+    WHERE user_id=$1 AND is_verified=true
+  `, [application.user_id]);
+}
+
 export async function decideListenerApplication(
   req: IncomingMessage,
   res: ServerResponse,
@@ -124,6 +146,7 @@ export async function decideListenerApplication(
   }
   const decision = body.decision;
   const reason = reviewReason(body.reason);
+  if (decision === 'reject' && !reason) throw new HttpError(400, 'listener_rejection_reason_required');
 
   const result = await withTransaction(async (client) => {
     const applicationResult = await client.query<{
@@ -188,6 +211,7 @@ export async function decideListenerApplication(
     }
 
     if (application.status === 'rejected') {
+      await deactivateRejectedProfile(client, application);
       return { decision, applicationStatus: 'rejected', idempotent: true, reason };
     }
     if (application.status === 'approved' || application.status === 'active') {
@@ -195,6 +219,7 @@ export async function decideListenerApplication(
     }
     if (application.status !== 'admin_review') throw new HttpError(409, 'listener_application_not_in_admin_review');
 
+    await deactivateRejectedProfile(client, application);
     await client.query(`
       UPDATE app.listener_applications
       SET status='rejected', approved_at=NULL, updated_at=now()
@@ -203,7 +228,7 @@ export async function decideListenerApplication(
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
       VALUES ($1,'listener_application_rejected','listener_application',$2,
-              jsonb_build_object('adminRole',$3::text,'reason',$4::text))
+              jsonb_build_object('adminRole',$3::text,'reason',$4::text,'profileDeactivated',true))
     `, [admin.userId, application.id, admin.adminRole, reason]);
     return { decision, applicationStatus: 'rejected', idempotent: false, reason };
   });

@@ -159,11 +159,15 @@ const checks = [
     mobileApiTs.includes("env === 'preview_internal_beta' || env === 'closed_test'")
       && mobileApiTs.includes('EXPO_PUBLIC_API_BASE_URL is required in ${env}')
       && mobileApiTs.includes('EXPO_PUBLIC_API_BASE_URL must not point at the Production API origin in ${env}')],
-  ['mobile Production API base URL behavior remains separately fail-closed',
-    mobileApiTs.includes("env === 'production' && !rawBaseUrl")
-      && mobileApiTs.includes('EXPO_PUBLIC_API_BASE_URL is required in production')
-      && mobileApiTs.includes("env === 'production' && !isProductionApiOrigin(configuredApiBase)")
-      && mobileApiTs.includes('Production builds must use the Production API origin')],
+  ['mobile Production API base URL behavior remains explicit and pinned to the canonical Production origin',
+    mobileApiTs.includes("if (env === 'production') {")
+      && mobileApiTs.includes("return (configured || PRODUCTION_API_BASE_URL).replace(/\\/$/, '');")
+      && mobileApiTs.includes("export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-unique-6ff0.vercel.app';")
+      && (() => {
+        const eas = JSON.parse(mobileEasJson);
+        return eas.build.production.env.EXPO_PUBLIC_APP_ENV === 'production'
+          && eas.build.production.env.EXPO_PUBLIC_API_BASE_URL === 'https://yeki-hast-unique-6ff0.vercel.app';
+      })()],
   ['mobile eas.json build profiles carry an explicit EXPO_PUBLIC_APP_ENV identity', mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "preview_internal_beta"') && mobileEasJson.includes('"EXPO_PUBLIC_APP_ENV": "production"')],
 
   // W63 production release profile closure (W61 P0-2)

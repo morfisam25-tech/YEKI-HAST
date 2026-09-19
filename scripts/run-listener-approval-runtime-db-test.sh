@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # W87 Listener onboarding/approval P0 runtime proof.
-# Provisions a throwaway local PostgreSQL cluster, applies canonical migration
-# 0001, runs the real route handlers, then deletes the cluster. It never points
-# at Production or a shared Preview database.
+# Provisions a throwaway local PostgreSQL cluster, applies the repository's
+# canonical current migration set, runs the real route handlers, then deletes
+# the cluster. It never points at Production or a shared Preview database.
 set -euo pipefail
 
 PG_BINDIR="${PG_BINDIR:-/usr/lib/postgresql/16/bin}"
@@ -42,9 +42,8 @@ trap cleanup EXIT
 "${PGRUN[@]}" "$PG_BINDIR/pg_ctl" -D "$PGDATA" -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=$WORK_DIR" -w start >/dev/null
 "${PGRUN[@]}" "$PG_BINDIR/createdb" -h 127.0.0.1 -p "$PORT" -U postgres "$DBNAME"
 
-node "$ROOT_DIR/scripts/materialize-migration.mjs" >/dev/null
-cat "$ROOT_DIR/packages/db/migrations/0001_initial.sql" \
-  | "${PGRUN[@]}" "$PG_BINDIR/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d "$DBNAME" -v ON_ERROR_STOP=1 >/dev/null
+export DATABASE_URL="postgres://postgres@127.0.0.1:$PORT/$DBNAME"
+node --experimental-strip-types "$ROOT_DIR/packages/db/src/migrate.ts" >/dev/null
 
-export LISTENER_APPROVAL_RUNTIME_DB_URL="postgres://postgres@127.0.0.1:$PORT/$DBNAME"
+export LISTENER_APPROVAL_RUNTIME_DB_URL="$DATABASE_URL"
 node --test --experimental-strip-types "$ROOT_DIR/tests/listener-approval-runtime-db.test.ts"

@@ -651,7 +651,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             <View key={listener.id} style={styles.listener}>
               <View style={styles.listenerText}>
                 <Text style={styles.listenerName}>{listener.nickname}</Text>
-                <Text style={styles.meta}>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب شنونده هنوز برای فعالیت تأیید نشده؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                <Text style={styles.meta}>{listener.workEligible ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب شنونده هنوز برای فعالیت تأیید نشده؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
                 {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}
               </View>
               <TouchableOpacity disabled={busy} style={styles.smallButton} onPress={() => { void startCall(listener); }}><Text style={styles.smallButtonText}>تماس</Text></TouchableOpacity>

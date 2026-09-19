@@ -20,6 +20,7 @@
     "test": "node --test --experimental-strip-types tests/*.test.ts",
     "test:safety-runtime-db": "bash scripts/run-safety-admin-runtime-db-test.sh",
     "test:recording-runtime-db": "bash scripts/run-recording-runtime-db-test.sh",
+    "test:listener-approval-runtime-db": "bash scripts/run-listener-approval-runtime-db-test.sh",
     "admin:recording-capability": "node --experimental-strip-types scripts/manage-recording-admin-capability.ts",
     "prevalidate:foundation": "node scripts/materialize-migration.mjs",
     "validate:foundation": "node scripts/validate-foundation.mjs",

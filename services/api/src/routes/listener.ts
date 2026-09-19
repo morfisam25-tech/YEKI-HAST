@@ -212,7 +212,13 @@ export async function acceptListenerAgreement(req: IncomingMessage, res: ServerR
       if (!existingConsent.rowCount) throw new HttpError(409, 'listener_agreement_evidence_missing');
       return { applicationId: application.id, status: application.status, idempotent: true };
     }
-    if (application.status !== 'agreement_pending') throw new HttpError(409, 'listener_agreement_not_available');
+    // `kyc_pending` is accepted here only as a compatibility state for a row
+    // whose provider checks already completed before W87 introduced the
+    // explicit KYC -> agreement_pending handoff. The evidence re-check below
+    // is authoritative; an actually pending KYC cannot advance.
+    if (!['agreement_pending', 'kyc_pending'].includes(application.status)) {
+      throw new HttpError(409, 'listener_agreement_not_available');
+    }
 
     const kyc = await client.query<{ status: string }>(`
       SELECT status::text FROM private_data.listener_kyc WHERE user_id=$1
@@ -237,13 +243,13 @@ export async function acceptListenerAgreement(req: IncomingMessage, res: ServerR
     await client.query(`
       UPDATE app.listener_applications
       SET status='admin_review', updated_at=now()
-      WHERE id=$1 AND status='agreement_pending'
+      WHERE id=$1 AND status IN ('agreement_pending','kyc_pending')
     `, [application.id]);
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
       VALUES ($1,'listener_rules_accepted','listener_application',$2,
-              jsonb_build_object('version',$3::text,'nextStatus','admin_review'))
-    `, [userId, application.id, LISTENER_RULES_CONSENT_VERSION]);
+              jsonb_build_object('version',$3::text,'nextStatus','admin_review','fromStatus',$4::text))
+    `, [userId, application.id, LISTENER_RULES_CONSENT_VERSION, application.status]);
 
     return { applicationId: application.id, status: 'admin_review', idempotent: false };
   });

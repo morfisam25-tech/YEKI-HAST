@@ -268,7 +268,7 @@ export type BrowseListener = {
   id: string;
   nickname: string;
   gender: 'female' | 'male';
-  verified: boolean;
+  workEligible: boolean;
   reliabilityScore: number;
   shortIntro: string | null;
   listeningStyle: string | null;
@@ -278,8 +278,6 @@ export type BrowseListener = {
   presence: string;
   languages: Array<{ code: string; nameFa: string; nameEn: string | null; proficiency: string }>;
 };
-
-type BrowseListenerWire = Omit<BrowseListener, 'verified'> & { workEligible: boolean };
 
 class ApiError extends Error {
   readonly code: string;
@@ -498,7 +496,7 @@ export function joinCallerWaitlist(
   return request('/v1/caller/waitlist', { method: 'POST', body: JSON.stringify(input) }, token);
 }
 
-export async function browseListeners(
+export function browseListeners(
   token: string,
   input: { languageCode?: string; gender?: 'female' | 'male' | 'any'; limit?: number } = {},
 ): Promise<{ listeners: BrowseListener[] }> {
@@ -507,15 +505,7 @@ export async function browseListeners(
   if (input.gender && input.gender !== 'any') params.set('gender', input.gender);
   if (input.limit) params.set('limit', String(input.limit));
   const suffix = params.toString() ? `?${params.toString()}` : '';
-  const result = await request<{ listeners: BrowseListenerWire[] }>(`/v1/listeners${suffix}`, {}, token);
-  return {
-    listeners: result.listeners.map(({ workEligible, ...listener }) => ({
-      ...listener,
-      // Compatibility name is kept inside the mobile client only. The public
-      // API uses workEligible so it cannot be read as a broad identity claim.
-      verified: workEligible,
-    })),
-  };
+  return request(`/v1/listeners${suffix}`, {}, token);
 }
 
 export function requestCall(

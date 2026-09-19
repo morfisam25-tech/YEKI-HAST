@@ -88,7 +88,11 @@ test('a non-boolean CALL_RECORDING_REQUIRED value is rejected rather than coerce
 
 test('recordingRetentionDays and playback grant TTL have sane, bounded defaults', () => {
   withEnv({ CALL_RECORDING_RETENTION_DAYS: undefined, CALL_RECORDING_PLAYBACK_TTL_SECONDS: undefined }, () => {
-    assert.equal(recordingRetentionDays(), 90);
+    // Locked policy default (W70): recordings retain for 30 days, distinct
+    // from the separate legal-hold path (private_data.call_recording_sessions
+    // .legal_hold) admins keep active for up to 180 days after a
+    // safety/complaint case closes.
+    assert.equal(recordingRetentionDays(), 30);
     assert.equal(recordingPlaybackGrantTtlSeconds(), 300);
   });
   withEnv({ CALL_RECORDING_RETENTION_DAYS: '0' }, () => {

@@ -41,7 +41,7 @@ export function currentRecordingPolicy(): RecordingPolicy {
 
 export function recordingRetentionDays(): number {
   const raw = process.env.CALL_RECORDING_RETENTION_DAYS?.trim();
-  const value = raw ? Number(raw) : 90;
+  const value = raw ? Number(raw) : 30;
   if (!Number.isInteger(value) || value < 1 || value > 3650) {
     throw new Error('CALL_RECORDING_RETENTION_DAYS must be an integer between 1 and 3650');
   }

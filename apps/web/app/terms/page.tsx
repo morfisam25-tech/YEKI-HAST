@@ -106,6 +106,14 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
+          <h2>اپراتور سرویس و قانون حاکم</h2>
+          <p>
+            این سرویس توسط شرکت UNIQE OTOMOTİV KİMYA SANAYİ LİMİTED ŞİRKETİ به نشانی Akçaburgaz Mah. 1584 Sok.
+            No: 10, Esenyurt / İstanbul / Türkiye اداره می‌شود. این قوانین استفاده تابع قوانین ترکیه است.
+          </p>
+        </section>
+
+        <section className="legal-section">
           <h2>پشتیبانی</h2>
           <p>
             برای پشتیبانی حساب یا پرسش درباره سرویس به{' '}

@@ -40,6 +40,22 @@ test('privacy discloses runtime data with a limited, audited recording posture a
   assert.doesNotMatch(privacy, /ضبط تماس توسط پلتفرم خاموش است/);
 });
 
+// W70: locked owner-provided operator identity, governing law, and recording
+// retention/safety-hold figures must actually appear on the public legal
+// pages -- not just live in the recording-config default or internal docs.
+test('terms and privacy name the operator, governing law, and the locked 30/180-day recording windows', () => {
+  for (const source of [terms, privacy]) {
+    assert.match(source, /UNIQE OTOMOTİV KİMYA SANAYİ LİMİTED ŞİRKETİ/);
+    assert.match(source, /Akçaburgaz Mah\.\s+1584 Sok\.\s+No: 10, Esenyurt \/ İstanbul \/ Türkiye/);
+    assert.match(source, /تابع قوانین ترکیه است/);
+  }
+  assert.match(privacy, /حداکثر ۳۰ روز نگهداری/);
+  assert.match(privacy, /حداکثر ۱۸۰ روز پس از بسته شدن نهایی همان پرونده/);
+  // No invented city-specific court or generic "verified identity" claim.
+  assert.doesNotMatch(terms, /دادگاه/);
+  assert.doesNotMatch(privacy, /دادگاه/);
+});
+
 test('public Caller age policy fails closed unless it is exactly 18 and versions force fresh consent', () => {
   assert.match(callerRoute, /PUBLIC_CALLER_MINIMUM_AGE = 18/);
   assert.match(callerRoute, /minimumAge !== PUBLIC_CALLER_MINIMUM_AGE/);

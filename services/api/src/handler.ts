@@ -41,12 +41,6 @@ function ensureKycReady(): void {
 function ensureCallReady(): void {
   ensureDatabaseReady();
   if (isInternalOwnerTestMode()) return;
-  // W60: which live-media transport a call actually needs ready is now
-  // provider-dependent. The legacy TURN/ICE relay (call-transport.ts) is
-  // Preview-only infrastructure once RealtimeKit is the active provider (task
-  // section 9/18) -- Production running RealtimeKit must not be blocked by a
-  // legacy TURN relay it no longer uses, and must not silently accept a call
-  // with neither transport configured.
   let mediaProvider: 'realtimekit' | 'legacy_p2p';
   try { mediaProvider = currentCallMediaProvider(); }
   catch { throw new HttpError(503, 'call_media_not_configured'); }
@@ -110,6 +104,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'GET' && url.pathname === '/v1/listener/earnings') { ensureDatabaseReady(); const { getListenerEarnings } = await import('./routes/listener-earnings.ts'); return await getListenerEarnings(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/training/complete') { ensureDatabaseReady(); const { completeListenerTraining } = await import('./routes/listener.ts'); return await completeListenerTraining(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/assessment') { ensureDatabaseReady(); const { submitListenerAssessment } = await import('./routes/listener.ts'); return await submitListenerAssessment(req, res); }
+    if (method === 'POST' && url.pathname === '/v1/listener/agreement') { ensureDatabaseReady(); const { acceptListenerAgreement } = await import('./routes/listener.ts'); return await acceptListenerAgreement(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/kyc') { ensureDatabaseReady(); const { getListenerKycStatus } = await import('./routes/kyc.ts'); return await getListenerKycStatus(req, res); }
     if (method === 'POST' && url.pathname === '/v1/listener/kyc') { ensureKycReady(); const { submitListenerKyc } = await import('./routes/kyc.ts'); return await submitListenerKyc(req, res); }
     if (method === 'GET' && url.pathname === '/v1/listener/presence') { ensureDatabaseReady(); const { getListenerPresence } = await import('./routes/marketplace.ts'); return await getListenerPresence(req, res); }
@@ -167,6 +162,8 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     const adminKycMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/kyc$/);
     if (method === 'GET' && adminKycMatch) { ensureDatabaseReady(); const { getListenerKycForAdmin } = await import('./routes/admin-kyc.ts'); return await getListenerKycForAdmin(req, res, adminKycMatch[1]); }
     if (method === 'POST' && adminKycMatch) { ensureDatabaseReady(); const { reviewListenerKyc } = await import('./routes/admin-kyc.ts'); return await reviewListenerKyc(req, res, adminKycMatch[1]); }
+    const adminListenerDecisionMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)\/decision$/);
+    if (method === 'POST' && adminListenerDecisionMatch) { ensureDatabaseReady(); const { decideListenerApplication } = await import('./routes/admin-listener-approval.ts'); return await decideListenerApplication(req, res, adminListenerDecisionMatch[1]); }
     const adminApplicationMatch = url.pathname.match(/^\/v1\/admin\/listener-applications\/([^/]+)$/);
     if (method === 'GET' && adminApplicationMatch) { ensureDatabaseReady(); const { getListenerApplicationForAdmin } = await import('./routes/admin.ts'); return await getListenerApplicationForAdmin(req, res, adminApplicationMatch[1]); }
     const adminAssessmentMatch = url.pathname.match(/^\/v1\/admin\/listener-assessments\/([^/]+)\/review$/);
@@ -180,10 +177,6 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     if (method === 'POST' && recordingConsentMatch) { ensureDatabaseReady(); const { postCallRecordingConsent } = await import('./routes/call-recording.ts'); return await postCallRecordingConsent(req, res, recordingConsentMatch[1]); }
     const recordingStatusMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/recording-status$/);
     if (method === 'GET' && recordingStatusMatch) { ensureDatabaseReady(); const { getCallRecordingStatus } = await import('./routes/call-recording.ts'); return await getCallRecordingStatus(req, res, recordingStatusMatch[1]); }
-    // W81A: RealtimeKit `recording.statusUpdate` webhook. Not admin-session
-    // authenticated -- Cloudflare calls this directly; authenticity is the
-    // rtk-signature verification inside the handler itself (see
-    // routes/recording-webhook.ts).
     if (method === 'POST' && url.pathname === '/v1/webhooks/realtimekit/recording') { ensureDatabaseReady(); const { handleRealtimeKitRecordingWebhook } = await import('./routes/recording-webhook.ts'); return await handleRealtimeKitRecordingWebhook(req, res); }
 
     const voiceStartMatch = url.pathname.match(/^\/v1\/calls\/([^/]+)\/voice\/start$/);

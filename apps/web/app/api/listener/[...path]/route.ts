@@ -14,6 +14,7 @@ const ALLOWED_PATHS = [
   /^listener\/application$/,
   /^listener\/training\/complete$/,
   /^listener\/assessment$/,
+  /^listener\/agreement$/,
   /^listener\/kyc$/,
   /^listener\/presence$/,
   /^listener\/presence\/heartbeat$/,

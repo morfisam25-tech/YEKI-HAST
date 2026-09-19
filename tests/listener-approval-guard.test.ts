@@ -54,6 +54,7 @@ test('W87 public marketplace exposes only approved work-eligible listeners witho
   const bookings = source('services/api/src/routes/bookings.ts');
   const callerBookings = source('services/api/src/routes/caller-bookings.ts');
   const mobileApi = source('apps/mobile/src/api.ts');
+  const callerMobile = source('apps/mobile/src/CallerClosedBetaScreen.tsx');
 
   for (const current of [discovery, booking, callRequest, bookings, callerBookings]) {
     assert.match(current, /la\.status(?:::\w+)? IN \('approved','active'\)|la\.status\.toString\(\)/,
@@ -67,8 +68,10 @@ test('W87 public marketplace exposes only approved work-eligible listeners witho
   assert.doesNotMatch(discovery, /verified:\s*row\.is_verified/);
   assert.doesNotMatch(booking, /verified:\s*true/);
 
-  assert.match(mobileApi, /type BrowseListenerWire = Omit<BrowseListener, 'verified'> & \{ workEligible: boolean \}/);
-  assert.match(mobileApi, /verified: workEligible/);
+  assert.match(mobileApi, /workEligible: boolean/);
+  assert.doesNotMatch(mobileApi, /\bverified:\s*boolean/);
+  assert.match(callerMobile, /listener\.workEligible/);
+  assert.doesNotMatch(callerMobile, /listener\.verified/);
 });
 
 test('W87 admin approval UI shows field-level KYC evidence and gates final decisions', () => {

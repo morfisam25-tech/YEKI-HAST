@@ -256,13 +256,12 @@ export default function ListenerTrainingScreen({ token, onDone }: Props) {
     );
   }
 
-  if (['assessment_passed', 'kyc_pending', 'kyc_expired'].includes(application.status)) {
+  if (['assessment_passed', 'kyc_pending', 'kyc_expired', 'agreement_pending'].includes(application.status)) {
     return <ListenerKycScreen token={token} onDone={onDone} />;
   }
 
-  if (['agreement_pending', 'admin_review', 'mock_call', 'suspended', 'rejected', 'archived'].includes(application.status)) {
+  if (['admin_review', 'mock_call', 'suspended', 'rejected', 'archived'].includes(application.status)) {
     const labels: Record<string, string> = {
-      agreement_pending: 'در انتظار قرارداد',
       admin_review: 'در بررسی نهایی',
       mock_call: 'در مرحله تماس آزمایشی',
       suspended: 'حساب معلق است',

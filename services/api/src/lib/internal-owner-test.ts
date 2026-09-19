@@ -32,25 +32,34 @@ function isLocalDatabase(url: URL): boolean {
   return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
 }
 
-function requireDedicatedInternalBetaDatabase(): string {
+// Identity of the dedicated Preview database this process has already
+// verified isolated from Production and rebound DATABASE_URL to. Once set,
+// DATABASE_URL legitimately reading back as this same identity on a later
+// call is our own prior rebind, not a misconfiguration -- so it must not be
+// re-flagged as "must be isolated". A different dedicated identity (or none
+// yet bound) gets the full isolation check every time.
+let boundDedicatedDatabaseIdentity: string | null = null;
+
+function requireDedicatedInternalBetaDatabase(currentDatabaseUrl: string | undefined): { raw: string; identity: string } {
   const dedicated = parseDatabaseUrl('INTERNAL_BETA_DATABASE_URL', process.env.INTERNAL_BETA_DATABASE_URL);
+  const dedicatedIdentity = databaseIdentity(dedicated.url);
+
   const production = process.env.PRODUCTION_DATABASE_URL?.trim();
   if (production) {
     const parsedProduction = parseDatabaseUrl('PRODUCTION_DATABASE_URL', production);
-    if (databaseIdentity(parsedProduction.url) === databaseIdentity(dedicated.url)) {
+    if (databaseIdentity(parsedProduction.url) === dedicatedIdentity) {
       throw new HttpError(503, 'internal_beta_database_must_be_isolated');
     }
   }
 
-  const normal = process.env.DATABASE_URL?.trim();
-  if (normal) {
+  const normal = currentDatabaseUrl?.trim();
+  if (normal && boundDedicatedDatabaseIdentity !== dedicatedIdentity) {
     const parsedNormal = parseDatabaseUrl('DATABASE_URL', normal);
-    if (!isLocalDatabase(dedicated.url)
-      && databaseIdentity(parsedNormal.url) === databaseIdentity(dedicated.url)) {
+    if (!isLocalDatabase(dedicated.url) && databaseIdentity(parsedNormal.url) === dedicatedIdentity) {
       throw new HttpError(503, 'internal_beta_database_must_be_isolated');
     }
   }
-  return dedicated.raw;
+  return { raw: dedicated.raw, identity: dedicatedIdentity };
 }
 
 function requireOwnerTestAuthToken(): string {
@@ -62,9 +71,16 @@ function requireOwnerTestAuthToken(): string {
 }
 
 function initializeInternalBetaRuntime(): void {
-  const dedicatedDatabaseUrl = requireDedicatedInternalBetaDatabase();
+  const dedicated = requireDedicatedInternalBetaDatabase(process.env.DATABASE_URL);
   requireOwnerTestAuthToken();
-  process.env.DATABASE_URL = dedicatedDatabaseUrl;
+  process.env.DATABASE_URL = dedicated.raw;
+  boundDedicatedDatabaseIdentity = dedicated.identity;
+}
+
+// Test-only: unit tests need to reset the module-level rebind cache between
+// runs since it is intentionally process-lifetime state, not per-call state.
+export function __resetInternalBetaRuntimeCacheForTests(): void {
+  boundDedicatedDatabaseIdentity = null;
 }
 
 export function isInternalOwnerTestMode(): boolean {

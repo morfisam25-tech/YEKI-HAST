@@ -11,6 +11,7 @@ test('W87 Listener approval routes are server-owned and audited', () => {
   const agreement = source('services/api/src/routes/listener.ts');
   const approval = source('services/api/src/routes/admin-listener-approval.ts');
   const kyc = source('services/api/src/services/kyc-verification.ts');
+  const listenerWebProxy = source('apps/web/app/api/listener/[...path]/route.ts');
 
   assert.match(handler, /POST' && url\.pathname === '\/v1\/listener\/agreement'/);
   assert.match(handler, /adminListenerDecisionMatch/);
@@ -23,6 +24,8 @@ test('W87 Listener approval routes are server-owned and audited', () => {
   assert.match(agreement, /SET status='admin_review'/);
   assert.doesNotMatch(agreement, /listener_application_approved/);
   assert.doesNotMatch(agreement, /INSERT INTO app\.listener_profiles/);
+  assert.doesNotMatch(listenerWebProxy, /listener\\\/.*decision/,
+    'the ordinary Listener browser proxy must not expose the Admin decision route');
 
   assert.match(kyc, /allRequiredKycChecksVerified/);
   assert.match(kyc, /SET status='agreement_pending'/);
@@ -48,12 +51,17 @@ test('W87 public marketplace exposes only approved work-eligible listeners witho
   const discovery = source('services/api/src/routes/caller-discovery.ts');
   const booking = source('services/api/src/routes/booking-discovery.ts');
   const callRequest = source('services/api/src/routes/caller-call-request.ts');
+  const bookings = source('services/api/src/routes/bookings.ts');
+  const callerBookings = source('services/api/src/routes/caller-bookings.ts');
   const mobileApi = source('apps/mobile/src/api.ts');
 
-  for (const current of [discovery, booking, callRequest]) {
-    assert.match(current, /la\.status IN \('approved','active'\)/);
-    assert.match(current, /sp\.is_public=true/);
+  for (const current of [discovery, booking, callRequest, bookings, callerBookings]) {
+    assert.match(current, /la\.status(?:::\w+)? IN \('approved','active'\)|la\.status\.toString\(\)/,
+      'sellable Listener paths must be approval-state gated');
   }
+  assert.match(discovery, /sp\.is_public=true/);
+  assert.match(booking, /sp\.is_public=true/);
+  assert.match(callRequest, /sp\.is_public=true/);
   assert.match(discovery, /workEligible: true/);
   assert.match(booking, /workEligible: true/);
   assert.doesNotMatch(discovery, /verified:\s*row\.is_verified/);

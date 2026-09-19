@@ -27,6 +27,18 @@ export type SabtAhvalInput = { nationalId: string; birthYear: string; birthMonth
 export type ShahkarInput = { nationalId: string; mobile: string };
 export type ShebaInput = { sheba: string };
 
+// A future provider (e.g. Vandar) only ever needs to implement this shape --
+// auth, endpoint/request mapping, response mapping and error mapping stay
+// isolated inside its own class, exactly like PaymentProvider in
+// providers/payment.ts. Nothing above this line, and no call site outside
+// this file, should ever need to change to add one.
+export interface KycInquiryProvider {
+  readonly key: string;
+  sabtAhval(input: SabtAhvalInput): Promise<NextPayInquiryEnvelope<SabtAhvalData>>;
+  shahkar(input: ShahkarInput): Promise<NextPayInquiryEnvelope<unknown>>;
+  sheba(input: ShebaInput): Promise<NextPayInquiryEnvelope<unknown>>;
+}
+
 export class KycInquiryProviderError extends Error {
   readonly code: string;
   readonly providerCode: number | null;
@@ -118,7 +130,7 @@ function validSupportedJalaliYear(value: string): boolean {
   return year >= 1200 && year <= 1600;
 }
 
-export class NextPayKycInquiryProvider {
+export class NextPayKycInquiryProvider implements KycInquiryProvider {
   readonly key = 'nextpay';
   private readonly inquiryApi: string;
   private readonly fetchImpl: FetchLike;
@@ -181,7 +193,7 @@ export function validateKycInquiryProviderEnv(): void {
   new NextPayKycInquiryProvider();
 }
 
-export function getKycInquiryProvider(): NextPayKycInquiryProvider {
+export function getKycInquiryProvider(): KycInquiryProvider {
   validateKycInquiryProviderEnv();
   return new NextPayKycInquiryProvider();
 }

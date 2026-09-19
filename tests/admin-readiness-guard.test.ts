@@ -64,10 +64,35 @@ test('commercial hosting is an explicit fail-closed Caller launch dependency', (
 test('Caller launch readiness stays fail-closed until every v1.2 primary-transport dependency is ready', () => {
   assert.match(source, /isCallerClosedBetaConfigured/);
   assert.match(source, /isCallerClosedBetaEnabled/);
-  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*commercialHostingApproved[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callTransportReady[\s\S]*paymentReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown[\s\S]*publicRelease\.ready/);
+  assert.match(source, /callerLaunchReady = callerClosedBetaConfigured[\s\S]*commercialHostingApproved[\s\S]*callerAgePolicyReady[\s\S]*callerCatalogReady[\s\S]*accountAuthReady[\s\S]*callTransportReady[\s\S]*paymentReady[\s\S]*kycInquiryReady[\s\S]*sensitiveDataReady[\s\S]*adminBootstrapLockedDown[\s\S]*publicRelease\.ready/);
   const callerLaunchBlock = source.match(/const callerLaunchReady =[\s\S]*?;/)?.[0] ?? '';
   assert.doesNotMatch(callerLaunchBlock, /callPhoneVerificationReady/);
   assert.doesNotMatch(callerLaunchBlock, /telephonyReady/);
   assert.match(source, /callerClosedBeta: \{ configured: callerClosedBetaConfigured, enabled: callerClosedBetaEnabled \}/);
   assert.match(source, /callerLaunch: \{ ready: callerLaunchReady \}/);
+});
+
+// W78: kycInquiryReady was computed and reported (integrations.kycInquiry)
+// but never actually gated callerLaunchReady -- meaning the paid Caller
+// marketplace could report itself launch-ready with no working path for a
+// Listener to ever complete KYC. Fixed by adding it as a required conjunct.
+test('paid Caller launch readiness requires the KYC inquiry provider exactly as strictly as it requires payment', () => {
+  const callerLaunchBlock = source.match(/const callerLaunchReady =[\s\S]*?;/)?.[0] ?? '';
+  assert.match(callerLaunchBlock, /&&\s*paymentReady/);
+  assert.match(callerLaunchBlock, /&&\s*kycInquiryReady/);
+  // A pure &&-chain with no || means: paymentReady=true/kycInquiryReady=false
+  // (or the reverse) forces callerLaunchReady=false, and both true (with
+  // every other existing conjunct also true) is required and sufficient for
+  // callerLaunchReady=true -- proving the exact truth table this gate needs
+  // without requiring a live DB-backed integration run.
+  assert.doesNotMatch(callerLaunchBlock, /\|\|/);
+});
+
+test('public site and Gmail email-OTP auth readiness stay independent of payment/KYC readiness', () => {
+  // accountAuthReady (email OTP or SMS) is computed from emailAuthReady/smsReady
+  // only, never from paymentReady/kycInquiryReady, and getPublicReleaseConfig's
+  // own readiness is a separate legal/support-surface check -- neither the
+  // public site nor login gates on the paid-marketplace providers.
+  const accountAuthLine = source.split('\n').find((line) => line.includes('const accountAuthReady =')) ?? '';
+  assert.match(accountAuthLine, /^\s*const accountAuthReady = emailAuthReady \|\| smsReady;\s*$/);
 });

@@ -14,6 +14,7 @@ const sources = [
   ['0009_booking_reservation_sweeper.sql', new URL('../packages/db/migrations/0009_booking_reservation_sweeper.sql', import.meta.url), false],
   ['0010_recording_core_foundation.sql', new URL('../packages/db/migrations/0010_recording_core_foundation.sql', import.meta.url), false],
   ['0011_call_media_sessions.sql', new URL('../packages/db/migrations/0011_call_media_sessions.sql', import.meta.url), false],
+  ['0012_listener_kyc_field_checks.sql', new URL('../packages/db/migrations/0012_listener_kyc_field_checks.sql', import.meta.url), false],
 ];
 
 export async function currentMigrationEntries() {

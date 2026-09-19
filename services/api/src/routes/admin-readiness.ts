@@ -88,6 +88,11 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   const callerClosedBetaConfigured = isCallerClosedBetaConfigured();
   const callerClosedBetaEnabled = isCallerClosedBetaEnabled();
   const commercialHostingApproved = isCommercialHostingApproved();
+  // Both the payment rail and the Listener KYC inquiry provider are required
+  // Day-1 paid-marketplace dependencies: a Caller can fund a wallet without
+  // payment, but the marketplace has no honestly-onboardable Listener supply
+  // without KYC actually being executable. Neither may gate the other's
+  // absence -- the paid launch stays closed unless both are ready.
   const callerLaunchReady = callerClosedBetaConfigured
     && commercialHostingApproved
     && callerAgePolicyReady
@@ -95,6 +100,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && accountAuthReady
     && callTransportReady
     && paymentReady
+    && kycInquiryReady
     && sensitiveDataReady
     && adminBootstrapLockedDown
     && publicRelease.ready;

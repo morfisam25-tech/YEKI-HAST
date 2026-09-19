@@ -5,8 +5,17 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = new URL('../', import.meta.url);
-const staleOrigin = 'https://yeki-hast.vercel.app';
-const currentOrigin = 'https://yeki-hast-theta.vercel.app';
+// W78: 'theta' was this test's "current" origin, but it has since been
+// superseded by 'unique-6ff0' -- confirmed both by tests/deployment-api-base-
+// guard.test.ts (which already tracks 'theta' as staleApiOrigin and
+// 'unique-6ff0' as canonicalApiOrigin) and by W66's live check
+// (https://yeki-hast-theta.vercel.app returned 404). 'theta' was removed
+// from services/api/src/routes/payments.ts's callback-origin fallback in the
+// same change that surfaced this test was checking the wrong constant --
+// that fallback was itself a bug (a silent production fallback to a stale
+// origin), not a legitimate remaining use of 'theta'.
+const staleOrigins = ['https://yeki-hast.vercel.app', 'https://yeki-hast-theta.vercel.app'];
+const currentOrigin = 'https://yeki-hast-unique-6ff0.vercel.app';
 const textExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.md']);
 
 async function collectTextFiles(relativeDir: string): Promise<string[]> {
@@ -42,7 +51,7 @@ test('runtime source contains no stale production API origin', async () => {
   let currentOriginSeen = false;
   for (const file of files) {
     const source = await readFile(file, 'utf8');
-    if (source.includes(staleOrigin)) offenders.push(file);
+    if (staleOrigins.some((stale) => source.includes(stale))) offenders.push(file);
     if (source.includes(currentOrigin)) currentOriginSeen = true;
   }
 

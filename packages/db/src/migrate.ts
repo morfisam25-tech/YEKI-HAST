@@ -61,6 +61,10 @@ const migrationSources: MigrationSource[] = [
     filename: '0011_call_media_sessions.sql',
     path: join(migrationsDir, '0011_call_media_sessions.sql'),
   },
+  {
+    filename: '0012_listener_kyc_field_checks.sql',
+    path: join(migrationsDir, '0012_listener_kyc_field_checks.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {

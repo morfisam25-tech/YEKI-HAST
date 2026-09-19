@@ -31,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <nav style={navStyle} aria-label="Admin operations navigation">
           <a style={linkStyle} href="/">داشبورد</a>
+          <a style={linkStyle} href="/listener-approvals">تأیید شنونده</a>
           <a style={linkStyle} href="/calls">تماس‌ها</a>
           <a style={linkStyle} href="/safety">ایمنی</a>
           <a style={linkStyle} href="/recordings">ضبط تماس‌ها</a>

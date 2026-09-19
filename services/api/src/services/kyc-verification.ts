@@ -161,9 +161,32 @@ export async function executeListenerKycVerification(userId: string): Promise<{ 
 
     await client.query(`
       UPDATE private_data.listener_kyc
-      SET status='verified', verified_at=now()
+      SET status='verified', verified_at=now(), rejected_reason_code=NULL
       WHERE user_id=$1 AND status='pending'
     `, [userId]);
+
+    // The schema already defines agreement_pending between KYC and final
+    // admin review. Once both field-level checks are verified, hand the real
+    // user to that stage. No profile is created and no marketplace eligibility
+    // is granted here.
+    const moved = await client.query<{ id: string }>(`
+      UPDATE app.listener_applications la
+      SET status='agreement_pending', updated_at=now()
+      FROM app.service_catalog s
+      WHERE la.service_id=s.id
+        AND s.code='human_listening'
+        AND la.user_id=$1
+        AND la.status='kyc_pending'
+      RETURNING la.id::text
+    `, [userId]);
+    if (moved.rows[0]) {
+      await client.query(`
+        INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1,'listener_kyc_ready_for_agreement','listener_application',$2,
+                jsonb_build_object('nextStatus','agreement_pending','checks',$3::jsonb))
+      `, [userId, moved.rows[0].id, JSON.stringify(checksForDomain)]);
+    }
+
     return { status: 'verified' };
   });
 }

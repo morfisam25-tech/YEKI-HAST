@@ -16,13 +16,16 @@ export function resolveApiBaseUrl(): string {
     return (configured || PRODUCTION_API_BASE_URL).replace(/\/$/, '');
   }
 
-  if (env === 'preview_internal_beta') {
+  // closed_test (W86) shares preview_internal_beta's fail-closed origin
+  // resolution: the Google Play Closed-Test build must never silently fall
+  // back to, or be pointed at, the Production API.
+  if (env === 'preview_internal_beta' || env === 'closed_test') {
     if (!configured) {
-      throw new Error('EXPO_PUBLIC_API_BASE_URL is required in preview_internal_beta; Preview must never fall back to the Production API');
+      throw new Error(`EXPO_PUBLIC_API_BASE_URL is required in ${env}; it must never fall back to the Production API`);
     }
     const normalized = configured.replace(/\/$/, '');
     if (isProductionOrigin(normalized, PRODUCTION_API_BASE_URL)) {
-      throw new Error('EXPO_PUBLIC_API_BASE_URL must not point at the Production API origin in preview_internal_beta');
+      throw new Error(`EXPO_PUBLIC_API_BASE_URL must not point at the Production API origin in ${env}`);
     }
     return normalized;
   }

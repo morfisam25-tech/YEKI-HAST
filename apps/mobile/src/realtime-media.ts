@@ -19,6 +19,19 @@ import { useRealtimeKitClient } from '@cloudflare/realtimekit-react-native';
 // possible, not merely "the SDK finished initializing" or "the join request
 // returned successfully".
 
+// W86: classifies a mediaDevices.getUserMedia() rejection distinctly from a
+// network/API error, so the caller/listener call-start UI can show
+// "microphone permission denied" or "microphone unavailable" instead of a
+// misleading generic/network failure message (see MISSION E).
+export function classifyMicrophoneError(error: unknown): 'microphone_permission_denied' | 'microphone_unavailable' {
+  const name = error && typeof error === 'object' && 'name' in error ? String((error as { name?: unknown }).name ?? '') : '';
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || /permission/i.test(message)) {
+    return 'microphone_permission_denied';
+  }
+  return 'microphone_unavailable';
+}
+
 export type RealtimeCallMediaState =
   | 'idle'
   | 'connecting'

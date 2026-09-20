@@ -6,6 +6,7 @@ import {
   RecordingArchiveError,
 } from '../lib/recording-archive-r2.ts';
 import { loadRecordingArchiveReference } from '../services/recording-archive.ts';
+import { RecordingProviderError } from './recording.ts';
 import {
   capPlaybackTtlSeconds,
   type PlaybackResolutionResult,
@@ -57,6 +58,9 @@ export function createCloudflareRealtimeKitPlaybackResolver(): PlaybackResolver 
         return { status: 'available', playbackUrl: signed.playbackUrl, expiresAt: signed.expiresAt };
       } catch (error) {
         if (error instanceof RecordingArchiveError) {
+          return { status: 'unavailable', reason: error.code };
+        }
+        if (error instanceof RecordingProviderError) {
           return { status: 'unavailable', reason: error.code };
         }
         return { status: 'unavailable', reason: 'playback_resolution_failed' };

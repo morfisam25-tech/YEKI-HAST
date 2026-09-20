@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { addRealtimeKitMeetingParticipant } from '../services/api/src/providers/recording-realtimekit.ts';
 import { RecordingProviderError } from '../services/api/src/providers/recording.ts';
@@ -110,4 +111,11 @@ test('missing config fails closed before any network call', async () => {
       /cloudflare_realtimekit_not_configured/,
     );
   });
+});
+
+test('RealtimeKit listener media-connected is the answer boundary that starts recording', async () => {
+  const source = await readFile(new URL('../services/api/src/routes/internet-voice.ts', import.meta.url), 'utf8');
+  assert.match(source, /realtimeKitListenerConnected = kind === 'media_connected'/);
+  assert.match(source, /\(kind === 'answer' && role === 'listener'\) \|\| realtimeKitListenerConnected/);
+  assert.match(source, /shouldStartRecording = row\.recording_mode === 'all_with_consent'/);
 });

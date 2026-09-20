@@ -245,9 +245,15 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
     if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');
 
     let shouldStartRecording = false;
-    if (kind === 'answer' && role === 'listener') {
+    const realtimeKitListenerConnected = kind === 'media_connected'
+      && role === 'listener'
+      && currentCallMediaProvider() === 'realtimekit';
+    if ((kind === 'answer' && role === 'listener') || realtimeKitListenerConnected) {
       // Mirrors startInternetVoiceCall's caller-side gate: a recording-required
-      // call must not let the listener answer without their own consent.
+      // call must not let the listener answer without their own consent. The
+      // RealtimeKit path intentionally has no legacy `answer` signal, so its
+      // authoritative listener media-connected event is the equivalent
+      // one-time answer boundary that starts provider recording.
       await requireParticipantRecordingConsent(client, rawCallId, userId);
       const answered = await client.query(`
         UPDATE app.call_sessions

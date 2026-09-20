@@ -122,33 +122,39 @@ export async function requestRecordingPlaybackGrant(
       ))
     `, [admin.userId, recordingSessionId, caseKind, caseId, reasonCode]);
 
-    let resolution: PlaybackResolutionResult;
-    try {
-      const resolver = await getPlaybackResolver(sessionRow.provider);
-      resolution = await resolver.resolvePlayback({
-        recordingSessionId,
-        provider: sessionRow.provider,
-        providerMeetingId: sessionRow.provider_meeting_id,
-        providerRecordingId: sessionRow.provider_recording_id,
-        ttlSeconds,
-        grantExpiresAt: insertedRow.expires_at,
-      });
-    } catch (error) {
-      const code = error instanceof PlaybackResolverError ? error.code : 'playback_resolution_failed';
-      resolution = { status: 'unavailable', reason: code };
-    }
+    return { ...insertedRow, sessionRow, ttlSeconds };
+  });
 
-    await client.query(`UPDATE app.recording_playback_grants SET accessed_at=now() WHERE id=$1`, [insertedRow.id]);
+  // Resolve only after the grant transaction commits. Archive reconciliation
+  // may insert/update a segment in its own transaction; doing that while the
+  // parent recording row is held FOR UPDATE can self-block on the FK lock.
+  let resolution: PlaybackResolutionResult;
+  try {
+    const resolver = await getPlaybackResolver(grant.sessionRow.provider);
+    resolution = await resolver.resolvePlayback({
+      recordingSessionId,
+      provider: grant.sessionRow.provider,
+      providerMeetingId: grant.sessionRow.provider_meeting_id,
+      providerRecordingId: grant.sessionRow.provider_recording_id,
+      ttlSeconds: grant.ttlSeconds,
+      grantExpiresAt: grant.expires_at,
+    });
+  } catch (error) {
+    const code = error instanceof PlaybackResolverError ? error.code : 'playback_resolution_failed';
+    resolution = { status: 'unavailable', reason: code };
+  }
+
+  await withTransaction(async (client) => {
+    await client.query(`UPDATE app.recording_playback_grants SET accessed_at=now() WHERE id=$1`, [grant.id]);
     await client.query(`
       INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
       VALUES ($1,'admin_recording_playback_resolved','recording_session',$2,jsonb_build_object(
         'grantId',$3::text,'status',$4::text,'reason',$5::text
       ))
     `, [
-      admin.userId, recordingSessionId, insertedRow.id, resolution.status,
+      admin.userId, recordingSessionId, grant.id, resolution.status,
       resolution.status === 'unavailable' ? resolution.reason : null,
     ]);
-    return { ...insertedRow, resolution };
   });
 
   sendJson(res, 201, {
@@ -157,10 +163,10 @@ export async function requestRecordingPlaybackGrant(
     recordingSessionId,
     authorizedAt: grant.authorized_at,
     expiresAt: grant.expires_at,
-    playbackUrl: grant.resolution.status === 'available' ? grant.resolution.playbackUrl : null,
-    playback: grant.resolution.status === 'available'
-      ? { status: 'available', expiresAt: grant.resolution.expiresAt }
-      : { status: 'unavailable', reason: grant.resolution.reason },
+    playbackUrl: resolution.status === 'available' ? resolution.playbackUrl : null,
+    playback: resolution.status === 'available'
+      ? { status: 'available', expiresAt: resolution.expiresAt }
+      : { status: 'unavailable', reason: resolution.reason },
   });
 }
 

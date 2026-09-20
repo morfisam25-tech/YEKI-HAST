@@ -150,7 +150,7 @@ test('authorization source still requires recording_admin and exact case match b
   const source = await readFile(new URL('../services/api/src/routes/admin-recording.ts', import.meta.url), 'utf8');
   assert.match(source, /requireAdminCapability\(req, RECORDING_CAPABILITY\)/);
   assert.match(source, /recording_case_mismatch/);
-  assert.match(source, /grantExpiresAt: insertedRow\.expires_at/);
+  assert.match(source, /grantExpiresAt: grant\.expires_at/);
 });
 
 test('signed playback URL is never written to audit metadata or persistence SQL', async () => {

@@ -269,6 +269,7 @@ test('legacy production-runtime hydration path is removed', async () => {
 test('owner-test calls use the active recording policy instead of hard-coding recording off', async () => {
   const source = await readFile(new URL('../services/api/src/routes/internal-owner-test.ts', import.meta.url), 'utf8');
   assert.match(source, /currentRecordingPolicy\(\)\.required \? 'all_with_consent' : 'none'/);
+  assert.match(source, /\$8::text,\$9,\$10,\$8::text/);
   assert.doesNotMatch(source, /\$11,\$12,'none'/);
 });
 

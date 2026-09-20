@@ -203,7 +203,7 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
         authorized_minor,max_billable_seconds,recording_mode
       ) VALUES (
         $1,$2,$3,$3,$4,$5,'internal-owner-test:'||gen_random_uuid()::text,
-        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,$8,$11,$12,$13::app.recording_mode
+        'routing','any',$6,'just_talk','internal_owner_test',$7,$8::text,$9,$10,$8::text,$11,$12,$13::app.recording_mode
       ) RETURNING id::text
     `, [ctx.product_id,ctx.service_id,ctx.market_id,INTERNAL_OWNER_TEST_CALLER_ID,
       INTERNAL_OWNER_TEST_LISTENER_ID,ctx.language_id,ctx.pricing_plan_id,ctx.currency_code,

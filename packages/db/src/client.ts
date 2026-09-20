@@ -1,6 +1,7 @@
 import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 
 let pool: Pool | undefined;
+let poolConnectionString: string | undefined;
 
 function normalizedDatabaseUrl(connectionString: string): string {
   const url = new URL(connectionString);
@@ -28,16 +29,24 @@ function poolMax(): number {
 export function getPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is required');
+  const normalizedConnectionString = normalizedDatabaseUrl(connectionString);
 
-  pool ??= new Pool({
-    connectionString: normalizedDatabaseUrl(connectionString),
-    // Vercel may create many runtime instances during bursts. Keep each process
-    // deliberately small; production is routed through Neon PgBouncer by the
-    // controlled environment sync before Caller traffic is ever opened.
-    max: poolMax(),
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000,
-  });
+  if (pool && poolConnectionString !== normalizedConnectionString) {
+    throw new Error('DATABASE_URL changed after pool initialization');
+  }
+
+  if (!pool) {
+    pool = new Pool({
+      connectionString: normalizedConnectionString,
+      // Vercel may create many runtime instances during bursts. Keep each process
+      // deliberately small; production is routed through Neon PgBouncer by the
+      // controlled environment sync before Caller traffic is ever opened.
+      max: poolMax(),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
+    poolConnectionString = normalizedConnectionString;
+  }
   return pool;
 }
 
@@ -63,4 +72,5 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
 export async function closePool() {
   if (pool) await pool.end();
   pool = undefined;
+  poolConnectionString = undefined;
 }

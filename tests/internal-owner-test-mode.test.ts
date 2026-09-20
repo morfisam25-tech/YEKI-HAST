@@ -266,6 +266,12 @@ test('legacy production-runtime hydration path is removed', async () => {
   assert.match(source, /process\.env\.DATABASE_URL = dedicated\.raw/);
 });
 
+test('owner-test calls use the active recording policy instead of hard-coding recording off', async () => {
+  const source = await readFile(new URL('../services/api/src/routes/internal-owner-test.ts', import.meta.url), 'utf8');
+  assert.match(source, /currentRecordingPolicy\(\)\.required \? 'all_with_consent' : 'none'/);
+  assert.doesNotMatch(source, /\$11,\$12,'none'/);
+});
+
 test('Home freeze blobs remain exact', async () => {
   // Baseline updated for the W9-approved diaspora poem reel (commit 0e09f1a); these are
   // that commit's own page.tsx/home.module.css blob hashes, not a new Home change.

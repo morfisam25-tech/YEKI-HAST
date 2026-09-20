@@ -11,6 +11,7 @@ import { getDefaultOperatingContextCodes } from '../lib/operating-context.ts';
 import { computeCallAuthorization } from '../domain/call-authorization.ts';
 import { newOpaqueToken, tokenHash } from '../lib/security.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
+import { currentRecordingPolicy } from '../lib/recording-config.ts';
 
 const TEST_CREDIT_MINOR = 1_000_000_000n;
 
@@ -149,6 +150,7 @@ export async function assertOwnerTestActor(req: IncomingMessage, expected: 'call
 export async function createOwnerTestCall(req: IncomingMessage, res: ServerResponse): Promise<void> {
   await assertOwnerTestActor(req, 'caller');
   const { productCode, serviceCode, marketCode } = getDefaultOperatingContextCodes();
+  const recordingMode = currentRecordingPolicy().required ? 'all_with_consent' : 'none';
   const callId = await withTransaction(async (client) => {
     const context = await client.query<{
       product_id:string; service_id:string; market_id:string; language_id:string;
@@ -201,11 +203,12 @@ export async function createOwnerTestCall(req: IncomingMessage, res: ServerRespo
         authorized_minor,max_billable_seconds,recording_mode
       ) VALUES (
         $1,$2,$3,$3,$4,$5,'internal-owner-test:'||gen_random_uuid()::text,
-        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,$8,$11,$12,'none'
+        'routing','any',$6,'just_talk','internal_owner_test',$7,$8,$9,$10,$8,$11,$12,$13::app.recording_mode
       ) RETURNING id::text
     `, [ctx.product_id,ctx.service_id,ctx.market_id,INTERNAL_OWNER_TEST_CALLER_ID,
       INTERNAL_OWNER_TEST_LISTENER_ID,ctx.language_id,ctx.pricing_plan_id,ctx.currency_code,
-      ctx.caller_rate,ctx.listener_rate,authorization.authorizedMinor.toString(),authorization.maxBillableSeconds]);
+      ctx.caller_rate,ctx.listener_rate,authorization.authorizedMinor.toString(),authorization.maxBillableSeconds,
+      recordingMode]);
     await client.query(`
       INSERT INTO app.wallet_hold_events(
         wallet_id,call_session_id,currency_code,event_type,amount_minor,reason_code,idempotency_key,metadata

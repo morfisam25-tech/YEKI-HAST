@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   createCloudflareRealtimeKitProvider,
   getCloudflareRealtimeKitRecordingDetails,
+  normalizeRealtimeKitFileSize,
+  normalizeRealtimeKitRecordingDuration,
   readCloudflareRealtimeKitConfig,
 } from '../services/api/src/providers/recording-realtimekit.ts';
 import { RecordingProviderError } from '../services/api/src/providers/recording.ts';
@@ -249,6 +251,80 @@ test('getCloudflareRealtimeKitRecordingDetails normalizes the documented REST fi
       });
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test('recording duration normalization preserves integer/null values and rounds fractional seconds up for integer DB storage', () => {
+  assert.equal(normalizeRealtimeKitRecordingDuration(12), 12);
+  assert.equal(normalizeRealtimeKitRecordingDuration(12.001), 13);
+  assert.equal(normalizeRealtimeKitRecordingDuration(null), null);
+  assert.equal(normalizeRealtimeKitRecordingDuration(undefined), null);
+});
+
+test('recording duration normalization rejects negative, malformed, non-finite, and unsafe values', () => {
+  for (const value of [-0.1, '12.5', Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_VALUE]) {
+    assert.throws(
+      () => normalizeRealtimeKitRecordingDuration(value),
+      (error: unknown) => error instanceof RecordingProviderError
+        && error.code === 'cloudflare_realtimekit_invalid_recording_duration',
+    );
+  }
+});
+
+test('file size normalization accepts only non-negative safe integers and null', () => {
+  assert.equal(normalizeRealtimeKitFileSize(0), 0);
+  assert.equal(normalizeRealtimeKitFileSize(2044680), 2044680);
+  assert.equal(normalizeRealtimeKitFileSize(null), null);
+  assert.equal(normalizeRealtimeKitFileSize(undefined), null);
+});
+
+test('file size normalization rejects fractional, negative, malformed, non-finite, and unsafe values', () => {
+  for (const value of [1.5, -1, '2044680', Number.NaN, Number.NEGATIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(
+      () => normalizeRealtimeKitFileSize(value),
+      (error: unknown) => error instanceof RecordingProviderError
+        && error.code === 'cloudflare_realtimekit_invalid_file_size',
+    );
+  }
+});
+
+test('recording details expose DB-safe integer metadata and log no transient URLs', async () => {
+  await withEnvAsync({
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc1',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app1',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'secret-token-value',
+  }, async () => {
+    const originalFetch = globalThis.fetch;
+    const originalInfo = console.info;
+    const logs: string[] = [];
+    console.info = (...values: unknown[]) => logs.push(values.map(String).join(' '));
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        id: 'rec_fractional',
+        status: 'UPLOADED',
+        started_time: '2026-09-20T11:11:06.123Z',
+        stopped_time: '2026-09-20T11:11:18.124Z',
+        recording_duration: 12.001,
+        file_size: 2044680,
+        download_url: 'https://example.com/recording.mp4?X-Amz-Signature=secret',
+      },
+    }), { status: 200 })) as typeof fetch;
+    try {
+      const details = await getCloudflareRealtimeKitRecordingDetails('rec_fractional');
+      assert.equal(details.recordingDurationSeconds, 13);
+      assert.equal(details.fileSizeBytes, 2044680);
+      assert.ok(Number.isSafeInteger(details.recordingDurationSeconds));
+      assert.ok(Number.isSafeInteger(details.fileSizeBytes));
+      const diagnostic = logs.join('\n');
+      assert.match(diagnostic, /cloudflare_realtimekit_recording_metadata/);
+      assert.match(diagnostic, /"recordingDuration":12\.001/);
+      assert.match(diagnostic, /"normalizedDuration":13/);
+      assert.doesNotMatch(diagnostic, /example\.com|X-Amz|Signature|secret-token-value/);
+    } finally {
+      globalThis.fetch = originalFetch;
+      console.info = originalInfo;
     }
   });
 });

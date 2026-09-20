@@ -209,7 +209,7 @@ function amzTime(now: Date): { timestamp: string; dateStamp: string } {
 }
 
 function archiveHost(config: R2ArchiveConfig): string {
-  return `${config.bucket}.${config.accountId}.r2.cloudflarestorage.com`;
+  return `${config.accountId}.r2.cloudflarestorage.com`;
 }
 
 function canonicalQuery(params: Record<string, string>): string {
@@ -233,6 +233,7 @@ export function presignR2ObjectUrl(input: {
   const now = input.now ?? new Date();
   const { timestamp, dateStamp } = amzTime(now);
   const host = archiveHost(config);
+  const objectPath = encodeKeyPath(`${config.bucket}/${input.key}`);
   const credentialScope = `${dateStamp}/${SIGV4_REGION}/${SIGV4_SERVICE}/aws4_request`;
   const params: Record<string, string> = {
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
@@ -244,7 +245,7 @@ export function presignR2ObjectUrl(input: {
   const query = canonicalQuery(params);
   const canonicalRequest = [
     input.method,
-    encodeKeyPath(input.key),
+    objectPath,
     query,
     `host:${host}\n`,
     'host',
@@ -259,7 +260,7 @@ export function presignR2ObjectUrl(input: {
   const signature = createHmac('sha256', signingKey(config.secretAccessKey, dateStamp))
     .update(stringToSign)
     .digest('hex');
-  const url = `https://${host}${encodeKeyPath(input.key)}?${query}&X-Amz-Signature=${signature}`;
+  const url = `https://${host}${objectPath}?${query}&X-Amz-Signature=${signature}`;
   return {
     url,
     expiresAt: new Date(now.getTime() + input.expiresInSeconds * 1_000).toISOString(),

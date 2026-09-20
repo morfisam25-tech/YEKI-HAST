@@ -127,7 +127,7 @@ test('presigned GET is direct R2, short-lived, and contains no secret access key
     now: new Date('2026-09-19T08:00:00.000Z'),
     config: fakeConfig,
   });
-  assert.match(signed.playbackUrl, /^https:\/\/yeki-hast-recording-archive-preview-w88\.[^.]+\.r2\.cloudflarestorage\.com\//);
+  assert.match(signed.playbackUrl, /^https:\/\/[^.]+\.r2\.cloudflarestorage\.com\/yeki-hast-recording-archive-preview-w88\//);
   assert.match(signed.playbackUrl, /X-Amz-Expires=42/);
   assert.doesNotMatch(signed.playbackUrl, new RegExp(fakeConfig.secretAccessKey));
 });

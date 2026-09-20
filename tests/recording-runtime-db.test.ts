@@ -319,6 +319,12 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
         assert.equal(await stopRecordingForCall(callId), 'uploading');
         assert.equal(statusMock.calls.length, 1);
         assert.equal(statusMock.calls[0]?.method, 'GET');
+        const persisted = await query<{ state: string; failure_code: string | null }>(`
+          SELECT state::text, failure_code
+          FROM private_data.call_recording_sessions
+          WHERE call_session_id=$1
+        `, [callId]);
+        assert.deepEqual(persisted.rows[0], { state: 'uploading', failure_code: null });
       } finally {
         statusMock.restore();
       }

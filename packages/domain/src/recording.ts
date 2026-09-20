@@ -22,7 +22,7 @@ const RECORDING_TRANSITIONS: Record<RecordingState, readonly RecordingState[]> =
   not_requested: ['consent_pending', 'ready'],
   consent_pending: ['consent_pending', 'ready', 'failed'],
   ready: ['starting', 'failed'],
-  starting: ['starting', 'recording', 'failed'],
+  starting: ['starting', 'recording', 'stopping', 'failed'],
   recording: ['recording', 'stopping', 'failed'],
   stopping: ['stopping', 'uploading', 'stored', 'failed'],
   uploading: ['uploading', 'stored', 'failed'],

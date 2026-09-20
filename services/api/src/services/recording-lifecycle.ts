@@ -319,7 +319,18 @@ export async function stopRecordingForCall(callSessionId: string): Promise<Recor
       }
       const normalized = provider.normalizeStatus(stopped.providerStatus);
       const target: RecordingState = normalized === 'stored' ? 'stored' : normalized === 'uploading' ? 'uploading' : 'stopping';
-      await transitionState(client, session.id, session.state, target, { endedAt: true });
+      // Keep every persisted edge inside the domain state machine even when
+      // the provider has already advanced past our local state.
+      let localState: RecordingState = session.state;
+      if ((target === 'uploading' || target === 'stored') && localState === 'starting') {
+        await transitionState(client, session.id, 'starting', 'recording', { startedAt: true });
+        localState = 'recording';
+      }
+      if ((target === 'uploading' || target === 'stored') && localState === 'recording') {
+        await transitionState(client, session.id, 'recording', 'stopping', { endedAt: true });
+        localState = 'stopping';
+      }
+      await transitionState(client, session.id, localState, target, { endedAt: true });
       if (target === 'stored') {
         const retentionUntil = computePurgeEligibleAt(new Date(), recordingRetentionDays());
         await client.query(`

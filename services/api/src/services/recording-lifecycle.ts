@@ -294,10 +294,29 @@ export async function stopRecordingForCall(callSessionId: string): Promise<Recor
 
     try {
       const provider = await getRecordingProvider(session.provider);
-      const stopped = await provider.stopRecording({
+      const providerInput = {
         providerMeetingId: session.provider_meeting_id,
         providerRecordingId: session.provider_recording_id,
-      });
+      };
+      let stopped;
+      try {
+        const current = await provider.getRecordingStatus(providerInput);
+        const currentState = provider.normalizeStatus(current.providerStatus);
+        // RealtimeKit can stop automatically when max_seconds elapses (or
+        // all peers leave). In that case a subsequent explicit stop is
+        // rejected even though the desired transition already happened.
+        stopped = currentState === 'uploading' || currentState === 'stored'
+          ? current
+          : await provider.stopRecording(providerInput);
+      } catch (stopError) {
+        // Close the GET/PUT race: max_seconds may elapse after the status
+        // check but before PUT. Reconcile once and accept only an
+        // authoritative terminal/uploading provider state.
+        const reconciled = await provider.getRecordingStatus(providerInput).catch(() => null);
+        const reconciledState = reconciled ? provider.normalizeStatus(reconciled.providerStatus) : null;
+        if (!reconciled || (reconciledState !== 'uploading' && reconciledState !== 'stored')) throw stopError;
+        stopped = reconciled;
+      }
       const normalized = provider.normalizeStatus(stopped.providerStatus);
       const target: RecordingState = normalized === 'stored' ? 'stored' : normalized === 'uploading' ? 'uploading' : 'stopping';
       await transitionState(client, session.id, session.state, target, { endedAt: true });

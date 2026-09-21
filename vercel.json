@@ -3,9 +3,7 @@
   "framework": null,
   "regions": ["iad1"],
   "git": {
-    "deploymentEnabled": {
-      "w88/recording-r2-preview-archive-20260919": true
-    }
+    "deploymentEnabled": false
   },
   "rewrites": [
     { "source": "/health", "destination": "/api/index" },

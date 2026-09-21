@@ -4,7 +4,11 @@ import { canTransitionRecordingState, purgeEligibleAt, type RecordingState } fro
 import { HttpError, readRawBody, sendJson } from '../lib/http.ts';
 import { recordingRetentionDays } from '../lib/recording-config.ts';
 import { verifyRealtimeKitWebhookSignature } from '../lib/recording-webhook-signature.ts';
-import { createCloudflareRealtimeKitProvider } from '../providers/recording-realtimekit.ts';
+import {
+  createCloudflareRealtimeKitProvider,
+  normalizeRealtimeKitFileSize,
+  normalizeRealtimeKitRecordingDuration,
+} from '../providers/recording-realtimekit.ts';
 
 // W81A — RealtimeKit `recording.statusUpdate` webhook receiver. Verified
 // 2026-09-19 against developers.cloudflare.com/realtime/realtimekit/
@@ -85,10 +89,10 @@ export async function handleRealtimeKitRecordingWebhook(req: IncomingMessage, re
   const normalized = provider.normalizeStatus(providerStatus);
   const startedTime = typeof recording.startedTime === 'string' ? recording.startedTime : null;
   const stoppedTime = typeof recording.stoppedTime === 'string' ? recording.stoppedTime : null;
-  const recordingDuration = typeof recording.recordingDuration === 'number' ? recording.recordingDuration : null;
-  const fileSize = typeof recording.fileSize === 'string' || typeof recording.fileSize === 'number'
-    ? Number(recording.fileSize)
-    : null;
+  const recordingDuration = normalizeRealtimeKitRecordingDuration(recording.recordingDuration);
+  // RealtimeKit webhook fixtures include an integer byte count as a string.
+  // Accept that strict representation without coercing decimals or exponents.
+  const fileSize = normalizeRealtimeKitFileSize(recording.fileSize, true);
 
   const result = await withTransaction(async (client) => {
     const session = await client.query<{ id: string; state: string }>(`
@@ -155,7 +159,7 @@ export async function handleRealtimeKitRecordingWebhook(req: IncomingMessage, re
         startedTime,
         stoppedTime,
         recordingDuration,
-        Number.isFinite(fileSize) ? fileSize : null,
+        fileSize,
       ]);
     }
 

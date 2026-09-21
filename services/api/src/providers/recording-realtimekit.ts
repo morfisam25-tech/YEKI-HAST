@@ -251,13 +251,19 @@ export function normalizeRealtimeKitRecordingDuration(value: unknown): number | 
   );
   if (duration === null) return null;
   const rounded = Math.ceil(duration);
-  if (!Number.isSafeInteger(rounded)) {
+  if (!Number.isSafeInteger(rounded) || rounded > 2_147_483_647) {
     throw new RecordingProviderError('cloudflare_realtimekit_invalid_recording_duration');
   }
   return rounded;
 }
 
-export function normalizeRealtimeKitFileSize(value: unknown): number | null {
+export function normalizeRealtimeKitFileSize(value: unknown, allowIntegerString = false): number | null {
+  if (allowIntegerString && typeof value === 'string') {
+    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+      throw new RecordingProviderError('cloudflare_realtimekit_invalid_file_size');
+    }
+    value = Number(value);
+  }
   const fileSize = normalizeOptionalNonNegativeFiniteNumber(
     value,
     'cloudflare_realtimekit_invalid_file_size',

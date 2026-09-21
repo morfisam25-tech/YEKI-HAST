@@ -263,7 +263,7 @@ test('recording duration normalization preserves integer/null values and rounds 
 });
 
 test('recording duration normalization rejects negative, malformed, non-finite, and unsafe values', () => {
-  for (const value of [-0.1, '12.5', Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_VALUE]) {
+  for (const value of [-0.1, '12.5', Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648, Number.MAX_VALUE]) {
     assert.throws(
       () => normalizeRealtimeKitRecordingDuration(value),
       (error: unknown) => error instanceof RecordingProviderError
@@ -283,6 +283,18 @@ test('file size normalization rejects fractional, negative, malformed, non-finit
   for (const value of [1.5, -1, '2044680', Number.NaN, Number.NEGATIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(
       () => normalizeRealtimeKitFileSize(value),
+      (error: unknown) => error instanceof RecordingProviderError
+        && error.code === 'cloudflare_realtimekit_invalid_file_size',
+    );
+  }
+});
+
+test('webhook byte-count string support is strict and integer-safe', () => {
+  assert.equal(normalizeRealtimeKitFileSize('0', true), 0);
+  assert.equal(normalizeRealtimeKitFileSize('2044680', true), 2044680);
+  for (const value of ['', '01', '1.5', '-1', '1e3', ' 12', '9007199254740992']) {
+    assert.throws(
+      () => normalizeRealtimeKitFileSize(value, true),
       (error: unknown) => error instanceof RecordingProviderError
         && error.code === 'cloudflare_realtimekit_invalid_file_size',
     );

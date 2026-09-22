@@ -5,9 +5,7 @@
     "iad1"
   ],
   "git": {
-    "deploymentEnabled": {
-      "w89/final-integrated-rc-20260922": true
-    }
+    "deploymentEnabled": false
   },
   "rewrites": [
     {

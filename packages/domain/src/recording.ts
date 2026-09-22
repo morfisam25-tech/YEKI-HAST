@@ -23,7 +23,13 @@ const RECORDING_TRANSITIONS: Record<RecordingState, readonly RecordingState[]> =
   consent_pending: ['consent_pending', 'ready', 'failed'],
   ready: ['starting', 'failed'],
   starting: ['starting', 'recording', 'stopping', 'failed'],
-  recording: ['recording', 'stopping', 'failed'],
+  // RealtimeKit stops on its own when the last participant leaves and then
+  // reports UPLOADING/UPLOADED without ever passing through a stop we issued,
+  // so 'stopping' cannot be required on the way out. Refusing those left the
+  // session pinned at 'recording' forever, which meant ended_at,
+  // retention_until and purge_eligible_at were never set and the recording
+  // never became purge-eligible -- silently voiding the retention guarantee.
+  recording: ['recording', 'stopping', 'uploading', 'stored', 'failed'],
   stopping: ['stopping', 'uploading', 'stored', 'failed'],
   uploading: ['uploading', 'stored', 'failed'],
   stored: ['stored', 'held', 'purged'],

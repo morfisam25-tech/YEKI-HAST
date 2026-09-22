@@ -167,3 +167,24 @@ test('legal hold review-due date rejects a non-positive window instead of silent
   assert.throws(() => legalHoldReviewDueAt(new Date('2026-01-01T00:00:00.000Z'), 0), /postClosureReviewDays/);
   assert.throws(() => legalHoldReviewDueAt(new Date('2026-01-01T00:00:00.000Z'), -5), /postClosureReviewDays/);
 });
+
+// W89: RealtimeKit stops recording itself once the last participant leaves and
+// then reports UPLOADING/UPLOADED directly, never passing through a stop we
+// issued. The session table previously refused those, pinning the session at
+// 'recording' so ended_at / retention_until / purge_eligible_at were never set
+// and the recording never became purge-eligible.
+test('a provider-initiated stop can settle a recording session without an explicit stopping step', () => {
+  assert.equal(canTransitionRecordingState('recording', 'uploading'), true);
+  assert.equal(canTransitionRecordingState('recording', 'stored'), true);
+  // The explicit-stop path stays valid.
+  assert.equal(canTransitionRecordingState('recording', 'stopping'), true);
+  assert.equal(canTransitionRecordingState('stopping', 'stored'), true);
+  // Settled/terminal states still never reopen into an active recording.
+  assert.equal(canTransitionRecordingState('stored', 'recording'), false);
+  assert.equal(canTransitionRecordingState('purged', 'recording'), false);
+  assert.equal(canTransitionRecordingState('recording', 'ready'), false);
+  // Billing confirmation is unchanged: only a confirmed 'recording' counts.
+  assert.equal(isRecordingActiveForBilling('recording'), true);
+  assert.equal(isRecordingActiveForBilling('uploading'), false);
+  assert.equal(isRecordingActiveForBilling('stored'), false);
+});

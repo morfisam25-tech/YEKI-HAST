@@ -16,10 +16,33 @@ const training = await readFile(new URL('../apps/mobile/src/ListenerTrainingScre
 
 test('W86: Android identity stays locked (package, versionCode) and targetSdk 36 is proven via expo-build-properties', () => {
   assert.match(appConfig, /"package": "app\.yekihast\.mobile"/);
-  assert.match(appConfig, /"versionCode": 8/);
+  assert.match(appConfig, /"versionCode": 9/);
   assert.match(appConfig, /"expo-build-properties"[\s\S]*"targetSdkVersion": 36/);
   assert.match(appConfig, /"expo-build-properties"[\s\S]*"compileSdkVersion": 36/);
   assert.match(mobilePackage, /"expo-build-properties": "~57\.0\.21"/);
+});
+
+// W89: the plugin and its two app.json hooks are what make a real Gradle build
+// succeed and keep the merged manifest audio-only. Nothing asserted them
+// before, which is how W89 initially inherited a tree without the plugin.
+test('W86/W89: the RealtimeKit Android compatibility plugin is registered and location permissions stay blocked', async () => {
+  const plugin = await readFile(new URL('../apps/mobile/plugins/withRealtimeKitAndroidCompat.js', import.meta.url), 'utf8');
+  assert.match(plugin, /blob_provider_authority/);
+  assert.match(plugin, /android\.hardware\.camera/);
+  assert.match(plugin, /'android:required': 'false'/);
+  assert.match(plugin, /'tools:node': 'replace'/);
+
+  const config = JSON.parse(appConfig);
+  assert.ok(
+    config.expo.plugins.includes('./plugins/withRealtimeKitAndroidCompat'),
+    'the compatibility plugin must be registered or a real Gradle build fails on the undefined blob_provider_authority string',
+  );
+  for (const permission of ['android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION']) {
+    assert.ok(
+      config.expo.android.blockedPermissions.includes(permission),
+      permission + ' must stay blocked: the RealtimeKit library manifest would otherwise merge it into this audio-only app',
+    );
+  }
 });
 
 test('W86: eas.json adds a store-distribution app-bundle Closed-Test profile that never hardcodes the Production API', () => {

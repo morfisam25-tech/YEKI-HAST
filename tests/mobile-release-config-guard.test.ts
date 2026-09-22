@@ -11,7 +11,7 @@ const sdk57Node = '22.23.1';
 
 test('mobile app has stable Android and iOS application identifiers', () => {
   assert.equal(appConfig.expo.android.package, 'app.yekihast.mobile');
-  assert.equal(appConfig.expo.android.versionCode, 8);
+  assert.equal(appConfig.expo.android.versionCode, 9);
   assert.equal(appConfig.expo.ios.bundleIdentifier, 'app.yekihast.mobile');
 });
 

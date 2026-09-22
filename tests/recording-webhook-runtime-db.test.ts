@@ -106,7 +106,7 @@ test('W81A RealtimeKit recording webhook runtime', { skip }, async (t) => {
     return { callSessionId, recordingSessionId: session.rows[0].id, providerRecordingId };
   }
 
-  function uploadedPayload(providerRecordingId: string): Buffer {
+  function uploadedPayload(providerRecordingId: string, metadata: { recordingDuration?: unknown; fileSize?: unknown } = {}): Buffer {
     return Buffer.from(JSON.stringify({
       event: 'recording.statusUpdate',
       recording: {
@@ -118,11 +118,27 @@ test('W81A RealtimeKit recording webhook runtime', { skip }, async (t) => {
         downloadUrlExpiry: '2026-06-10T10:30:00.000Z',
         startedTime: '2026-06-03T10:00:00.000Z',
         stoppedTime: '2026-06-03T10:30:00.000Z',
-        fileSize: '2044680',
+        fileSize: Object.hasOwn(metadata, 'fileSize') ? metadata.fileSize : '2044680',
         outputFileName: 'weekly-sync.mp4',
-        recordingDuration: 1800,
+        recordingDuration: Object.hasOwn(metadata, 'recordingDuration') ? metadata.recordingDuration : 1800,
       },
     }));
+  }
+
+  function statusPayload(providerRecordingId: string, status: string, metadata: Record<string, unknown> = {}): Buffer {
+    return Buffer.from(JSON.stringify({
+      event: 'recording.statusUpdate',
+      recording: { id: providerRecordingId, recordingId: providerRecordingId, status, ...metadata },
+    }));
+  }
+
+  async function deliver(body: Buffer): Promise<void> {
+    const res = makeRes();
+    await handleRealtimeKitRecordingWebhook(
+      makeRawReq(body, { 'rtk-signature': sign(body), 'rtk-uuid': randomUUID() }), res as never,
+    );
+    assert.equal(res.statusCode, 200);
+    assert.equal(JSON.parse(res.body).matched, true);
   }
 
   await t.test('a request with no rtk-signature header is rejected before touching the database', async () => {
@@ -180,6 +196,130 @@ test('W81A RealtimeKit recording webhook runtime', { skip }, async (t) => {
       [recordingSessionId, providerRecordingId],
     );
     assert.equal(segmentAfterRedelivery.rows[0].n, 1, 'redelivery must not create a duplicate segment row');
+  });
+
+  await t.test('a signed fractional-duration UPLOADED event stores a safe integer and both automatic retention dates', async () => {
+    const { recordingSessionId, providerRecordingId } = await seedRecordingSession('uploading');
+    const body = uploadedPayload(providerRecordingId, { recordingDuration: 14.048, fileSize: '558670' });
+    const response = makeRes();
+    await handleRealtimeKitRecordingWebhook(
+      makeRawReq(body, { 'rtk-signature': sign(body), 'rtk-uuid': randomUUID() }), response as never,
+    );
+    assert.equal(response.statusCode, 200);
+    const session = await query<{
+      state: string; retention_until: Date | null; purge_eligible_at: Date | null; updated_at: Date;
+    }>(`
+      SELECT state::text, retention_until, purge_eligible_at, updated_at
+      FROM private_data.call_recording_sessions WHERE id=$1
+    `, [recordingSessionId]);
+    const row = session.rows[0];
+    assert.equal(row.state, 'stored');
+    assert.ok(row.retention_until);
+    assert.ok(row.purge_eligible_at);
+    assert.equal(row.retention_until.getTime(), row.purge_eligible_at.getTime());
+    const retentionDays = (row.retention_until.getTime() - row.updated_at.getTime()) / 86_400_000;
+    assert.ok(retentionDays >= 29.99 && retentionDays <= 30.01);
+    const segment = await query<{ duration_seconds: number; bytes: string }>(`
+      SELECT duration_seconds, bytes::text FROM private_data.call_recording_segments
+      WHERE recording_session_id=$1 AND provider_output_id=$2
+    `, [recordingSessionId, providerRecordingId]);
+    assert.equal(segment.rows[0].duration_seconds, 15);
+    assert.equal(segment.rows[0].bytes, '558670');
+  });
+
+  await t.test('RECORDING, UPLOADING, UPLOADED finalize the same provisional segment', async () => {
+    const { recordingSessionId, providerRecordingId } = await seedRecordingSession('stopping');
+    await deliver(statusPayload(providerRecordingId, 'RECORDING'));
+    const provisional = await query<{ id: string; state: string }>(`
+      SELECT id::text, state::text FROM private_data.call_recording_segments
+      WHERE recording_session_id=$1 AND provider_output_id=$2
+    `, [recordingSessionId, providerRecordingId]);
+    assert.equal(provisional.rowCount, 1);
+    assert.equal(provisional.rows[0].state, 'recording');
+
+    await deliver(statusPayload(providerRecordingId, 'UPLOADING'));
+    await deliver(statusPayload(providerRecordingId, 'UPLOADED', {
+      startedTime: '2026-06-03T10:00:00.000Z',
+      stoppedTime: '2026-06-03T10:00:15.000Z',
+      recordingDuration: 14.048,
+      fileSize: '558670',
+    }));
+    const session = await query<{ state: string; retention_until: Date | null; purge_eligible_at: Date | null }>(`
+      SELECT state::text, retention_until, purge_eligible_at
+      FROM private_data.call_recording_sessions WHERE id=$1
+    `, [recordingSessionId]);
+    assert.equal(session.rows[0].state, 'stored');
+    assert.ok(session.rows[0].retention_until);
+    assert.ok(session.rows[0].purge_eligible_at);
+    assert.equal(session.rows[0].retention_until.getTime(), session.rows[0].purge_eligible_at.getTime());
+    const segments = await query<{ id: string; state: string; duration_seconds: number; bytes: string; ended_at: Date | null }>(`
+      SELECT id::text, state::text, duration_seconds, bytes::text, ended_at
+      FROM private_data.call_recording_segments WHERE recording_session_id=$1 AND provider_output_id=$2
+    `, [recordingSessionId, providerRecordingId]);
+    assert.equal(segments.rowCount, 1);
+    assert.equal(segments.rows[0].id, provisional.rows[0].id);
+    assert.equal(segments.rows[0].state, 'stored');
+    assert.equal(segments.rows[0].duration_seconds, 15);
+    assert.equal(segments.rows[0].bytes, '558670');
+    assert.ok(segments.rows[0].ended_at);
+  });
+
+  await t.test('delayed earlier provider events cannot regress a stored segment or clear final metadata', async () => {
+    const { recordingSessionId, providerRecordingId } = await seedRecordingSession('uploading');
+    await deliver(uploadedPayload(providerRecordingId, { recordingDuration: 14.048, fileSize: '558670' }));
+    for (const status of ['RECORDING', 'UPLOADING']) {
+      await deliver(statusPayload(providerRecordingId, status, {
+        recordingDuration: null, fileSize: null,
+      }));
+    }
+    const segments = await query<{ state: string; duration_seconds: number; bytes: string; ended_at: Date | null }>(`
+      SELECT state::text, duration_seconds, bytes::text, ended_at
+      FROM private_data.call_recording_segments WHERE recording_session_id=$1 AND provider_output_id=$2
+    `, [recordingSessionId, providerRecordingId]);
+    assert.equal(segments.rowCount, 1);
+    assert.equal(segments.rows[0].state, 'stored');
+    assert.equal(segments.rows[0].duration_seconds, 15);
+    assert.equal(segments.rows[0].bytes, '558670');
+    assert.ok(segments.rows[0].ended_at);
+  });
+
+  await t.test('a signed UPLOADED event preserves null duration while storing valid numeric file size', async () => {
+    const { recordingSessionId, providerRecordingId } = await seedRecordingSession('uploading');
+    const body = uploadedPayload(providerRecordingId, { recordingDuration: null, fileSize: 558670 });
+    const response = makeRes();
+    await handleRealtimeKitRecordingWebhook(
+      makeRawReq(body, { 'rtk-signature': sign(body), 'rtk-uuid': randomUUID() }), response as never,
+    );
+    assert.equal(response.statusCode, 200);
+    const segment = await query<{ duration_seconds: number | null; bytes: string }>(`
+      SELECT duration_seconds, bytes::text FROM private_data.call_recording_segments
+      WHERE recording_session_id=$1 AND provider_output_id=$2
+    `, [recordingSessionId, providerRecordingId]);
+    assert.equal(segment.rows[0].duration_seconds, null);
+    assert.equal(segment.rows[0].bytes, '558670');
+  });
+
+  await t.test('signed invalid webhook metadata fails closed without changing lifecycle state', async () => {
+    for (const metadata of [
+      { recordingDuration: -1 },
+      { recordingDuration: '14.048' },
+      { fileSize: '-1' },
+      { fileSize: '1.5' },
+      { fileSize: '1e3' },
+    ]) {
+      const { recordingSessionId, providerRecordingId } = await seedRecordingSession('uploading');
+      const body = uploadedPayload(providerRecordingId, metadata);
+      await assert.rejects(
+        () => handleRealtimeKitRecordingWebhook(
+          makeRawReq(body, { 'rtk-signature': sign(body), 'rtk-uuid': randomUUID() }), makeRes() as never,
+        ),
+        /cloudflare_realtimekit_invalid_(recording_duration|file_size)/,
+      );
+      const session = await query<{ state: string }>(
+        'SELECT state::text FROM private_data.call_recording_sessions WHERE id=$1', [recordingSessionId],
+      );
+      assert.equal(session.rows[0].state, 'uploading');
+    }
   });
 
   await t.test('an event for a recording id with no matching session is safely ignored, not a fabricated match', async () => {

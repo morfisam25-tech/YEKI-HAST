@@ -283,18 +283,51 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
       ]);
       try { await startRecordingForCall(callId, 600); } finally { startMock.restore(); }
 
-      const stopMock = mockFetchSequence([{ status: 200, json: { success: true, data: { status: 'STOPPED' } } }]);
+      const stopMock = mockFetchSequence([
+        { status: 200, json: { success: true, data: { status: 'RECORDING' } } },
+        { status: 200, json: { success: true, data: { status: 'UPLOADING' } } },
+      ]);
       let firstStop: string;
       let secondStop: string;
       try {
         firstStop = await stopRecordingForCall(callId);
         secondStop = await stopRecordingForCall(callId);
       } finally {
-        assert.equal(stopMock.calls.length, 1, 'the provider stop endpoint must be called at most once');
+        assert.equal(stopMock.calls.length, 2, 'one status check and at most one provider stop are allowed');
         stopMock.restore();
       }
-      assert.equal(firstStop, 'stopping');
-      assert.equal(secondStop, 'stopping');
+      assert.equal(firstStop, 'uploading');
+      assert.equal(secondStop, 'uploading');
+    });
+  });
+
+  await t.test('automatic provider stop is reconciled without issuing a redundant stop request', async () => {
+    await withEnv({ ...REQUIRED_ENV, CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc', CLOUDFLARE_REALTIMEKIT_APP_ID: 'app', CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'tok' }, async () => {
+      const { callId, callerId, listenerId } = await seedCall('all_with_consent');
+      await recordCallRecordingConsent({ callSessionId: callId, userId: callerId, role: 'caller', locale: 'fa-IR', clientVersion: 'test' });
+      await recordCallRecordingConsent({ callSessionId: callId, userId: listenerId, role: 'listener', locale: 'fa-IR', clientVersion: 'test' });
+      const startMock = mockFetchSequence([
+        { status: 200, json: { success: true, data: { id: 'meeting_1' } } },
+        { status: 200, json: { success: true, data: { id: 'rec_1', status: 'RECORDING' } } },
+      ]);
+      try { await startRecordingForCall(callId, 60); } finally { startMock.restore(); }
+
+      const statusMock = mockFetchSequence([
+        { status: 200, json: { success: true, data: { status: 'UPLOADING' } } },
+      ]);
+      try {
+        assert.equal(await stopRecordingForCall(callId), 'uploading');
+        assert.equal(statusMock.calls.length, 1);
+        assert.equal(statusMock.calls[0]?.method, 'GET');
+        const persisted = await query<{ state: string; failure_code: string | null }>(`
+          SELECT state::text, failure_code
+          FROM private_data.call_recording_sessions
+          WHERE call_session_id=$1
+        `, [callId]);
+        assert.deepEqual(persisted.rows[0], { state: 'uploading', failure_code: null });
+      } finally {
+        statusMock.restore();
+      }
     });
   });
 

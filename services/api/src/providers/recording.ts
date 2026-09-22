@@ -1,11 +1,6 @@
 import type { RecordingState } from '../../../../packages/domain/src/recording.ts';
 
-// Provider-agnostic contract. The orchestrator (services/api/src/services/
-// recording-lifecycle.ts) talks to this interface only; it never imports a
-// concrete adapter directly. This is what the eventual RealtimeKit mobile
-// media migration (out of scope for W58) plugs into without touching the
-// orchestrator, billing gate, consent model, or admin/evidence code.
-
+// Provider-agnostic contract. The orchestrator talks to this interface only.
 export interface RecordingSessionHandle {
   providerMeetingId: string;
 }
@@ -29,9 +24,6 @@ export interface RecordingStopResult {
 export interface RecordingProvider {
   readonly name: string;
 
-  // Create (or reuse) the provider-side session/meeting a recording attaches
-  // to. Does not itself start recording -- callers of this interface decide
-  // when to move from 'ready' to 'starting'.
   prepareSession(input: { callSessionId: string }): Promise<RecordingSessionHandle>;
 
   startRecording(input: {
@@ -49,9 +41,6 @@ export interface RecordingProvider {
     providerRecordingId: string;
   }): Promise<RecordingStopResult>;
 
-  // Maps this provider's own status vocabulary onto the platform's
-  // provider-agnostic app.recording_state. Kept on the adapter (not the
-  // orchestrator) because only the adapter knows its own provider's enum.
   normalizeStatus(providerStatus: string): RecordingState;
 }
 
@@ -66,14 +55,15 @@ export class RecordingProviderError extends Error {
 let cachedProvider: RecordingProvider | undefined;
 let cachedProviderName: string | undefined;
 
-// Lazily imports the concrete adapter so a deployment that never configures
-// CALL_RECORDING_PROVIDER never has to load/validate it.
 export async function getRecordingProvider(providerName: string): Promise<RecordingProvider> {
   if (cachedProvider && cachedProviderName === providerName) return cachedProvider;
 
   if (providerName === 'cloudflare_realtimekit') {
-    const { createCloudflareRealtimeKitProvider } = await import('./recording-realtimekit.ts');
-    cachedProvider = createCloudflareRealtimeKitProvider();
+    // W88 archive wrapper is a no-op unless CALL_RECORDING_ARCHIVE_R2_ENABLED
+    // is explicitly configured. This keeps local/non-archive behavior identical
+    // while letting Preview pass a per-recording Cloudflare R2 storage_config.
+    const { createCloudflareRealtimeKitArchiveProvider } = await import('./recording-realtimekit-archive.ts');
+    cachedProvider = createCloudflareRealtimeKitArchiveProvider();
     cachedProviderName = providerName;
     return cachedProvider;
   }
@@ -81,8 +71,6 @@ export async function getRecordingProvider(providerName: string): Promise<Record
   throw new RecordingProviderError('recording_provider_not_supported', `Unsupported CALL_RECORDING_PROVIDER: "${providerName}"`);
 }
 
-// Test-only: internal-owner-test / unit tests need to reset the module-level
-// cache between runs since env-derived adapters are cached by design.
 export function __resetRecordingProviderCacheForTests(): void {
   cachedProvider = undefined;
   cachedProviderName = undefined;

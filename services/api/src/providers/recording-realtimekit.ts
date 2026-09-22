@@ -233,6 +233,85 @@ export interface CloudflareRealtimeKitRecordingDetails {
   transientDownloadUrlExpiry: string | null;
 }
 
+function normalizeOptionalNonNegativeFiniteNumber(
+  value: unknown,
+  invalidCode: string,
+): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new RecordingProviderError(invalidCode);
+  }
+  return value;
+}
+
+export function normalizeRealtimeKitRecordingDuration(value: unknown): number | null {
+  const duration = normalizeOptionalNonNegativeFiniteNumber(
+    value,
+    'cloudflare_realtimekit_invalid_recording_duration',
+  );
+  if (duration === null) return null;
+  const rounded = Math.ceil(duration);
+  if (!Number.isSafeInteger(rounded) || rounded > 2_147_483_647) {
+    throw new RecordingProviderError('cloudflare_realtimekit_invalid_recording_duration');
+  }
+  return rounded;
+}
+
+export function normalizeRealtimeKitFileSize(value: unknown, allowIntegerString = false): number | null {
+  if (allowIntegerString && typeof value === 'string') {
+    if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+      throw new RecordingProviderError('cloudflare_realtimekit_invalid_file_size');
+    }
+    value = Number(value);
+  }
+  const fileSize = normalizeOptionalNonNegativeFiniteNumber(
+    value,
+    'cloudflare_realtimekit_invalid_file_size',
+  );
+  if (fileSize === null) return null;
+  if (!Number.isSafeInteger(fileSize)) {
+    throw new RecordingProviderError('cloudflare_realtimekit_invalid_file_size');
+  }
+  return fileSize;
+}
+
+function diagnosticTimestamp(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
+    return '[invalid]';
+  }
+  return value;
+}
+
+function logRecordingMetadataDiagnostic(input: {
+  recordingDuration: unknown;
+  fileSize: unknown;
+  startedTime: unknown;
+  stoppedTime: unknown;
+  normalizedDuration: number | null;
+  normalizedFileSize: number | null;
+}): void {
+  console.info(JSON.stringify({
+    event: 'cloudflare_realtimekit_recording_metadata',
+    recordingDuration: typeof input.recordingDuration === 'number' && Number.isFinite(input.recordingDuration)
+      ? input.recordingDuration
+      : input.recordingDuration == null ? null : '[invalid]',
+    recordingDurationType: input.recordingDuration === null
+      ? 'null'
+      : input.recordingDuration === undefined ? 'undefined' : typeof input.recordingDuration,
+    fileSize: typeof input.fileSize === 'number' && Number.isFinite(input.fileSize)
+      ? input.fileSize
+      : input.fileSize == null ? null : '[invalid]',
+    fileSizeType: input.fileSize === null
+      ? 'null'
+      : input.fileSize === undefined ? 'undefined' : typeof input.fileSize,
+    startedTime: diagnosticTimestamp(input.startedTime),
+    stoppedTime: diagnosticTimestamp(input.stoppedTime),
+    normalizedDuration: input.normalizedDuration,
+    normalizedFileSize: input.normalizedFileSize,
+  }));
+}
+
 export async function getCloudflareRealtimeKitRecordingDetails(
   providerRecordingId: string,
 ): Promise<CloudflareRealtimeKitRecordingDetails> {
@@ -245,13 +324,24 @@ export async function getCloudflareRealtimeKitRecordingDetails(
     invoked_time?: string | null;
     started_time?: string | null;
     stopped_time?: string | null;
-    recording_duration?: number | null;
-    file_size?: number | null;
+    recording_duration?: unknown;
+    file_size?: unknown;
     download_url?: string | null;
     audio_download_url?: string | null;
     download_url_expiry?: string | null;
   }>(config, 'GET', `/recordings/${encodeURIComponent(providerRecordingId)}`);
   if (!data?.id || !data.status) throw new RecordingProviderError('cloudflare_realtimekit_status_unavailable');
+
+  const recordingDurationSeconds = normalizeRealtimeKitRecordingDuration(data.recording_duration);
+  const fileSizeBytes = normalizeRealtimeKitFileSize(data.file_size);
+  logRecordingMetadataDiagnostic({
+    recordingDuration: data.recording_duration,
+    fileSize: data.file_size,
+    startedTime: data.started_time,
+    stoppedTime: data.stopped_time,
+    normalizedDuration: recordingDurationSeconds,
+    normalizedFileSize: fileSizeBytes,
+  });
 
   return {
     providerRecordingId: data.id,
@@ -261,8 +351,8 @@ export async function getCloudflareRealtimeKitRecordingDetails(
     invokedAt: data.invoked_time ?? null,
     startedAt: data.started_time ?? null,
     stoppedAt: data.stopped_time ?? null,
-    recordingDurationSeconds: data.recording_duration ?? null,
-    fileSizeBytes: data.file_size ?? null,
+    recordingDurationSeconds,
+    fileSizeBytes,
     transientDownloadUrl: data.download_url ?? null,
     transientAudioDownloadUrl: data.audio_download_url ?? null,
     transientDownloadUrlExpiry: data.download_url_expiry ?? null,

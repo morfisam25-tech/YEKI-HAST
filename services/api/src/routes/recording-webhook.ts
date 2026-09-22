@@ -4,7 +4,25 @@ import { canTransitionRecordingState, purgeEligibleAt, type RecordingState } fro
 import { HttpError, readRawBody, sendJson } from '../lib/http.ts';
 import { recordingRetentionDays } from '../lib/recording-config.ts';
 import { verifyRealtimeKitWebhookSignature } from '../lib/recording-webhook-signature.ts';
-import { createCloudflareRealtimeKitProvider } from '../providers/recording-realtimekit.ts';
+import {
+  createCloudflareRealtimeKitProvider,
+  normalizeRealtimeKitFileSize,
+  normalizeRealtimeKitRecordingDuration,
+} from '../providers/recording-realtimekit.ts';
+
+// Provider segment events progress independently of the session state machine:
+// RealtimeKit can move directly from RECORDING to UPLOADING.
+const SEGMENT_PROGRESS: Partial<Record<RecordingState, number>> = {
+  starting: 0, recording: 1, uploading: 2, stored: 3,
+};
+
+function canAdvanceSegment(from: RecordingState, to: RecordingState): boolean {
+  if (from === 'failed' || from === 'purged' || from === 'held') return false;
+  if (to === 'failed') return from !== 'stored';
+  const fromRank = SEGMENT_PROGRESS[from];
+  const toRank = SEGMENT_PROGRESS[to];
+  return fromRank !== undefined && toRank !== undefined && toRank >= fromRank;
+}
 
 // W81A — RealtimeKit `recording.statusUpdate` webhook receiver. Verified
 // 2026-09-19 against developers.cloudflare.com/realtime/realtimekit/
@@ -85,10 +103,10 @@ export async function handleRealtimeKitRecordingWebhook(req: IncomingMessage, re
   const normalized = provider.normalizeStatus(providerStatus);
   const startedTime = typeof recording.startedTime === 'string' ? recording.startedTime : null;
   const stoppedTime = typeof recording.stoppedTime === 'string' ? recording.stoppedTime : null;
-  const recordingDuration = typeof recording.recordingDuration === 'number' ? recording.recordingDuration : null;
-  const fileSize = typeof recording.fileSize === 'string' || typeof recording.fileSize === 'number'
-    ? Number(recording.fileSize)
-    : null;
+  const recordingDuration = normalizeRealtimeKitRecordingDuration(recording.recordingDuration);
+  // RealtimeKit webhook fixtures include an integer byte count as a string.
+  // Accept that strict representation without coercing decimals or exponents.
+  const fileSize = normalizeRealtimeKitFileSize(recording.fileSize, true);
 
   const result = await withTransaction(async (client) => {
     const session = await client.query<{ id: string; state: string }>(`
@@ -139,11 +157,23 @@ export async function handleRealtimeKitRecordingWebhook(req: IncomingMessage, re
     // exist yet (see providers/recording-playback-resolver.ts). The
     // transient RealtimeKit download URLs are never written here or
     // anywhere else (see this route's header comment).
-    const existingSegment = await client.query(`
-      SELECT 1 FROM private_data.call_recording_segments
+    const existingSegment = await client.query<{ state: RecordingState }>(`
+      SELECT state::text FROM private_data.call_recording_segments
       WHERE recording_session_id=$1 AND provider_output_id=$2
     `, [sessionRow.id, providerRecordingId]);
-    if (!existingSegment.rowCount) {
+    if (from !== 'purged' && from !== 'failed' && existingSegment.rowCount &&
+        canAdvanceSegment(existingSegment.rows[0].state, normalized)) {
+      await client.query(`
+        UPDATE private_data.call_recording_segments
+        SET state=$3::app.recording_state,
+            started_at=COALESCE($4::timestamptz, started_at),
+            ended_at=COALESCE($5::timestamptz, ended_at),
+            duration_seconds=COALESCE($6::integer, duration_seconds),
+            bytes=COALESCE($7::bigint, bytes),
+            updated_at=now()
+        WHERE recording_session_id=$1 AND provider_output_id=$2
+      `, [sessionRow.id, providerRecordingId, normalized, startedTime, stoppedTime, recordingDuration, fileSize]);
+    } else if (from !== 'purged' && from !== 'failed' && !existingSegment.rowCount) {
       await client.query(`
         INSERT INTO private_data.call_recording_segments(
           recording_session_id, provider_output_id, state, started_at, ended_at, duration_seconds, bytes
@@ -155,7 +185,7 @@ export async function handleRealtimeKitRecordingWebhook(req: IncomingMessage, re
         startedTime,
         stoppedTime,
         recordingDuration,
-        Number.isFinite(fileSize) ? fileSize : null,
+        fileSize,
       ]);
     }
 

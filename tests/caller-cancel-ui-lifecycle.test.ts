@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-const screen = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
+const screen = (await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('Caller UI uses local cancel only while the call is still unclaimed in routing', () => {
   const end = screen.match(/async function endCall[\s\S]*?finally \{ setBusy\(false\); \}\n  \}/)?.[0] ?? '';

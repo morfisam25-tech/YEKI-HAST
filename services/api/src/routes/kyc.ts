@@ -12,6 +12,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, requireString, sendJson } from '../lib/http.ts';
 import { encryptPrivateText, kycLookupHash } from '../lib/security.ts';
 import { validateKycInquiryProviderEnv } from '../providers/kyc-inquiry.ts';
+import { executeListenerKycVerification } from '../services/kyc-verification.ts';
 
 function requireKycSubmissionProvider(): void {
   try { validateKycInquiryProviderEnv(); }
@@ -169,7 +170,14 @@ export async function submitListenerKyc(req: IncomingMessage, res: ServerRespons
       return { applicationId: appRow.id };
     });
 
-    sendJson(res, 202, { ok: true, status: 'pending', applicationId: result.applicationId });
+    // Runs the field-level provider checks synchronously after the pending
+    // row is committed. Never throws: a provider outage or malformed
+    // response leaves the submission at 'pending' (auditable per-field as
+    // 'error' -- see kyc-verification.ts), it never fails the submission
+    // itself or fakes a verified outcome.
+    const outcome = await executeListenerKycVerification(userId).catch(() => ({ status: 'pending' as const }));
+
+    sendJson(res, 202, { ok: true, status: outcome.status, applicationId: result.applicationId });
   } catch (error) {
     const sqlError = error as { code?: string; constraint?: string };
     if (sqlError?.code === '23505') throw new HttpError(409, 'kyc_identity_conflict');
@@ -198,11 +206,26 @@ export async function getListenerKycStatus(req: IncomingMessage, res: ServerResp
   `, [userId]);
   const row = result.rows[0];
   if (!row) throw new HttpError(404, 'listener_application_not_found');
+
+  const checks = await query<{ check_kind: string; status: string; resolved_at: string | null }>(`
+    SELECT check_kind::text, status::text, resolved_at::text
+    FROM private_data.listener_kyc_checks
+    WHERE user_id=$1
+    ORDER BY check_kind
+  `, [userId]);
+
   sendJson(res, 200, {
     applicationStatus: row.application_status,
     status: row.kyc_status ?? 'not_started',
     verifiedAt: row.verified_at,
     rejectedReasonCode: row.rejected_reason_code,
     updatedAt: row.updated_at,
+    // Field-level evidence only -- never collapsed into a single "identity
+    // verified" claim. Each check kind stands on its own.
+    checks: checks.rows.map((check) => ({
+      checkKind: check.check_kind,
+      status: check.status,
+      resolvedAt: check.resolved_at,
+    })),
   });
 }

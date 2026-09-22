@@ -62,6 +62,8 @@ export default function BookingCallPage() {
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
   const [maxBillableSeconds, setMaxBillableSeconds] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [reportCategory, setReportCategory] = useState('inappropriate_conduct');
+  const [safetyNotice, setSafetyNotice] = useState('');
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -330,6 +332,56 @@ export default function BookingCallPage() {
     }
   }
 
+  async function safetyExit() {
+    if (!callId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`calls/${callId}/voice/safety-exit`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'web_booking_safety_exit', blockCounterparty: true }),
+      });
+      setNotice('تماس فوراً برای ایمنی پایان یافت و طرف مقابل بلاک شد.');
+      setPhase('ended');
+      cleanup();
+    } catch {
+      setError('خروج امن تأیید نشد. دوباره تلاش کن.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reportCall() {
+    if (!callId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('safety/report', {
+        method: 'POST',
+        body: JSON.stringify({ callId, category: reportCategory }),
+      });
+      setSafetyNotice('گزارش ثبت شد. بررسی از متن گزارش و شواهد غیرصوتی موجود استفاده می‌کند.');
+    } catch {
+      setError('ثبت گزارش انجام نشد. دوباره تلاش کن.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function blockCounterparty() {
+    if (!callId || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('safety/block', { method: 'POST', body: JSON.stringify({ callId }) });
+      setSafetyNotice('طرف مقابل برای تماس‌های بعدی بلاک شد.');
+    } catch {
+      setError('ثبت بلاک انجام نشد. دوباره تلاش کن.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const hasTarget = Boolean(bookingId || existingCallId);
 
   return (
@@ -337,7 +389,7 @@ export default function BookingCallPage() {
       <div className={styles.shell}>
         <header className={styles.header}>
           <h1 className={styles.title}>تماس رزروشده</h1>
-          <p className={styles.lead}>میکروفن ابتدا آماده می‌شود. برای رزروی که هنوز شروع نشده، رزرو موقت اعتبار فقط هنگام ساخت تماس ایجاد می‌شود.</p>
+          <p className={styles.lead}>تماس زنده با یک شنونده انسانی است. برای امنیت کاربران و رسیدگی به شکایت‌های احتمالی، این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود. میکروفن ابتدا آماده می‌شود و رزرو موقت اعتبار فقط هنگام ساخت تماس ایجاد می‌شود.</p>
           <nav className={styles.nav}>
             <a className={styles.link} href="/booking">رزروهای من</a>
             <a className={styles.link} href="/talk">تماس فوری</a>
@@ -361,6 +413,22 @@ export default function BookingCallPage() {
           ) : phase === 'ended' ? (
             <>
               <h2 className={styles.heading}>تماس بسته شد</h2>
+              <p className={styles.empty}>فایل صوتی تماس وجود ندارد. گزارش و بلاک با شواهد غیرصوتی موجود ثبت می‌شود.</p>
+              <label>
+                <span className={styles.meta}>دسته گزارش</span>
+                <select className={styles.control} value={reportCategory} onChange={(event) => setReportCategory(event.target.value)}>
+                  <option value="inappropriate_conduct">رفتار نامناسب</option>
+                  <option value="harassment">آزار</option>
+                  <option value="threat">تهدید</option>
+                  <option value="privacy_violation">نقض حریم خصوصی</option>
+                  <option value="other">سایر</option>
+                </select>
+              </label>
+              <div className={styles.row}>
+                <button type="button" className={styles.secondary} disabled={busy} onClick={() => void reportCall()}>ثبت گزارش</button>
+                <button type="button" className={styles.danger} disabled={busy} onClick={() => void blockCounterparty()}>بلاک طرف مقابل</button>
+              </div>
+              {safetyNotice && <div className={styles.notice} aria-live="polite">{safetyNotice}</div>}
               <a className={styles.link} href="/booking">بازگشت به رزروها</a>
             </>
           ) : (
@@ -380,7 +448,12 @@ export default function BookingCallPage() {
                   <button type="button" className={styles.secondary} disabled={busy} onClick={() => void extend(30)}>+۳۰ دقیقه</button>
                 </div>
               )}
-              {callId && <button type="button" className={styles.danger} disabled={busy} onClick={() => void end()}>پایان تماس</button>}
+              {callId && (
+                <div className={styles.row}>
+                  <button type="button" className={styles.secondary} disabled={busy} onClick={() => void end()}>پایان تماس</button>
+                  <button type="button" className={styles.danger} disabled={busy} onClick={() => void safetyExit()}>خروج امن + بلاک</button>
+                </div>
+              )}
               <audio ref={remoteAudioRef} autoPlay playsInline aria-label="صدای شنونده" />
             </>
           )}

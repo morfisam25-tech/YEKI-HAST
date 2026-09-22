@@ -1,4 +1,5 @@
 import { randomUUID, sign } from 'node:crypto';
+import { isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
 
 export interface SendLoginCodeInput {
   email: string;
@@ -92,7 +93,12 @@ export function validateEmailProviderEnv(): void {
   const provider = process.env.EMAIL_PROVIDER?.trim();
   if (!provider) throw new Error('EMAIL_PROVIDER is required');
   if (provider === 'dev') {
-    if (process.env.NODE_ENV === 'production') throw new Error('dev email provider is forbidden in production');
+    // Real Production is untouched: isInternalOwnerTestMode() always returns false there.
+    // A genuinely isolated, fail-closed, token-gated Preview Internal Beta deployment may
+    // also use the dev provider, since Vercel Preview builds still run with NODE_ENV=production.
+    if (process.env.NODE_ENV === 'production' && !isInternalOwnerTestMode()) {
+      throw new Error('dev email provider is forbidden in production');
+    }
     return;
   }
   if (provider === 'gmail_api') {

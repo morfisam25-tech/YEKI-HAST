@@ -4,6 +4,7 @@ import { requireAuth } from '../lib/auth.ts';
 import { HttpError, sendJson } from '../lib/http.ts';
 import { sessionTiming } from '../domain/session-policy.ts';
 import { settleInternetVoiceCall } from '../services/internet-voice-lifecycle.ts';
+import { reconcileRecordingForHeartbeat } from '../services/recording-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TERMINAL_STATUSES = new Set(['completed', 'missed', 'cancelled', 'failed', 'safety_terminated']);
@@ -51,6 +52,32 @@ export async function heartbeatInternetVoiceCall(
       RETURNING id
     `, [row.id]);
     if (!updated.rowCount) throw new HttpError(409, 'call_not_live');
+
+    // A recording-required call can be 'connected' (media is live) while
+    // still unbilled because recording has not yet been authoritatively
+    // confirmed active -- see the media_connected billing gate in
+    // routes/internet-voice.ts. Re-check on every heartbeat, and enforce the
+    // bounded confirmation timeout deterministically here.
+    const recordingOutcome = await reconcileRecordingForHeartbeat(row.id);
+    if (recordingOutcome === 'timeout') {
+      const settlement = await settleInternetVoiceCall({
+        callId: row.id,
+        endedByRole: role,
+        endedReason: 'recording_confirmation_timeout',
+      });
+      sendJson(res, 200, {
+        ok: true,
+        callId: row.id,
+        transport: 'internet_voice',
+        status: settlement.status,
+        terminal: true,
+        capReached: false,
+        recordingConfirmationTimeout: true,
+        timing: { elapsedConnectedSeconds: 0, remainingSeconds: 0, warningThresholdsSeconds: [120, 60], warning: null },
+        settlement,
+      });
+      return;
+    }
   }
 
   if (TERMINAL_STATUSES.has(row.status)) {

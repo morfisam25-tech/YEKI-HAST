@@ -9,7 +9,10 @@ const anomalies = await readFile(new URL('../services/api/src/routes/admin-call-
 test('marketplace excludes the authenticated caller from their own listener results', () => {
   assert.match(marketplace, /const \{ userId \} = await requireAuth\(req\)/);
   assert.match(marketplace, /lp\.user_id<>\$6::uuid/);
-  assert.match(marketplace, /\[gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId, productCode, serviceCode, marketCode\]/);
+  assert.match(
+    marketplace,
+    /\[gender, language, onlineOnly, limit, ACTIVE_CALL_STATUSES, userId, productCode, serviceCode, marketCode,\s+isInternalOwnerTestCaller\(userId\), INTERNAL_OWNER_TEST_LISTENER_ID\]/,
+  );
 });
 
 test('call assignment independently excludes caller identity even if marketplace is bypassed', () => {

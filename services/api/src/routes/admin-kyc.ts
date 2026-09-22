@@ -56,6 +56,22 @@ export async function getListenerKycForAdmin(
   const row = result.rows[0];
   if (!row) throw new HttpError(404, 'listener_application_not_found');
 
+  const checks = await query<{
+    check_kind: string;
+    status: string;
+    provider: string | null;
+    provider_reference: string | null;
+    failure_code: string | null;
+    requested_at: string | null;
+    resolved_at: string | null;
+  }>(`
+    SELECT check_kind::text, status::text, provider, provider_reference, failure_code,
+           requested_at::text, resolved_at::text
+    FROM private_data.listener_kyc_checks
+    WHERE user_id=$1
+    ORDER BY check_kind
+  `, [row.user_id]);
+
   sendJson(res, 200, {
     applicationId: row.application_id,
     userId: row.user_id,
@@ -72,6 +88,18 @@ export async function getListenerKycForAdmin(
       bankIban: row.has_bank_iban,
       bankAccountHolder: row.has_bank_holder,
     },
+    // Auditable per-field evidence: what was checked, which provider, when,
+    // the result, and the provider's own correlation reference only -- never
+    // the raw provider response payload.
+    checks: checks.rows.map((check) => ({
+      checkKind: check.check_kind,
+      status: check.status,
+      provider: check.provider,
+      providerReference: check.provider_reference,
+      failureCode: check.failure_code,
+      requestedAt: check.requested_at,
+      resolvedAt: check.resolved_at,
+    })),
   });
 }
 

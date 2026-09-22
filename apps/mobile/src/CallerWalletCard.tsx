@@ -13,8 +13,13 @@ import {
   type WalletTopupResponse,
   type WalletTransactionsResponse,
 } from './api';
+import { isPaymentEnabled } from './env.ts';
 
 type Props = { token: string };
+
+// W86: fixed for the lifetime of the process (EXPO_PUBLIC_APP_ENV is baked
+// in at build time), so this is resolved once rather than re-checked per render.
+const PAYMENT_ENABLED = isPaymentEnabled();
 
 function normalizeDigits(value: string): string {
   const fa = '۰۱۲۳۴۵۶۷۸۹';
@@ -135,7 +140,10 @@ export default function CallerWalletCard({ token }: Props) {
   }
 
   async function startTopup() {
-    if (busy) return;
+    // W86: Closed-Test builds must never open a live payment checkout --
+    // this is a fail-closed guard in addition to the UI below not rendering
+    // the topup controls in that build at all (see PAYMENT_ENABLED usage).
+    if (busy || !PAYMENT_ENABLED) return;
     const normalized = normalizeDigits(amountText);
     if (!normalized || normalized === '0') {
       setError(messageFor('invalid_amount'));
@@ -210,18 +218,24 @@ export default function CallerWalletCard({ token }: Props) {
         <Text style={styles.helper}>رزرو تماس جاری: {formatMinor(reservedMinor, divisor)} {displayUnit}</Text>
       )}
 
-      <Text style={styles.label}>مبلغ شارژ ({displayUnit})</Text>
-      <TextInput
-        keyboardType="number-pad"
-        value={amountText}
-        onChangeText={changeAmount}
-        placeholder="مثلاً ۱۰۰۰۰۰"
-        style={styles.input}
-        textAlign="right"
-      />
-      <TouchableOpacity disabled={busy || !amountText} onPress={startTopup} style={[styles.primary, (busy || !amountText) && styles.disabled]}>
-        <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'شارژ کیف پول'}</Text>
-      </TouchableOpacity>
+      {PAYMENT_ENABLED ? (
+        <>
+          <Text style={styles.label}>مبلغ شارژ ({displayUnit})</Text>
+          <TextInput
+            keyboardType="number-pad"
+            value={amountText}
+            onChangeText={changeAmount}
+            placeholder="مثلاً ۱۰۰۰۰۰"
+            style={styles.input}
+            textAlign="right"
+          />
+          <TouchableOpacity disabled={busy || !amountText} onPress={startTopup} style={[styles.primary, (busy || !amountText) && styles.disabled]}>
+            <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'شارژ کیف پول'}</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <Text style={styles.helper}>شارژ واقعی کیف پول در این نسخه آزمایشی (Closed Test) غیرفعال است؛ اعتبار تست توسط تیم اختصاص داده می‌شود.</Text>
+      )}
 
       {!!attempt && (
         <View style={styles.attemptBox}>

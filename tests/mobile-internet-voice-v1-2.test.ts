@@ -3,28 +3,52 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const app = await readFile(new URL('../apps/mobile/App.tsx', import.meta.url), 'utf8');
-const caller = await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8');
-const listener = await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8');
+const caller = (await readFile(new URL('../apps/mobile/src/CallerClosedBetaScreen.tsx', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const listener = (await readFile(new URL('../apps/mobile/src/ListenerActiveCallCard.tsx', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const voiceApi = await readFile(new URL('../apps/mobile/src/internet-voice-api.ts', import.meta.url), 'utf8');
 const appConfig = await readFile(new URL('../apps/mobile/app.json', import.meta.url), 'utf8');
 const mobilePackage = await readFile(new URL('../apps/mobile/package.json', import.meta.url), 'utf8');
 
 test('Android native build declares WebRTC dependency, plugin and audio-only microphone permission surface', () => {
-  assert.match(mobilePackage, /"react-native-webrtc": "\^124\.0\.8"/);
+  // W60: react-native-webrtc replaced by @cloudflare/react-native-webrtc --
+  // both register the same native WebRTC module and cannot coexist (task
+  // section 3). @config-plugins/react-native-webrtc's own plugin source
+  // (verified against github.com/expo/config-plugins at the time of this
+  // branch) never reads the literal npm package name, only adds generic
+  // iOS Info.plist/Podfile and Android permission entries -- it remains
+  // correct unchanged for the Cloudflare fork.
+  assert.doesNotMatch(mobilePackage, /"react-native-webrtc":/);
+  assert.match(mobilePackage, /"@cloudflare\/react-native-webrtc": "\^137\.0\.1"/);
+  assert.match(mobilePackage, /"@cloudflare\/realtimekit-react-native": "\^2\.0\.0"/);
   assert.match(mobilePackage, /"@config-plugins\/react-native-webrtc": "\^15\.0\.2"/);
   assert.match(appConfig, /@config-plugins\/react-native-webrtc/);
   assert.match(appConfig, /"permissions"[\s\S]*android\.permission\.RECORD_AUDIO/);
   assert.match(appConfig, /"blockedPermissions"[\s\S]*android\.permission\.CAMERA/);
 });
 
+test('W60 mobile RealtimeKit media migration: caller and listener join via RealtimeKit when CALL_MEDIA_PROVIDER=realtimekit, and never send legacy SDP/ICE for that path', () => {
+  assert.match(caller, /from '@cloudflare\/react-native-webrtc'/);
+  assert.match(listener, /from '@cloudflare\/react-native-webrtc'/);
+  assert.match(caller, /useRealtimeVoiceCall/);
+  assert.match(listener, /useRealtimeVoiceCall/);
+  assert.match(caller, /getInternetVoiceMediaAuth/);
+  assert.match(listener, /getInternetVoiceMediaAuth/);
+  assert.match(caller, /acknowledgeCallRecordingConsent/);
+  assert.match(listener, /acknowledgeCallRecordingConsent/);
+  assert.match(voiceApi, /voice\/media-auth/);
+});
+
 test('Android Store-facing shell describes Internet Voice accurately and exposes required public policy/support links', () => {
-  assert.match(app, /تماس اصلی از اینترنت برقرار می‌شود/);
-  assert.match(app, /برای Internet Voice شماره تلفن لازم نیست/);
+  assert.match(app, /تماس زنده از اینترنت برقرار می‌شود/);
+  assert.match(app, /تماس اصلی از اینترنت انجام می‌شود و شماره واقعی دو طرف برای آن لازم نیست یا نمایش داده نمی‌شود/);
   assert.doesNotMatch(app, /شماره تماس جداگانه تأیید می‌شود/);
-  assert.match(app, /https:\/\/yekihast\.app\/privacy/);
-  assert.match(app, /https:\/\/yekihast\.app\/terms/);
-  assert.match(app, /https:\/\/yekihast\.app\/account\/delete/);
-  assert.match(app, /mailto:sales@uniqueholding\.com\.tr/);
+  assert.match(app, /legal\?\.privacyPolicyUrl/);
+  assert.match(app, /legal\?\.termsOfServiceUrl/);
+  assert.match(app, /legal\?\.accountDeletionUrl/);
+  assert.match(app, /legal\?\.childSafetyUrl/);
+  assert.match(app, /legal\?\.supportEmail/);
+  assert.doesNotMatch(app, /https:\/\/yekihast\.app/);
+  assert.doesNotMatch(app, /sales@uniqueholding\.com\.tr/);
 });
 
 test('Android Caller requests microphone before creating the Wallet HOLD and never dispatches PSTN', () => {

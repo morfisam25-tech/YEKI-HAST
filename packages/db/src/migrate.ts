@@ -41,11 +41,35 @@ const migrationSources: MigrationSource[] = [
     filename: '0006_internet_voice_server_sweeper.sql',
     path: join(migrationsDir, '0006_internet_voice_server_sweeper.sql'),
   },
+  {
+    filename: '0007_global_caller_market_feedback.sql',
+    path: join(migrationsDir, '0007_global_caller_market_feedback.sql'),
+  },
+  {
+    filename: '0008_caller_quote_bindings.sql',
+    path: join(migrationsDir, '0008_caller_quote_bindings.sql'),
+  },
+  {
+    filename: '0009_booking_reservation_sweeper.sql',
+    path: join(migrationsDir, '0009_booking_reservation_sweeper.sql'),
+  },
+  {
+    filename: '0010_recording_core_foundation.sql',
+    path: join(migrationsDir, '0010_recording_core_foundation.sql'),
+  },
+  {
+    filename: '0011_call_media_sessions.sql',
+    path: join(migrationsDir, '0011_call_media_sessions.sql'),
+  },
+  {
+    filename: '0012_listener_kyc_field_checks.sql',
+    path: join(migrationsDir, '0012_listener_kyc_field_checks.sql'),
+  },
 ];
 
 async function loadMigration(source: MigrationSource): Promise<string> {
   const raw = await readFile(source.path, 'utf8');
-  if (!source.packed) return raw;
+  if (!source.packed) return raw.replaceAll('\r\n', '\n');
   return gunzipSync(Buffer.from(raw.trim(), 'base64')).toString('utf8');
 }
 

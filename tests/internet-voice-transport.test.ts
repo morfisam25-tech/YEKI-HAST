@@ -13,11 +13,21 @@ const voiceSource = await readFile(new URL('../services/api/src/routes/internet-
 
 const ENV_KEYS = [
   'NODE_ENV',
+  'VERCEL_ENV',
+  'APP_ENV',
   'CALL_PRIMARY_TRANSPORT',
   'CALL_FALLBACK_TRANSPORT',
+  'CALL_MEDIA_PROVIDER',
   'CLOUDFLARE_TURN_KEY_ID',
   'CLOUDFLARE_TURN_API_TOKEN',
   'CLOUDFLARE_TURN_TTL_SECONDS',
+  'CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID',
+  'CLOUDFLARE_REALTIMEKIT_APP_ID',
+  'CLOUDFLARE_REALTIMEKIT_API_TOKEN',
+  'CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME',
+  'CALL_RECORDING_REQUIRED',
+  'CALL_RECORDING_PROVIDER',
+  'CALL_RECORDING_CONSENT_POLICY_VERSION',
   'INTERNET_VOICE_ICE_SERVERS_JSON',
   'INTERNET_VOICE_IRAN_ICE_SERVERS_JSON',
   'INTERNET_VOICE_IRAN_CONTROL_PLANE_BASE_URL',
@@ -102,6 +112,7 @@ test('production Internet Voice fails closed without a TURN relay', () => {
   withEnv({
     NODE_ENV: 'production',
     CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'legacy_p2p',
     INTERNET_VOICE_ICE_SERVERS_JSON: JSON.stringify([{ urls: 'stun:stun.example.test:3478' }]),
   }, () => {
     assert.throws(() => validatePrimaryCallTransportEnv(), /internet_voice_turn_required/);
@@ -110,6 +121,7 @@ test('production Internet Voice fails closed without a TURN relay', () => {
   withEnv({
     NODE_ENV: 'production',
     CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'legacy_p2p',
     INTERNET_VOICE_ICE_SERVERS_JSON: JSON.stringify([{ urls: 'turn:turn.example.test:3478', username: 'u', credential: 'c' }]),
   }, () => {
     assert.equal(getCallTransportReadiness().internetVoice.credentialMode, 'static');
@@ -121,11 +133,102 @@ test('Cloudflare TURN configuration fails closed when the long-lived server secr
   withEnv({
     NODE_ENV: 'production',
     CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'legacy_p2p',
     CLOUDFLARE_TURN_KEY_ID: 'turnkey12345678',
     CLOUDFLARE_TURN_API_TOKEN: undefined,
   }, () => {
     assert.throws(() => getCallTransportReadiness(), /invalid_cloudflare_turn_config/);
     assert.throws(() => validatePrimaryCallTransportEnv(), /invalid_cloudflare_turn_config/);
+  });
+});
+
+test('production Internet Voice with the legacy provider never accepts RealtimeKit config as a substitute for TURN', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'legacy_p2p',
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME: 'voice-preset',
+  }, () => {
+    assert.throws(() => validatePrimaryCallTransportEnv(), /internet_voice_not_configured/);
+  });
+});
+
+test('RealtimeKit is the production media path and is never held to the legacy TURN/static-ICE contract', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    VERCEL_ENV: 'production',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'realtimekit',
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME: 'voice-preset',
+    CALL_RECORDING_REQUIRED: 'true',
+    CALL_RECORDING_PROVIDER: 'cloudflare_realtimekit',
+    CALL_RECORDING_CONSENT_POLICY_VERSION: 'rec-2026-09-14',
+  }, () => {
+    // No TURN/static ICE env at all -- must still pass, because RealtimeKit
+    // owns signaling/media relay on this path.
+    assert.doesNotThrow(() => validatePrimaryCallTransportEnv());
+  });
+});
+
+test('RealtimeKit in production still fails closed when RealtimeKit itself is unconfigured', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    VERCEL_ENV: 'production',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'realtimekit',
+  }, () => {
+    assert.throws(() => validatePrimaryCallTransportEnv(), /cloudflare_realtimekit_not_configured/);
+  });
+
+  withEnv({
+    NODE_ENV: 'production',
+    VERCEL_ENV: 'production',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'realtimekit',
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME: undefined,
+  }, () => {
+    assert.throws(() => validatePrimaryCallTransportEnv(), /CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME not configured/);
+  });
+});
+
+test('RealtimeKit in production still fails closed when recording is not fully configured', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    VERCEL_ENV: 'production',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'realtimekit',
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME: 'voice-preset',
+    CALL_RECORDING_REQUIRED: undefined,
+  }, () => {
+    assert.throws(() => validatePrimaryCallTransportEnv(), /recording_required_must_be_explicitly_true_in_production/);
+  });
+});
+
+test('RealtimeKit in Preview may keep the explicit recording-disabled technical-beta exception', () => {
+  withEnv({
+    NODE_ENV: 'production',
+    VERCEL_ENV: 'preview',
+    CALL_PRIMARY_TRANSPORT: 'internet_voice',
+    CALL_MEDIA_PROVIDER: 'realtimekit',
+    CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acc',
+    CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+    CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME: 'voice-preset',
+    CALL_RECORDING_REQUIRED: 'false',
+  }, () => {
+    assert.doesNotThrow(() => validatePrimaryCallTransportEnv());
   });
 });
 
@@ -158,6 +261,7 @@ test('Cloudflare TURN generates short-lived relay credentials server-side withou
     await withEnvAsync({
       NODE_ENV: 'production',
       CALL_PRIMARY_TRANSPORT: 'internet_voice',
+      CALL_MEDIA_PROVIDER: 'legacy_p2p',
       CLOUDFLARE_TURN_KEY_ID: 'turnkey12345678',
       CLOUDFLARE_TURN_API_TOKEN: 'server-only-api-token',
       CLOUDFLARE_TURN_TTL_SECONDS: '14400',
@@ -240,7 +344,15 @@ test('caller request uses primary call transport while legacy PSTN dispatch keep
 test('voice routes await short-lived TURN credentials and fail closed before returning client configuration', () => {
   assert.match(voiceSource, /await getInternetVoiceClientConfig\(\)/);
   assert.match(voiceSource, /internet_voice_turn_credentials_unavailable/);
-  const credentialsIndex = voiceSource.indexOf('const voiceClient = await getVoiceClientConfigOr503()', voiceSource.indexOf('startInternetVoiceCall'));
+  // W60: TURN/ICE resolution is now scoped to the legacy_p2p media provider
+  // only -- RealtimeKit handles its own relay and never calls
+  // getVoiceClientConfigOr503() at all (task section 9/18). The ordering
+  // invariant this test protects (resolve external transport config before
+  // mutating call state) still holds for whichever branch actually runs.
+  const credentialsIndex = voiceSource.indexOf(
+    "const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;",
+    voiceSource.indexOf('startInternetVoiceCall'),
+  );
   const transactionIndex = voiceSource.indexOf('const result = await withTransaction', voiceSource.indexOf('startInternetVoiceCall'));
   assert.ok(credentialsIndex >= 0 && transactionIndex > credentialsIndex);
 });
@@ -248,9 +360,20 @@ test('voice routes await short-lived TURN credentials and fail closed before ret
 test('billing connection begins only after both Internet Voice participants report media connected', () => {
   const connectedIndex = voiceSource.indexOf("kind === 'media_connected'");
   const bothRolesIndex = voiceSource.indexOf("roles.has('caller') && roles.has('listener')", connectedIndex);
-  const billingIndex = voiceSource.indexOf('billing_started_at=COALESCE(billing_started_at,now())', bothRolesIndex);
+  const billingIndex = voiceSource.indexOf('billing_started_at=CASE WHEN $2::boolean THEN COALESCE(billing_started_at,now())', bothRolesIndex);
   assert.ok(connectedIndex >= 0 && bothRolesIndex > connectedIndex && billingIndex > bothRolesIndex);
   assert.match(voiceSource, /reason: 'both_sides_media_connected'/);
+});
+
+// W58: for a recording-required call, both-sides-media-connected alone is no longer
+// sufficient -- billing_started_at additionally requires a fresh, authoritative
+// confirmRecordingActiveForBilling() result inside the same transaction.
+test('recording-required billing additionally requires a confirmed active recording state', () => {
+  const bothRolesIndex = voiceSource.indexOf("roles.has('caller') && roles.has('listener')");
+  const gateIndex = voiceSource.indexOf('confirmRecordingActiveForBilling(client, rawCallId)', bothRolesIndex);
+  const billingIndex = voiceSource.indexOf('billing_started_at=CASE WHEN $2::boolean', gateIndex);
+  assert.ok(bothRolesIndex >= 0 && gateIndex > bothRolesIndex && billingIndex > gateIndex);
+  assert.match(voiceSource, /recordingGate\.active/);
 });
 
 test('90-second no-answer path releases hold, auto-offlines listener, and charges zero', () => {

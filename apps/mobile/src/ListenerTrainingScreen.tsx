@@ -38,7 +38,7 @@ const modules: Array<{
   {
     key: 'platform_rules',
     title: '۴. مرزهای سالم',
-    body: 'اطلاعات تماس شخصی، عکس خصوصی، پول، رابطه عاطفی یا ادامه گفت‌وگو خارج از سرویس را پیشنهاد یا قبول نکن. اگر درخواستی ناراحت‌کننده شد، کوتاه و محترمانه مرزت را بگو.',
+    body: 'اطلاعات تماس شخصی، عکس خصوصی، پول، رابطه عاطفی یا ادامه گفت‌وگو خارج از سرویس را پیشنهاد یا قبول نکن. اگر درخواستی ناراحت‌کننده شد، کوتاه و محترمانه مرزت را بگو. پلتفرم برای امنیت کاربران و رسیدگی به شکایت‌ها تماس را ضبط می‌کند و هر دو طرف پیش از اتصال از این موضوع مطلع می‌شوند؛ تو به این ضبط دسترسی نداری و نباید به کسی وعده بدهی که «هیچ‌وقت کسی این را نمی‌شنود» یا قول حذف آن را بدهی. ضبط یا پخش مستقل مکالمه توسط خودت هم ممنوع است.',
   },
   {
     key: 'safety',
@@ -166,6 +166,15 @@ const questions = [
       ['self_story', 'داستان مشابه خودم را تعریف می‌کنم و نتیجه تجربه خودم را پیشنهاد می‌دهم.'],
     ],
   },
+  {
+    key: 'q_recording',
+    text: 'مخاطب می‌پرسد: «این تماس ضبط می‌شود؟ قول می‌دهی هیچ‌وقت کسی نشنود؟»',
+    choices: [
+      ['accurate_disclosure', 'می‌گویم پلتفرم برای امنیت و رسیدگی به شکایت‌ها تماس را ضبط و امن نگهداری می‌کند؛ من خودم به آن دسترسی ندارم و نمی‌توانم قول بدهم هیچ‌وقت کسی آن را نمی‌شنود.'],
+      ['false_promise', 'می‌گویم نگران نباشد، ضبطی وجود ندارد و هیچ‌کس هیچ‌وقت این مکالمه را نمی‌شنود.'],
+      ['self_record', 'می‌گویم اگر می‌خواهد مطمئن شود، خودم تماس را از گوشی‌ام ضبط می‌کنم تا برایش بفرستم.'],
+    ],
+  },
 ] as const;
 
 function messageFor(code: string): string {
@@ -247,13 +256,12 @@ export default function ListenerTrainingScreen({ token, onDone }: Props) {
     );
   }
 
-  if (['assessment_passed', 'kyc_pending', 'kyc_expired'].includes(application.status)) {
+  if (['assessment_passed', 'kyc_pending', 'kyc_expired', 'agreement_pending'].includes(application.status)) {
     return <ListenerKycScreen token={token} onDone={onDone} />;
   }
 
-  if (['agreement_pending', 'admin_review', 'mock_call', 'suspended', 'rejected', 'archived'].includes(application.status)) {
+  if (['admin_review', 'mock_call', 'suspended', 'rejected', 'archived'].includes(application.status)) {
     const labels: Record<string, string> = {
-      agreement_pending: 'در انتظار قرارداد',
       admin_review: 'در بررسی نهایی',
       mock_call: 'در مرحله تماس آزمایشی',
       suspended: 'حساب معلق است',

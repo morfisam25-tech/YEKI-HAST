@@ -16,7 +16,11 @@ test('Vercel keeps proven readiness/bootstrap routes on index and sends remainin
   ]);
 });
 
-test('runtime entrypoint statically imports backend handler', () => {
-  assert.match(runtimeSource, /import \{ handleApiRequest \} from '\.\.\/services\/api\/src\/handler\.ts';/);
-  assert.doesNotMatch(runtimeSource, /await import\(/);
+test('runtime entrypoint binds owner-test isolation before loading the backend handler', () => {
+  const initializeAt = runtimeSource.indexOf('isInternalOwnerTestMode();');
+  const handlerImportAt = runtimeSource.indexOf("await import('../services/api/src/handler.ts')");
+
+  assert.ok(initializeAt >= 0);
+  assert.ok(handlerImportAt > initializeAt);
+  assert.doesNotMatch(runtimeSource, /import \{ handleApiRequest \} from/);
 });

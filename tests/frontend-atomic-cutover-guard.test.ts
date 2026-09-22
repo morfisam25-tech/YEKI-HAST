@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const workflow = await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8');
+const workflow = (await readFile(new URL('../.github/workflows/deploy-production-frontends.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('Web staged protection is configured and Admin is verified fail-closed before either deployment begins', () => {
   const protectionPreflight = workflow.indexOf('Configure staged Web protection and require Admin fail-closed before any frontend deployment');

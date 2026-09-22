@@ -1,9 +1,56 @@
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://yeki-hast-theta.vercel.app').replace(/\/$/, '');
+import { isProductionOrigin, resolveAppEnv } from './env.ts';
+
+export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-unique-6ff0.vercel.app';
+
+// W63: environment identity (EXPO_PUBLIC_APP_ENV), never a bare
+// EXPO_PUBLIC_API_BASE_URL fallback alone -- mirrors apps/web/app/api/_backend.ts's
+// backendBaseUrl() exactly. Preview (Internal Beta) builds must never silently
+// fall back to the Production API: a missing or Production-pointing Preview
+// origin fails closed instead of defaulting anywhere. See
+// docs/W63_WEB_REALTIMEKIT_RELEASE_P0_CLOSURE.md section 9.
+export function resolveApiBaseUrl(): string {
+  const env = resolveAppEnv();
+  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+  if (env === 'production') {
+    return (configured || PRODUCTION_API_BASE_URL).replace(/\/$/, '');
+  }
+
+  // closed_test (W86) shares preview_internal_beta's fail-closed origin
+  // resolution: the Google Play Closed-Test build must never silently fall
+  // back to, or be pointed at, the Production API.
+  if (env === 'preview_internal_beta' || env === 'closed_test') {
+    if (!configured) {
+      throw new Error(`EXPO_PUBLIC_API_BASE_URL is required in ${env}; it must never fall back to the Production API`);
+    }
+    const normalized = configured.replace(/\/$/, '');
+    if (isProductionOrigin(normalized, PRODUCTION_API_BASE_URL)) {
+      throw new Error(`EXPO_PUBLIC_API_BASE_URL must not point at the Production API origin in ${env}`);
+    }
+    return normalized;
+  }
+
+  // local: no EAS build profile in play (bare `expo start`); an explicit
+  // override is honored, otherwise fall back to a local dev server -- never Production.
+  if (configured) return configured.replace(/\/$/, '');
+  return 'http://localhost:4000';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export type BootstrapLanguage = {
   code: string;
   nameFa: string;
   nameEn: string | null;
+};
+
+export type PublicLegalConfig = {
+  ready: boolean;
+  privacyPolicyUrl: string | null;
+  termsOfServiceUrl: string | null;
+  accountDeletionUrl: string | null;
+  childSafetyUrl: string | null;
+  supportEmail: string | null;
 };
 
 export type BootstrapResponse = {
@@ -21,6 +68,7 @@ export type BootstrapResponse = {
   features?: {
     callerClosedBetaEnabled?: boolean;
   };
+  legal?: PublicLegalConfig;
   languages: BootstrapLanguage[];
 };
 
@@ -65,12 +113,15 @@ export type ListenerApplicationResponse = {
   };
 };
 
+export type ListenerKycCheck = { checkKind: string; status: string; resolvedAt: string | null };
+
 export type ListenerKycStatusResponse = {
   applicationStatus: string;
   status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
   verifiedAt: string | null;
   rejectedReasonCode: string | null;
   updatedAt: string | null;
+  checks: ListenerKycCheck[];
 };
 
 export type ListenerPresenceResponse = {
@@ -217,7 +268,7 @@ export type BrowseListener = {
   id: string;
   nickname: string;
   gender: 'female' | 'male';
-  verified: boolean;
+  workEligible: boolean;
   reliabilityScore: number;
   shortIntro: string | null;
   listeningStyle: string | null;
@@ -474,6 +525,44 @@ export function requestCall(
 
 export function getActiveCall(token: string): Promise<{ activeCall: CallResponse | null }> {
   return request('/v1/calls/active', {}, token);
+}
+
+// W58 recording foundation: typed client for the per-call recording consent
+// endpoint. NOT yet wired into any live call screen -- the actual pre-call
+// recording disclosure UI and the point in the call flow where this gets
+// called are part of the follow-up RealtimeKit mobile signaling migration
+// (after the W54 live PoC), which this branch intentionally does not touch.
+// See docs/W58_RECORDING_CORE_FOUNDATION.md.
+export type CallRecordingConsentResponse = {
+  ok: true;
+  callId: string;
+  role: 'caller' | 'listener';
+  policyVersion: string;
+  bothPartiesConsented: boolean;
+};
+
+export type CallRecordingStatusResponse = {
+  ok: true;
+  callId: string;
+  required: boolean;
+  policyVersion: string | null;
+  callerConsented: boolean;
+  listenerConsented: boolean;
+};
+
+export function acknowledgeCallRecordingConsent(
+  token: string,
+  callId: string,
+  input: { locale: string; clientVersion?: string },
+): Promise<CallRecordingConsentResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/recording-consent`, {
+    method: 'POST',
+    body: JSON.stringify({ acknowledged: true, locale: input.locale, clientVersion: input.clientVersion ?? null }),
+  }, token);
+}
+
+export function getCallRecordingStatus(token: string, callId: string): Promise<CallRecordingStatusResponse> {
+  return request(`/v1/calls/${encodeURIComponent(callId)}/recording-status`, {}, token);
 }
 
 export function dispatchCall(token: string, callId: string): Promise<CallResponse> {

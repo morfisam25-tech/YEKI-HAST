@@ -3,6 +3,7 @@ export type PublicReleaseConfig = {
   privacyPolicyUrl: string | null;
   termsOfServiceUrl: string | null;
   accountDeletionUrl: string | null;
+  childSafetyUrl: string | null;
   supportEmail: string | null;
 };
 
@@ -31,12 +32,14 @@ export function getPublicReleaseConfig(): PublicReleaseConfig {
   const privacyPolicyUrl = publicHttpsUrl(process.env.PRIVACY_POLICY_URL);
   const termsOfServiceUrl = publicHttpsUrl(process.env.TERMS_OF_SERVICE_URL);
   const accountDeletionUrl = publicHttpsUrl(process.env.ACCOUNT_DELETION_URL);
+  const childSafetyUrl = publicHttpsUrl(process.env.CHILD_SAFETY_URL);
   const support = supportEmail(process.env.SUPPORT_EMAIL);
   return {
-    ready: Boolean(privacyPolicyUrl && termsOfServiceUrl && accountDeletionUrl && support),
+    ready: Boolean(privacyPolicyUrl && termsOfServiceUrl && accountDeletionUrl && childSafetyUrl && support),
     privacyPolicyUrl,
     termsOfServiceUrl,
     accountDeletionUrl,
+    childSafetyUrl,
     supportEmail: support,
   };
 }

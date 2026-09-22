@@ -9,8 +9,16 @@ test('safety actions require an authenticated admin', () => {
 });
 
 test('closed safety cases cannot be mutated again', () => {
-  assert.match(source, /status::text IN \('open','in_review'\)/);
+  assert.match(source, /status::text IN \('open','reviewing'\)/);
   assert.match(source, /safety_case_closed/);
+});
+
+test('claim uses the canonical app.case_status enum value and never the drifted one', () => {
+  // W36/G1: app.case_status enum is ('open','reviewing','resolved','dismissed').
+  // The W29 code wrote 'in_review', which does not exist in the enum and fails at
+  // runtime. Guard against any regression back to that value in this route.
+  assert.doesNotMatch(source, /in_review/);
+  assert.match(source, /action === 'claim' \? 'reviewing'/);
 });
 
 test('claim only takes open cases and review ownership is protected', () => {
@@ -26,7 +34,7 @@ test('resolving or dismissing requires a bounded resolution code', () => {
 });
 
 test('claim assigns the acting admin and moves the case in review', () => {
-  assert.match(source, /action === 'claim' \? 'in_review'/);
+  assert.match(source, /action === 'claim' \? 'reviewing'/);
   assert.match(source, /assigned_admin_user_id=\$3/);
   assert.match(source, /admin\.userId/);
 });

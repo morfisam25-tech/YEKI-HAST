@@ -13,13 +13,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cloudflare/react-native-webrtc": "^137.0.1",
+    "@cloudflare/realtimekit-react-native": "^2.0.0",
     "@config-plugins/react-native-webrtc": "^15.0.2",
     "expo": "~57.0.9",
+    "expo-build-properties": "~57.0.21",
     "expo-secure-store": "~57.0.2",
     "expo-status-bar": "~57.0.0",
     "react": "19.2.3",
-    "react-native": "0.86.3",
-    "react-native-webrtc": "^124.0.8"
+    "react-native": "0.86.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",

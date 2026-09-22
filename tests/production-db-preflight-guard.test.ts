@@ -7,6 +7,10 @@ import test from 'node:test';
 const scriptUrl = new URL('../scripts/preflight-production-db-migration.mjs', import.meta.url);
 const scriptPath = fileURLToPath(scriptUrl);
 const script = await readFile(scriptUrl, 'utf8');
+const currentMigrationManifest = await readFile(
+  new URL('../scripts/current-migration-manifest.mjs', import.meta.url),
+  'utf8',
+);
 const workflow = await readFile(
   new URL('../.github/workflows/migrate-production-db.yml', import.meta.url),
   'utf8',
@@ -21,9 +25,11 @@ test('production migration preflight is catalog/history read-only', () => {
   assert.match(script, /to_regnamespace\('private_data'\) IS NOT NULL/);
   assert.match(script, /to_regclass\('public\.yeki_hast_schema_migrations'\) IS NOT NULL/);
   assert.match(script, /SELECT filename, sha256/);
-  assert.match(script, /f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09/);
-  assert.match(script, /3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90/);
-  assert.match(script, /46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b/);
+  assert.match(script, /currentMigrationEntries/);
+  assert.match(currentMigrationManifest, /0001_initial\.sql/);
+  assert.match(currentMigrationManifest, /0002_email_auth\.sql/);
+  assert.match(currentMigrationManifest, /0006_internet_voice_server_sweeper\.sql/);
+  assert.match(currentMigrationManifest, /0009_booking_reservation_sweeper\.sql/);
   assert.doesNotMatch(script, /efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254/);
   assert.match(script, /application schemas exist without tracked initial migration/);
   assert.match(script, /tracked initial migration is missing required application schemas/);

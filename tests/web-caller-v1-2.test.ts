@@ -14,7 +14,7 @@ test('Web Caller proxy keeps the session token server-side and allow-lists Calle
   assert.match(callerProxy, /browserMutationAllowed/);
   assert.match(callerProxy, /\^listeners\$/);
   assert.match(callerProxy, /cancel\$/);
-  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|end\|safety-exit\)/);
+  assert.match(callerProxy, /voice\\\/\(start\|config\|signals\|no-answer\|extend\|heartbeat\|end\|safety-exit\|media-auth\)/);
   assert.doesNotMatch(callerProxy, /localStorage|sessionStorage/);
 });
 
@@ -58,7 +58,7 @@ test('Web Caller handles 90-second no-answer, actual connected timing, warnings 
 });
 
 test('Web listener cards distinguish verified status from self-declared intro', () => {
-  assert.match(callerPage, /هویت\/فیلدهای تأییدشده مشخص است/);
+  assert.match(callerPage, /حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است/);
   assert.match(callerPage, /معرفی خوداظهاری \(تأییدنشده\)/);
 });
 

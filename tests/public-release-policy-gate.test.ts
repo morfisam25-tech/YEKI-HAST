@@ -15,6 +15,7 @@ const publicRuntimeKeys = [
   'PRIVACY_POLICY_URL',
   'TERMS_OF_SERVICE_URL',
   'ACCOUNT_DELETION_URL',
+  'CHILD_SAFETY_URL',
   'SUPPORT_EMAIL',
 ];
 
@@ -42,8 +43,9 @@ test('shared public-release parser rejects non-public surfaces and reports readi
   assert.match(publicRelease, /url\.username \|\| url\.password/);
   assert.match(publicRelease, /privacyPolicyUrl: string \| null/);
   assert.match(publicRelease, /accountDeletionUrl: string \| null/);
+  assert.match(publicRelease, /childSafetyUrl: string \| null/);
   assert.match(publicRelease, /supportEmail: string \| null/);
-  assert.match(publicRelease, /ready: Boolean\(privacyPolicyUrl && termsOfServiceUrl && accountDeletionUrl && support\)/);
+  assert.match(publicRelease, /ready: Boolean\(privacyPolicyUrl && termsOfServiceUrl && accountDeletionUrl && childSafetyUrl && support\)/);
 });
 
 test('caller readiness fails closed until every public release surface is valid', () => {
@@ -54,6 +56,7 @@ test('caller readiness fails closed until every public release surface is valid'
   assert.match(readiness, /privacyPolicyReady: Boolean\(publicRelease\.privacyPolicyUrl\)/);
   assert.match(readiness, /termsOfServiceReady: Boolean\(publicRelease\.termsOfServiceUrl\)/);
   assert.match(readiness, /accountDeletionReady: Boolean\(publicRelease\.accountDeletionUrl\)/);
+  assert.match(readiness, /childSafetyReady: Boolean\(publicRelease\.childSafetyUrl\)/);
   assert.match(readiness, /supportReady: Boolean\(publicRelease\.supportEmail\)/);
 });
 
@@ -63,6 +66,7 @@ test('production security verifier requires real public surfaces when caller bet
   assert.match(securityVerifier, /publicHttpsUrl\('PRIVACY_POLICY_URL'\)/);
   assert.match(securityVerifier, /publicHttpsUrl\('TERMS_OF_SERVICE_URL'\)/);
   assert.match(securityVerifier, /publicHttpsUrl\('ACCOUNT_DELETION_URL'\)/);
+  assert.match(securityVerifier, /publicHttpsUrl\('CHILD_SAFETY_URL'\)/);
   assert.match(securityVerifier, /emailAddress\('SUPPORT_EMAIL'\)/);
 });
 
@@ -70,15 +74,18 @@ test('privacy terms and account deletion are source-locked first-party canonical
   assert.ok(envSync.includes(`const DEFAULT_PRIVACY_POLICY_URL = '${canonicalWebOrigin}/privacy'`));
   assert.ok(envSync.includes(`const DEFAULT_TERMS_OF_SERVICE_URL = '${canonicalWebOrigin}/terms'`));
   assert.ok(envSync.includes(`const DEFAULT_ACCOUNT_DELETION_URL = '${canonicalWebOrigin}/account/delete'`));
+  assert.ok(envSync.includes(`const DEFAULT_CHILD_SAFETY_URL = '${canonicalWebOrigin}/safety/children'`));
   for (const name of legacyPolicyInputs) {
     assert.doesNotMatch(envSync, new RegExp(name));
   }
   assert.match(envSync, /const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL/);
   assert.match(envSync, /const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL/);
   assert.match(envSync, /const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL/);
+  assert.match(envSync, /const childSafetyUrl = DEFAULT_CHILD_SAFETY_URL/);
   assert.match(envSync, /setPlain\('PRIVACY_POLICY_URL', privacyPolicyUrl\)/);
   assert.match(envSync, /setPlain\('TERMS_OF_SERVICE_URL', termsOfServiceUrl\)/);
   assert.match(envSync, /setPlain\('ACCOUNT_DELETION_URL', accountDeletionUrl\)/);
+  assert.match(envSync, /setPlain\('CHILD_SAFETY_URL', childSafetyUrl\)/);
   assert.match(privacyPage, /حریم خصوصی/);
   assert.match(privacyPage, /\/account\/delete/);
   assert.match(termsPage, /قوانین استفاده/);
@@ -102,6 +109,7 @@ test('production env sync never clears public values with blank writes', () => {
   assert.doesNotMatch(envSync, /setPlain\('PRIVACY_POLICY_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('TERMS_OF_SERVICE_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('ACCOUNT_DELETION_URL',\s*''\)/);
+  assert.doesNotMatch(envSync, /setPlain\('CHILD_SAFETY_URL',\s*''\)/);
   assert.doesNotMatch(envSync, /setPlain\('SUPPORT_EMAIL',\s*''\)/);
 });
 

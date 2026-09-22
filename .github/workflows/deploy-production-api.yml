@@ -7,6 +7,13 @@ on:
         description: 'Type DEPLOY-PRODUCTION-API to confirm manual release'
         required: true
         type: string
+      release_profile:
+        description: 'Production release profile for this deploy'
+        required: true
+        type: choice
+        options:
+          - internal_beta
+          - public_release
 
 permissions:
   contents: read
@@ -25,6 +32,7 @@ jobs:
       PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
       PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON: ${{ secrets.PRODUCTION_GMAIL_SERVICE_ACCOUNT_JSON }}
       PRODUCTION_COMMERCIAL_HOSTING_APPROVED: ${{ vars.PRODUCTION_COMMERCIAL_HOSTING_APPROVED }}
+      PRODUCTION_RELEASE_PROFILE: ${{ github.event.inputs.release_profile }}
       VERCEL_TEAM_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_ORG_ID: team_GmseY3ibD05FWemVhLElL3hI
       VERCEL_TEAM_SLUG: unique-6ff0
@@ -50,6 +58,10 @@ jobs:
           fi
           if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "${MANUAL_CONFIRM:-}" != "DEPLOY-PRODUCTION-API" ]; then
             echo "::error::Production API deploy requires a manual dispatch with the exact confirmation phrase"
+            exit 1
+          fi
+          if [ "$PRODUCTION_RELEASE_PROFILE" != "internal_beta" ] && [ "$PRODUCTION_RELEASE_PROFILE" != "public_release" ]; then
+            echo "::error::release_profile must be an explicit choice of internal_beta or public_release"
             exit 1
           fi
           missing=()

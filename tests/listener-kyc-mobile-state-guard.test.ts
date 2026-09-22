@@ -29,6 +29,19 @@ test('Web and Mobile expose explicit provider-disabled and pending-review KYC st
   }
 });
 
+// W78: both surfaces previously rendered a generic "احراز هویت تأیید شد"
+// ("identity verification confirmed") claim from the bare aggregate
+// verified status. Only the specific field-level checks that actually ran
+// (national-id/DOB match, IBAN inquiry) may ever be presented as verified.
+test('Web and Mobile never render a generic "identity verified" claim, only field-level check evidence', () => {
+  for (const source of [webOnboarding, mobileKyc]) {
+    assert.doesNotMatch(source, /احراز هویت تأیید شد/);
+    assert.match(source, /status\.checks|kycStatus\.checks/);
+    assert.match(source, /national_id_dob_match/);
+    assert.match(source, /iban_inquiry/);
+  }
+});
+
 test('Mobile Listener keeps post-onboarding states read-only instead of replaying training', () => {
   assert.match(mobileTraining, /agreement_pending/);
   assert.match(mobileTraining, /admin_review/);

@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// LEGACY_P2P_PREVIEW_ONLY: react-native-webrtc's native module cannot
+// coexist with @cloudflare/react-native-webrtc (both register the same
+// native WebRTC module). @cloudflare/react-native-webrtc is a drop-in fork
+// with the same JS API, so this legacy P2P path keeps compiling for the
+// Internal Preview transport mode without a second native module -- see
+// docs/W60_REALTIMEKIT_MOBILE_MEDIA_MIGRATION.md section "Preview legacy
+// behavior". This whole legacy code path is retired once live RealtimeKit
+// verification (W54) proves the RealtimeKit path end to end.
 import {
   mediaDevices,
   MediaStream,
   RTCPeerConnection,
   RTCIceCandidate,
   RTCSessionDescription,
-} from 'react-native-webrtc';
+} from '@cloudflare/react-native-webrtc';
 import {
+  acknowledgeCallRecordingConsent,
   browseListeners,
   cancelCall,
   confirmCallerAge,
@@ -24,15 +33,19 @@ import {
   extendInternetVoiceCall,
   getInternetVoiceConfig,
   getInternetVoiceErrorCode,
+  getInternetVoiceMediaAuth,
   getInternetVoiceSignals,
   heartbeatInternetVoiceCall,
   postInternetVoiceSignal,
   safetyExitInternetVoiceCall,
   startInternetVoiceCall,
+  type CallMediaProvider,
   type InternetVoiceClientConfig,
   type InternetVoiceSignal,
   type InternetVoiceTiming,
+  type PeerConnectionWithLegacyEvents,
 } from './internet-voice-api';
+import { classifyMicrophoneError, useRealtimeVoiceCall } from './realtime-media';
 import CallerWalletCard from './CallerWalletCard';
 import CallerRecentCallsCard from './CallerRecentCallsCard';
 
@@ -52,7 +65,7 @@ const HEARTBEAT_MS = 5_000;
 
 function messageFor(code: string): string {
   const messages: Record<string, string> = {
-    caller_closed_beta_disabled: 'بتای Caller برای این محیط بسته شده است.',
+    caller_closed_beta_disabled: 'مسیر تماس‌گیرنده برای این محیط فعال نیست.',
     caller_age_policy_not_configured: 'سیاست سنی Caller هنوز برای این محیط فعال نشده.',
     caller_age_gate_required: 'برای ادامه باید شرط سنی نسخه جاری را تأیید کنی.',
     caller_consent_required: 'برای ادامه باید قوانین استفاده و مرزبندی ایمنی را بپذیری.',
@@ -71,6 +84,12 @@ function messageFor(code: string): string {
     call_end_conflict: 'پایان تماس همزمان از مسیر دیگری ثبت شده؛ وضعیت تماس را به‌روزرسانی کن.',
     no_answer_window_active: 'مهلت پاسخ شنونده هنوز تمام نشده است.',
     listener_already_answered: 'شنونده پاسخ داده و اتصال صوتی در حال کامل‌شدن است.',
+    recording_consent_required: 'برای ادامه باید ضبط این تماس را تأیید کنی.',
+    call_media_not_configured: 'مسیر صوتی این تماس در این محیط هنوز آماده نیست.',
+    call_media_provider_not_realtimekit: 'مسیر صوتی این تماس در این محیط هنوز آماده نیست.',
+    internet_voice_client_config_missing: 'اتصال صوتی این تماس آماده نشد؛ دوباره امتحان کن.',
+    microphone_permission_denied: 'دسترسی به میکروفون رد شد. برای شروع تماس، دسترسی میکروفون این برنامه را از تنظیمات گوشی فعال کن.',
+    microphone_unavailable: 'میکروفون در دسترس نیست. مطمئن شو برنامه دیگری از آن استفاده نمی‌کند و دوباره امتحان کن.',
     network_error: 'ارتباط با سرور برقرار نشد.',
   };
   return messages[code] ?? 'عملیات انجام نشد.';
@@ -98,6 +117,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [safetyAccepted, setSafetyAccepted] = useState(false);
+  const [recordingAccepted, setRecordingAccepted] = useState(false);
   const [listeners, setListeners] = useState<BrowseListener[]>([]);
   const [selected, setSelected] = useState<BrowseListener | null>(null);
   const [call, setCall] = useState<CallerCallResponse | null>(null);
@@ -109,13 +129,15 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   const [noAnswerDeadlineMs, setNoAnswerDeadlineMs] = useState<number | null>(null);
   const [timing, setTiming] = useState<InternetVoiceTiming | null>(null);
   const [error, setError] = useState('');
+  const [mediaProvider, setMediaProvider] = useState<CallMediaProvider>('legacy_p2p');
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const processedSignalIdsRef = useRef(new Set<string>());
   const postedMediaConnectedRef = useRef(false);
   const noAnswerExpiryInFlightRef = useRef(false);
-  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted;
+  const policiesReady = ageConfirmed && termsAccepted && safetyAccepted && recordingAccepted;
+  const realtimeCall = useRealtimeVoiceCall();
 
   function cleanupRtc() {
     const peer = peerRef.current;
@@ -127,6 +149,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     processedSignalIdsRef.current.clear();
     postedMediaConnectedRef.current = false;
     setVoiceReady(false);
+    setLegacyMuted(false);
+    void realtimeCall.leave();
   }
 
   useEffect(() => () => {
@@ -136,6 +160,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     const stream = localStreamRef.current;
     localStreamRef.current = null;
     try { stream?.getTracks().forEach((track) => track.stop()); } catch {}
+    void realtimeCall.leave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -183,9 +209,29 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
   async function ensureMicrophone(): Promise<MediaStream> {
     if (localStreamRef.current) return localStreamRef.current;
-    const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-    localStreamRef.current = stream;
-    return stream;
+    try {
+      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      return stream;
+    } catch (cause) {
+      throw new Error(classifyMicrophoneError(cause));
+    }
+  }
+
+  // Microphone mute/unmute (task section 15): the RealtimeKit path uses the
+  // SDK's own self.enableAudio()/disableAudio() (useRealtimeVoiceCall);
+  // LEGACY_P2P_PREVIEW_ONLY toggles the local track's `enabled` flag directly
+  // since react-native-webrtc/@cloudflare/react-native-webrtc has no
+  // higher-level mute API of its own.
+  const [legacyMuted, setLegacyMuted] = useState(false);
+  const muted = mediaProvider === 'realtimekit' ? realtimeCall.muted : legacyMuted;
+  function toggleMute() {
+    if (mediaProvider === 'realtimekit') { void realtimeCall.toggleMuted(); return; }
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const nextMuted = !legacyMuted;
+    stream.getAudioTracks().forEach((track) => { track.enabled = !nextMuted; });
+    setLegacyMuted(nextMuted);
   }
 
   async function postMediaConnected(callId: string) {
@@ -213,13 +259,17 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     peerRef.current = peer;
     stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
-    peer.onicecandidate = (event: { candidate: RTCIceCandidate | null }) => {
+    // @cloudflare/react-native-webrtc's RTCPeerConnection extends EventTarget
+    // (event-target-shim) rather than exposing on*-style properties -- unlike
+    // the upstream react-native-webrtc types this replaces, so this is now
+    // addEventListener-based.
+    (peer as PeerConnectionWithLegacyEvents).addEventListener('icecandidate', (event) => {
       if (!event.candidate) return;
       void postInternetVoiceSignal(token, callId, 'ice', event.candidate.toJSON()).catch((cause) => {
         setError(messageFor(getInternetVoiceErrorCode(cause)));
       });
-    };
-    peer.onconnectionstatechange = () => {
+    });
+    (peer as PeerConnectionWithLegacyEvents).addEventListener('connectionstatechange', () => {
       if (peer.connectionState === 'connected') {
         void postInternetVoiceSignal(token, callId, 'reconnected', { source: 'peer_connection_state' }).catch(() => undefined);
         void postMediaConnected(callId);
@@ -228,13 +278,33 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
         void postInternetVoiceSignal(token, callId, 'reconnecting', { source: 'peer_connection_state' }).catch(() => undefined);
       }
       if (peer.connectionState === 'failed' || peer.connectionState === 'closed') setVoiceReady(false);
-    };
+    });
 
     const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
     await peer.setLocalDescription(offer);
     await postInternetVoiceSignal(token, callId, 'offer', { type: offer.type, sdp: offer.sdp });
     setVoiceReady(true);
   }
+
+  // W60 RealtimeKit path: RealtimeKit handles its own signaling entirely --
+  // no offer/answer/ICE goes through postInternetVoiceSignal here (task
+  // section 10). `media_connected` is posted only once useRealtimeVoiceCall
+  // reports a genuine two-party 'connected' state (see the effect below),
+  // never on token mint or join()-resolves alone (task section 7).
+  async function joinRealtimeCall(callId: string) {
+    postedMediaConnectedRef.current = false;
+    const auth = await getInternetVoiceMediaAuth(token, callId);
+    await realtimeCall.join(auth.authToken);
+    setVoiceReady(true);
+  }
+
+  useEffect(() => {
+    if (mediaProvider !== 'realtimekit' || !call) return;
+    const callId = call.callId;
+    if (realtimeCall.state === 'connected') void postMediaConnected(callId);
+    if (realtimeCall.state === 'failed' || realtimeCall.state === 'ended') setVoiceReady(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaProvider, realtimeCall.state, call?.callId]);
 
   async function consumeListenerSignal(signal: InternetVoiceSignal) {
     const peer = peerRef.current;
@@ -258,7 +328,9 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (!voiceReady || !call || terminalStatuses.has(call.status)) return;
+    // LEGACY_P2P_PREVIEW_ONLY: signal polling drives SDP/ICE exchange, which
+    // only exists on the legacy transport (task section 10).
+    if (mediaProvider !== 'legacy_p2p' || !voiceReady || !call || terminalStatuses.has(call.status)) return;
     let disposed = false;
     const callId = call.callId;
     async function pollSignals() {
@@ -280,14 +352,17 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     void pollSignals();
     const timer = setInterval(() => { void pollSignals(); }, SIGNAL_POLL_MS);
     return () => { disposed = true; clearInterval(timer); };
-  }, [token, voiceReady, call?.callId, call?.status]);
+  }, [token, mediaProvider, voiceReady, call?.callId, call?.status]);
 
   useEffect(() => {
     if (!call || call.status !== 'connected') return;
     let disposed = false;
     const callId = call.callId;
     async function heartbeat() {
-      if (peerRef.current?.connectionState !== 'connected') return;
+      const mediaLive = mediaProvider === 'legacy_p2p'
+        ? peerRef.current?.connectionState === 'connected'
+        : realtimeCall.state === 'connected';
+      if (!mediaLive) return;
       try {
         const result = await heartbeatInternetVoiceCall(token, callId);
         if (disposed) return;
@@ -303,7 +378,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     void heartbeat();
     const timer = setInterval(() => { void heartbeat(); }, HEARTBEAT_MS);
     return () => { disposed = true; clearInterval(timer); };
-  }, [token, call?.callId, call?.status]);
+  }, [token, call?.callId, call?.status, mediaProvider, realtimeCall.state]);
 
   useEffect(() => {
     if (!call || call.status !== 'calling_listener' || noAnswerDeadlineMs === null) return;
@@ -374,18 +449,42 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
       setCall(requested as CallerCallResponse);
       setStage('call');
 
+      // Per-call recording consent, written right after calls/request
+      // succeeds and before voice/start -- mirrors the caller web flow (see
+      // docs/W58_RECORDING_CORE_FOUNDATION.md section 4). Best-effort here:
+      // when recording is required, startInternetVoiceCall below is the
+      // authoritative fail-closed gate (it rejects recording_consent_required
+      // on its own), so a transient failure of this POST is never silently
+      // skipped -- it just surfaces as that rejection instead.
+      await acknowledgeCallRecordingConsent(token, requested.callId, { locale: 'fa-IR' }).catch(() => undefined);
+
       const startedCallId = requested.callId;
       const started = await startInternetVoiceCall(token, startedCallId);
       voiceStarted = true;
+      setMediaProvider(started.mediaProvider);
       setCall((current) => current && current.callId === startedCallId ? {
         ...current,
         status: started.status,
         transport: 'internet_voice',
       } : current);
       setNoAnswerDeadlineMs(Date.now() + started.noAnswerSeconds * 1_000);
-      await createCallerPeer(startedCallId, started.client, stream);
+      if (started.mediaProvider === 'realtimekit') {
+        // RealtimeKit's own SDK acquires the microphone internally when
+        // joining; release this permission-priming stream rather than hold
+        // two simultaneous captures of the same device.
+        try { stream.getTracks().forEach((track) => track.stop()); } catch {}
+        localStreamRef.current = null;
+        await joinRealtimeCall(startedCallId);
+      } else if (started.client) {
+        await createCallerPeer(startedCallId, started.client, stream);
+      } else {
+        throw new Error('internet_voice_client_config_missing');
+      }
     } catch (cause) {
-      const code = getInternetVoiceErrorCode(cause) === 'network_error' ? getErrorCode(cause) : getInternetVoiceErrorCode(cause);
+      const micCode = cause instanceof Error && (cause.message === 'microphone_permission_denied' || cause.message === 'microphone_unavailable')
+        ? cause.message
+        : null;
+      const code = micCode ?? (getInternetVoiceErrorCode(cause) === 'network_error' ? getErrorCode(cause) : getInternetVoiceErrorCode(cause));
       if (requested) {
         try {
           if (voiceStarted) await endInternetVoiceCall(token, requested.callId, 'mobile_start_failed');
@@ -423,12 +522,22 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
     setBusy(true);
     setError('');
     try {
-      const stream = await ensureMicrophone();
       const config = await getInternetVoiceConfig(token, call.callId);
-      await createCallerPeer(call.callId, config.client, stream);
+      setMediaProvider(config.mediaProvider);
+      if (config.mediaProvider === 'realtimekit') {
+        await joinRealtimeCall(call.callId);
+      } else if (config.client) {
+        const stream = await ensureMicrophone();
+        await createCallerPeer(call.callId, config.client, stream);
+      } else {
+        throw new Error('internet_voice_client_config_missing');
+      }
       if (config.status === 'calling_listener') setNoAnswerDeadlineMs(Date.now() + config.noAnswerSeconds * 1_000);
     } catch (cause) {
-      setError(messageFor(getInternetVoiceErrorCode(cause)));
+      const micCode = cause instanceof Error && (cause.message === 'microphone_permission_denied' || cause.message === 'microphone_unavailable')
+        ? cause.message
+        : null;
+      setError(messageFor(micCode ?? getInternetVoiceErrorCode(cause)));
       cleanupRtc();
     } finally { setBusy(false); }
   }
@@ -492,8 +601,8 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <Text style={styles.title}>Caller · تماس اینترنتی</Text>
-      <Text style={styles.note}>Internet Voice مسیر اصلی تماس است. شماره تلفن برای این مسیر لازم نیست؛ PSTN فقط fallback عملیاتی است.</Text>
+      <Text style={styles.title}>تماس اینترنتی با شنونده انسانی</Text>
+      <Text style={styles.note}>ویژه ۱۸ سال و بالاتر · تماس زنده WebRTC · برای امنیت کاربران، مکالمه توسط پلتفرم ضبط و امن نگهداری می‌شود. این سرویس درمانی، پزشکی، دوست‌یابی یا اضطراری نیست.</Text>
 
       {!recoveryComplete && <View style={styles.card}><Text style={styles.heading}>بررسی تماس جاری</Text><Text style={styles.body}>اگر تماس فعالی داشته باشی، همان تماس از سرور بازیابی می‌شود.</Text></View>}
 
@@ -507,14 +616,17 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
   <View style={styles.card}>
     <Text style={styles.heading}>تأیید سن و قوانین</Text>
     <Text style={styles.body}>قبل از دیدن شنونده‌ها هر سه مورد را جداگانه تأیید کن.</Text>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
-      <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم حداقل سن اعلام‌شده سرویس را دارم.</Text>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: ageConfirmed, disabled: busy }} disabled={busy} style={[styles.policyRow, ageConfirmed && styles.policyRowActive]} onPress={() => setAgeConfirmed((current) => !current)}>
+      <Text style={styles.policyText}>{ageConfirmed ? '☑' : '☐'} تأیید می‌کنم ۱۸ سال یا بیشتر دارم.</Text>
     </TouchableOpacity>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: termsAccepted, disabled: busy }} disabled={busy} style={[styles.policyRow, termsAccepted && styles.policyRowActive]} onPress={() => setTermsAccepted((current) => !current)}>
       <Text style={styles.policyText}>{termsAccepted ? '☑' : '☐'} قوانین استفاده را خواندم و می‌پذیرم. لینک «قوانین استفاده» پایین صفحه در دسترس است.</Text>
     </TouchableOpacity>
-    <TouchableOpacity disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: safetyAccepted, disabled: busy }} disabled={busy} style={[styles.policyRow, safetyAccepted && styles.policyRowActive]} onPress={() => setSafetyAccepted((current) => !current)}>
       <Text style={styles.policyText}>{safetyAccepted ? '☑' : '☐'} می‌پذیرم محترمانه رفتار کنم؛ اینجا محل دوست‌یابی یا مشاوره تخصصی نیست و اطلاعات تماس شخصی ردوبدل نمی‌کنم.</Text>
+    </TouchableOpacity>
+    <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: recordingAccepted, disabled: busy }} disabled={busy} style={[styles.policyRow, recordingAccepted && styles.policyRowActive]} onPress={() => setRecordingAccepted((current) => !current)}>
+      <Text style={styles.policyText}>{recordingAccepted ? '☑' : '☐'} می‌دانم برای امنیت کاربران و رسیدگی به شکایت‌های احتمالی، این مکالمه توسط پلتفرم ضبط و به‌صورت امن نگهداری می‌شود.</Text>
     </TouchableOpacity>
     <TouchableOpacity disabled={busy || !policiesReady} style={[styles.primary, !policiesReady && styles.disabled]} onPress={acceptAgeGate}>
       <Text style={styles.primaryText}>{busy ? 'در حال بررسی…' : 'تأیید و ادامه'}</Text>
@@ -539,7 +651,7 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
             <View key={listener.id} style={styles.listener}>
               <View style={styles.listenerText}>
                 <Text style={styles.listenerName}>{listener.nickname}</Text>
-                <Text style={styles.meta}>{listener.verified ? 'هویت/فیلدهای تأییدشده مشخص است' : 'اطلاعات تأییدنشده'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
+                <Text style={styles.meta}>{listener.workEligible ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب شنونده هنوز برای فعالیت تأیید نشده؛ جزئیات پروفایل خوداظهاری است.'} · {listener.languages.map((x) => x.nameFa).join(' · ') || 'زبان ثبت نشده'}</Text>
                 {!!listener.shortIntro && <Text style={styles.body}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</Text>}
               </View>
               <TouchableOpacity disabled={busy} style={styles.smallButton} onPress={() => { void startCall(listener); }}><Text style={styles.smallButtonText}>تماس</Text></TouchableOpacity>
@@ -559,6 +671,17 @@ export default function CallerClosedBetaScreen({ token, onClose }: Props) {
 
           {!terminalStatuses.has(call.status) && call.status !== 'routing' && !voiceReady && (
             <TouchableOpacity disabled={busy} style={styles.primary} onPress={() => { void reconnectVoice(); }}><Text style={styles.primaryText}>{busy ? 'در حال اتصال…' : 'اتصال/ادامه صدای اینترنتی'}</Text></TouchableOpacity>
+          )}
+          {voiceReady && mediaProvider === 'realtimekit' && realtimeCall.state === 'waiting_for_other_participant' && (
+            <Text style={styles.body}>اتصال برقرار شد؛ در انتظار پیوستن شنونده به تماس صوتی هستیم.</Text>
+          )}
+          {voiceReady && mediaProvider === 'realtimekit' && realtimeCall.state === 'reconnecting' && (
+            <Text style={styles.warning}>اتصال صوتی قطع شد؛ در حال تلاش برای اتصال دوباره…</Text>
+          )}
+          {voiceReady && (
+            <TouchableOpacity style={styles.secondary} onPress={toggleMute}>
+              <Text style={styles.secondaryText}>{muted ? 'روشن‌کردن میکروفون' : 'قطع موقت میکروفون'}</Text>
+            </TouchableOpacity>
           )}
 
           {call.status === 'connected' && (

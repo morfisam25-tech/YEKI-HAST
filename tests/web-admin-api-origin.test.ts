@@ -12,7 +12,7 @@ for (const [name, source, envName] of [
   ['admin', adminSource, 'ADMIN_API_BASE_URL'],
 ] as const) {
   test(`${name} proxy source-locks production and keeps overrides non-production-only`, () => {
-    const productionLock = source.indexOf("if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;");
+    const productionLock = source.indexOf("if (env === 'production') return PRODUCTION_API_BASE_URL;");
     const envLookup = source.indexOf(`process.env.${envName}`);
     const localhostFallback = source.indexOf("return 'http://localhost:4000';");
     assert.ok(productionLock >= 0 && envLookup > productionLock && localhostFallback > envLookup);

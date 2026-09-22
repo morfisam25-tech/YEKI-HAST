@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('../services/api/src/routes/calls.ts', import.meta.url), 'utf8');
+const source = (await readFile(new URL('../services/api/src/routes/calls.ts', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('caller cancellation keeps provider bridge private', () => {
   assert.match(source, /provider_bridge_id/);

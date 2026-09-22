@@ -91,6 +91,8 @@ export default function BookingPage() {
   const [languageCode, setLanguageCode] = useState('fa');
   const [maxSeconds, setMaxSeconds] = useState<600 | 1800 | 3600>(1800);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [safetyAccepted, setSafetyAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -155,7 +157,7 @@ export default function BookingPage() {
   }
 
   async function createReservation() {
-    if (!selected || !selectedWindow || !scheduledLocal || !ageConfirmed || busy) return;
+    if (!selected || !selectedWindow || !scheduledLocal || !ageConfirmed || !termsAccepted || !safetyAccepted || busy) return;
     if (!clientTimeFits()) {
       setError('زمان انتخاب‌شده داخل بازه آزاد این شنونده نیست یا با رزرو دیگری تداخل دارد.');
       return;
@@ -166,7 +168,7 @@ export default function BookingPage() {
     try {
       await api('caller/age-gate', {
         method: 'POST',
-        body: JSON.stringify({ confirmed: true }),
+        body: JSON.stringify({ confirmed: true, termsAccepted, safetyAccepted }),
       });
       await api('bookings', {
         method: 'POST',
@@ -237,7 +239,8 @@ export default function BookingPage() {
                   <span className={styles.listenerName}>{listener.nickname}</span>
                   <span className={styles.meta}>نزدیک‌ترین زمان: {faDate(listener.nextAvailableAt)}</span><br />
                   <span className={styles.meta}>امتیاز اعتماد: {fa(listener.reliabilityScore)} · تماس تکمیل‌شده: {fa(listener.completedCalls)}</span>
-                  {listener.shortIntro && <><br /><span className={styles.meta}>معرفی خوداظهاری: {listener.shortIntro}</span></>}
+                  <br /><span className={styles.meta}>{listener.verified ? 'حساب شنونده برای فعالیت تأیید شده؛ جزئیات پروفایل خوداظهاری است.' : 'حساب آزمایشی؛ جزئیات پروفایل خوداظهاری است.'}</span>
+                  {listener.shortIntro && <><br /><span className={styles.meta}>معرفی خوداظهاری (تأییدنشده): {listener.shortIntro}</span></>}
                 </button>
               ))}
             </div>
@@ -308,12 +311,22 @@ export default function BookingPage() {
 
                 <label className={styles.row}>
                   <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />
-                  <span>شرط سنی سرویس را دارم.</span>
+                  <span>تأیید می‌کنم ۱۸ سال یا بیشتر دارم.</span>
+                </label>
+
+                <label className={styles.row}>
+                  <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
+                  <span><a href="/terms">قوانین استفاده</a> را خواندم و می‌پذیرم.</span>
+                </label>
+
+                <label className={styles.row}>
+                  <input type="checkbox" checked={safetyAccepted} onChange={(event) => setSafetyAccepted(event.target.checked)} />
+                  <span>مرزبندی ایمنی را می‌پذیرم؛ این تماس با شنونده انسانی است و درمان، دوست‌یابی یا سرویس اضطراری نیست.</span>
                 </label>
 
                 <button
                   type="button"
-                  disabled={busy || !ageConfirmed || !clientTimeFits()}
+                  disabled={busy || !ageConfirmed || !termsAccepted || !safetyAccepted || !clientTimeFits()}
                   className={styles.primary}
                   onClick={() => void createReservation()}
                 >

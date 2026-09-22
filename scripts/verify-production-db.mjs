@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { currentMigrationEntries } from './current-migration-manifest.mjs';
 
 function normalizedDatabaseUrl(connectionString) {
   const url = new URL(connectionString);
@@ -18,14 +19,8 @@ try {
     FROM public.yeki_hast_schema_migrations
     ORDER BY filename
   `);
-  const expectedMigrations = new Map([
-    ['0001_initial.sql', 'f3a6d566b8298c6ef00b10ab1efe91a313e307101297fa35d817270335ed2e09'],
-    ['0002_email_auth.sql', '3e748e17f9a51ce27513cf03a459e7152ac74b63af32e43ff3478c514584fd90'],
-    ['0003_internet_voice_transport.sql', '08fc87e2b1a12164b3078b99ca66b46d6db6003fb387fa79761bba92c34bff12'],
-    ['0004_booking.sql', '63f4070bdd1b6f89cca95eaa63a681ec31a246f13ac10a14ba814f98d887d4e3'],
-    ['0005_no_answer_hold_idempotency.sql', '7456314e4969ba9536f21ca3c9de0ab4f665ba6f236cddea5832a43601b0ef3c'],
-    ['0006_internet_voice_server_sweeper.sql', '46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b'],
-  ]);
+  const expectedMigrationEntries = await currentMigrationEntries();
+  const expectedMigrations = new Map(expectedMigrationEntries);
   const migrationMap = new Map();
   for (const migration of migrations.rows) {
     const filename = String(migration.filename ?? '');
@@ -69,6 +64,9 @@ try {
     'app.internet_voice_signals',
     'app.listener_availability',
     'app.call_reservations',
+    'app.call_ratings',
+    'app.caller_favorite_listeners',
+    'app.caller_quote_bindings',
     'app.payment_attempts',
     'app.reservations',
     'app.call_sessions',
@@ -89,6 +87,14 @@ try {
     'private_data.email_otp_challenges',
     'private_data.report_details',
     'private_data.safety_event_details',
+    // W58 recording core foundation (0010_recording_core_foundation.sql).
+    'app.call_recording_consents',
+    'private_data.call_recording_sessions',
+    'private_data.call_recording_segments',
+    'app.admin_capabilities',
+    'app.recording_playback_grants',
+    // W60 RealtimeKit media migration (0011_call_media_sessions.sql).
+    'app.call_media_sessions',
   ];
   const relations = await pool.query(`
     SELECT r.relation_name, to_regclass(r.relation_name) IS NOT NULL AS present
@@ -98,11 +104,104 @@ try {
     if (row.present !== true) throw new Error(`critical relation missing: ${row.relation_name}`);
   }
 
+  const w3Schema = await pool.query(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='caller_profiles'
+          AND column_name='market_id'
+      ) AS caller_profile_market,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='call_reservations'
+          AND column_name='caller_market_id' AND is_nullable='NO'
+      ) AS reservation_caller_market,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='call_sessions'
+          AND column_name='caller_market_id' AND is_nullable='NO'
+      ) AS call_caller_market,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='call_sessions'
+          AND column_name='listener_currency_code' AND is_nullable='NO'
+      ) AS listener_currency,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='call_sessions'
+          AND column_name='platform_contribution_minor' AND is_nullable='YES'
+      ) AS cross_currency_contribution_nullable,
+      (
+        SELECT count(*)=9
+        FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='caller_quote_bindings'
+          AND column_name IN (
+            'caller_user_id','caller_market_id','pricing_plan_id','quote_target',
+            'max_billable_seconds','booking_id','authorized_minor','currency_code','expires_at'
+          )
+      ) AS quote_binding_columns,
+      (
+        SELECT count(*)=5
+        FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='call_ratings'
+          AND column_name IN ('call_session_id','caller_user_id','listener_user_id','service_id','rating')
+      ) AS call_rating_columns,
+      (
+        SELECT count(*)=2
+        FROM information_schema.columns
+        WHERE table_schema='app' AND table_name='caller_favorite_listeners'
+          AND column_name IN ('caller_user_id','listener_user_id')
+      ) AS favorite_columns
+  `);
+  const w3 = w3Schema.rows[0] ?? {};
+  if (w3.caller_profile_market !== true) throw new Error('Caller persisted market schema missing');
+  if (w3.reservation_caller_market !== true) throw new Error('Booking Caller market snapshot missing');
+  if (w3.call_caller_market !== true) throw new Error('Call Caller market snapshot missing');
+  if (w3.listener_currency !== true) throw new Error('Listener payout currency snapshot missing');
+  if (w3.cross_currency_contribution_nullable !== true) throw new Error('cross-currency contribution fail-closed schema missing');
+  if (w3.quote_binding_columns !== true) throw new Error('Caller quote binding schema incomplete');
+  if (w3.call_rating_columns !== true) throw new Error('Call rating schema incomplete');
+  if (w3.favorite_columns !== true) throw new Error('Caller favorite schema incomplete');
+
+  const recordingSchema = await pool.query(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'app' AND t.typname = 'recording_state'
+      ) AS recording_state_enum,
+      (
+        SELECT count(*)::int FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'app' AND t.typname = 'recording_state'
+      ) AS recording_state_enum_values,
+      to_regclass('app.call_media_sessions') IS NOT NULL AS call_media_sessions,
+      EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'app' AND table_name = 'call_recording_consents'
+          AND constraint_type = 'UNIQUE'
+      ) AS call_recording_consents_unique,
+      EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'private_data' AND table_name = 'call_recording_sessions'
+          AND constraint_type = 'UNIQUE'
+      ) AS call_recording_sessions_unique
+  `);
+  const recordingRow = recordingSchema.rows[0] ?? {};
+  if (recordingRow.recording_state_enum !== true) throw new Error('app.recording_state enum missing');
+  if (Number(recordingRow.recording_state_enum_values ?? 0) !== 11) throw new Error('app.recording_state enum value count mismatch');
+  if (recordingRow.call_media_sessions !== true) throw new Error('app.call_media_sessions table missing');
+  if (recordingRow.call_recording_consents_unique !== true) throw new Error('app.call_recording_consents unique constraint missing');
+  if (recordingRow.call_recording_sessions_unique !== true) throw new Error('private_data.call_recording_sessions unique constraint missing');
+
   const criticalTriggers = [
     'listener_presence_set_updated_at',
     'payout_items_guard_mutation',
     'payouts_validate_total_before_processing',
     'payouts_guard_status_transition',
+    'call_recording_sessions_set_updated_at',
+    'call_recording_segments_set_updated_at',
+    'call_media_sessions_set_updated_at',
   ];
   const triggers = await pool.query(`
     SELECT t.tgname
@@ -110,7 +209,7 @@ try {
     JOIN pg_class c ON c.oid=t.tgrelid
     JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE NOT t.tgisinternal
-      AND n.nspname='app'
+      AND n.nspname IN ('app', 'private_data')
       AND t.tgname = ANY($1::text[])
   `, [criticalTriggers]);
   const triggerNames = new Set(triggers.rows.map((row) => row.tgname));

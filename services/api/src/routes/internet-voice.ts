@@ -2,7 +2,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { withTransaction } from '../../../../packages/db/src/client.ts';
 import { requireAuth } from '../lib/auth.ts';
 import { HttpError, readJson, sendJson } from '../lib/http.ts';
-import { getCallTransportReadiness, getInternetVoiceClientConfig } from '../providers/call-transport.ts';
+import { getCallTransportReadiness, getInternetVoiceClientConfig, parseIceServers } from '../providers/call-transport.ts';
+import { isInternalOwnerTestCaller, isInternalOwnerTestMode } from '../lib/internal-owner-test.ts';
+import { currentCallMediaProvider } from '../lib/call-media-config.ts';
+import {
+  confirmRecordingActiveForBilling,
+  requireParticipantRecordingConsent,
+  startRecordingForCall,
+} from '../services/recording-lifecycle.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACTIVE_STATUSES = ['routing', 'calling_listener', 'connected'] as const;
@@ -53,6 +60,14 @@ async function deleteExpiredSignals(client: Parameters<Parameters<typeof withTra
 }
 
 async function getVoiceClientConfigOr503() {
+  if (isInternalOwnerTestMode()) {
+    const iceServers = parseIceServers(process.env.INTERNET_VOICE_ICE_SERVERS_JSON);
+    const relayConfigured = iceServers.some((server) =>
+      (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url)),
+    );
+    if (!relayConfigured) throw new HttpError(503, 'internet_voice_turn_credentials_unavailable');
+    return { signalingMode: 'http_polling' as const, iceServers, relayConfigured, iranDomesticPath: false };
+  }
   try {
     return await getInternetVoiceClientConfig();
   } catch {
@@ -63,11 +78,15 @@ async function getVoiceClientConfigOr503() {
 export async function startInternetVoiceCall(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
   const { userId } = await requireAuth(req);
-  const readiness = getCallTransportReadiness();
+  const readiness = isInternalOwnerTestCaller(userId) ? { primary: 'internet_voice' as const } : getCallTransportReadiness();
   if (readiness.primary !== 'internet_voice') throw new HttpError(409, 'internet_voice_not_primary');
-  // Resolve short-lived TURN credentials before mutating call state. If the external TURN
-  // control plane is unavailable, the call stays in routing rather than becoming half-started.
-  const voiceClient = await getVoiceClientConfigOr503();
+  // W60: RealtimeKit handles its own signaling/relay -- the legacy TURN/ICE
+  // `client` config only applies to the Preview-only legacy_p2p path (task
+  // section 10). Resolved before mutating call state either way: if the
+  // legacy TURN control plane is unavailable, the call stays in routing
+  // rather than becoming half-started.
+  const mediaProvider = currentCallMediaProvider();
+  const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{
@@ -87,6 +106,9 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     const row = call.rows[0];
     if (!row) throw new HttpError(404, 'call_not_found');
     if (!row.listener_user_id) throw new HttpError(409, 'call_not_dispatchable');
+    // A recording-required call must not start ringing the listener until the
+    // caller has acknowledged the per-call recording disclosure.
+    await requireParticipantRecordingConsent(client, row.id, userId);
 
     const expectedSessionId = internetVoiceSessionId(row.id);
     if (row.transport === 'internet_voice' && row.transport_session_id === expectedSessionId) {
@@ -128,6 +150,7 @@ export async function startInternetVoiceCall(req: IncomingMessage, res: ServerRe
     callId: rawCallId,
     status: result.status,
     transport: 'internet_voice',
+    mediaProvider,
     noAnswerSeconds: NO_ANSWER_SECONDS,
     client: voiceClient,
     idempotent: result.idempotent,
@@ -158,12 +181,14 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
     return { role, status: row.status };
   });
 
-  const voiceClient = await getVoiceClientConfigOr503();
+  const mediaProvider = currentCallMediaProvider();
+  const voiceClient = mediaProvider === 'legacy_p2p' ? await getVoiceClientConfigOr503() : null;
   sendJson(res, 200, {
     callId: rawCallId,
     transport: 'internet_voice',
     role: result.role,
     status: result.status,
+    mediaProvider,
     noAnswerSeconds: NO_ANSWER_SECONDS,
     client: voiceClient,
     readiness: {
@@ -175,10 +200,25 @@ export async function getInternetVoiceConfig(req: IncomingMessage, res: ServerRe
 
 export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // Internal Preview config is decoded lazily. Signal-only requests may land on a
+  // cold function instance, so hydrate it before authentication opens a DB transaction.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
   const body = await readJson<{ kind?: unknown; payload?: unknown }>(req);
   const kind = assertSignalKind(body.kind);
   const payload = normalizeSignalPayload(body.payload);
+
+  // W60 signaling retirement boundary (task section 10): RealtimeKit handles
+  // its own SDP/ICE signaling entirely -- a call on the RealtimeKit media
+  // path must never carry custom offer/answer/ICE through this legacy
+  // endpoint, even from a stale/misbehaving client. `media_connected`/
+  // `reconnecting`/`reconnected` stay valid on both paths: they are generic
+  // call-state signals, not SDP/ICE payloads, and postInternetVoiceSignal's
+  // `media_connected` handling below is exactly what the RealtimeKit mobile
+  // client now also relies on (see routes/internet-voice-media.ts).
+  if ((kind === 'offer' || kind === 'answer' || kind === 'ice') && currentCallMediaProvider() === 'realtimekit') {
+    throw new HttpError(409, 'legacy_signaling_disabled');
+  }
 
   const result = await withTransaction(async (client) => {
     const call = await client.query<{
@@ -186,8 +226,11 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
       listener_user_id: string | null;
       status: string;
       transport: string | null;
+      recording_mode: string;
+      max_billable_seconds: number | null;
     }>(`
-      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text
+      SELECT caller_user_id::text, listener_user_id::text, status::text, transport::text,
+             recording_mode::text, max_billable_seconds
       FROM app.call_sessions
       WHERE id=$1
       FOR UPDATE
@@ -201,13 +244,28 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
     if (kind === 'offer' && role !== 'caller') throw new HttpError(403, 'voice_offer_caller_only');
     if (kind === 'answer' && role !== 'listener') throw new HttpError(403, 'voice_answer_listener_only');
 
-    if (kind === 'answer' && role === 'listener') {
-      await client.query(`
+    let shouldStartRecording = false;
+    const realtimeKitListenerConnected = kind === 'media_connected'
+      && role === 'listener'
+      && currentCallMediaProvider() === 'realtimekit';
+    if ((kind === 'answer' && role === 'listener') || realtimeKitListenerConnected) {
+      // Mirrors startInternetVoiceCall's caller-side gate: a recording-required
+      // call must not let the listener answer without their own consent. The
+      // RealtimeKit path intentionally has no legacy `answer` signal, so its
+      // authoritative listener media-connected event is the equivalent
+      // one-time answer boundary that starts provider recording.
+      await requireParticipantRecordingConsent(client, rawCallId, userId);
+      const answered = await client.query(`
         UPDATE app.call_sessions
         SET voice_listener_answered_at=COALESCE(voice_listener_answered_at,now()),
             updated_at=now()
         WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
+        RETURNING voice_listener_answered_at
       `, [rawCallId]);
+      // Only kick off the provider once, on the transition that actually set
+      // voice_listener_answered_at for the first time -- a retried/duplicate
+      // 'answer' signal must not re-invoke the provider.
+      shouldStartRecording = row.recording_mode === 'all_with_consent' && Boolean(answered.rowCount);
     }
 
     await deleteExpiredSignals(client);
@@ -228,16 +286,25 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
       `, [rawCallId]);
       const roles = new Set(connectedRoles.rows.map((item) => item.role));
       if (roles.has('caller') && roles.has('listener')) {
+        // For a recording-required call, an authoritative provider-confirmed
+        // 'recording' state gates billing_started_at only -- media itself is
+        // unaffected (W58 does not touch the live P2P media path). A missing
+        // or not-yet-active recording never blocks the call from actually
+        // connecting; it only withholds billing until (and unless) recording
+        // is confirmed, with the heartbeat route enforcing a bounded timeout.
+        const recordingGate = row.recording_mode === 'all_with_consent'
+          ? await confirmRecordingActiveForBilling(client, rawCallId)
+          : { active: true, state: 'not_requested' as const };
         const updated = await client.query(`
           UPDATE app.call_sessions
           SET status='connected', connected_at=COALESCE(connected_at,now()),
-              billing_started_at=COALESCE(billing_started_at,now()),
+              billing_started_at=CASE WHEN $2::boolean THEN COALESCE(billing_started_at,now()) ELSE billing_started_at END,
               caller_voice_heartbeat_at=COALESCE(caller_voice_heartbeat_at,now()),
               listener_voice_heartbeat_at=COALESCE(listener_voice_heartbeat_at,now()),
               updated_at=now()
           WHERE id=$1 AND status='calling_listener' AND transport='internet_voice'
           RETURNING id
-        `, [rawCallId]);
+        `, [rawCallId, recordingGate.active]);
         if (updated.rowCount) {
           status = 'connected';
           becameConnected = true;
@@ -247,13 +314,24 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
           `, [rawCallId, JSON.stringify({
             reason: 'both_sides_media_connected',
             transport: 'internet_voice',
+            recordingRequired: row.recording_mode === 'all_with_consent',
+            recordingState: recordingGate.state,
+            billingStarted: recordingGate.active,
           })]);
         }
       }
     }
 
-    return { role, status, becameConnected };
+    return { role, status, becameConnected, shouldStartRecording, maxBillableSeconds: row.max_billable_seconds };
   });
+
+  if (result.shouldStartRecording) {
+    // Outside the transaction/row-lock that just committed, same pattern as
+    // startInternetVoiceCall's TURN credential resolution: external I/O never
+    // holds a DB connection+lock open. Best-effort -- see the comment above
+    // the media_connected billing gate for why a failure here is safe.
+    await startRecordingForCall(rawCallId, result.maxBillableSeconds ?? 3600).catch(() => undefined);
+  }
 
   sendJson(res, 202, {
     ok: true,
@@ -268,6 +346,8 @@ export async function postInternetVoiceSignal(req: IncomingMessage, res: ServerR
 
 export async function getInternetVoiceSignals(req: IncomingMessage, res: ServerResponse, rawCallId: string) {
   assertCallId(rawCallId);
+  // See postInternetVoiceSignal: this is a separate cold-start entry point.
+  isInternalOwnerTestMode();
   const { userId } = await requireAuth(req);
 
   const result = await withTransaction(async (client) => {

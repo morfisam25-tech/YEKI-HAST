@@ -1,9 +1,30 @@
+import { isProductionOrigin, resolveAppEnv } from './_env.ts';
+
 export const WEB_SESSION_COOKIE = process.env.NODE_ENV === 'production' ? '__Host-yeki_web_session' : 'yeki_web_session';
 export const PRODUCTION_API_BASE_URL = 'https://yeki-hast-unique-6ff0.vercel.app';
 const BACKEND_REQUEST_TIMEOUT_MS = 15_000;
 
+// Environment identity (APP_ENV / VERCEL_ENV), never NODE_ENV alone: Vercel builds
+// Preview deployments with NODE_ENV=production too, so a NODE_ENV-only check cannot
+// tell Preview apart from Production. Preview must never silently fall back to the
+// Production API, so a missing/unsafe Preview API origin fails closed instead of
+// defaulting anywhere.
 export function backendBaseUrl(): string {
-  if (process.env.NODE_ENV === 'production') return PRODUCTION_API_BASE_URL;
+  const env = resolveAppEnv();
+  if (env === 'production') return PRODUCTION_API_BASE_URL;
+
+  if (env === 'preview_internal_beta') {
+    const configured = process.env.WEB_API_BASE_URL?.trim();
+    if (!configured) {
+      throw new Error('WEB_API_BASE_URL is required in preview_internal_beta; Preview must never fall back to the Production API');
+    }
+    const normalized = configured.replace(/\/$/, '');
+    if (isProductionOrigin(normalized, PRODUCTION_API_BASE_URL)) {
+      throw new Error('WEB_API_BASE_URL must not point at the Production API origin in preview_internal_beta');
+    }
+    return normalized;
+  }
+
   const configured = process.env.WEB_API_BASE_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
   return 'http://localhost:4000';

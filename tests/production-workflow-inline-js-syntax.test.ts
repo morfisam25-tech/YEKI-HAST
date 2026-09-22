@@ -20,7 +20,7 @@ function extractNodeHeredocs(source: string): string[] {
 
 for (const workflowPath of workflows) {
   test(`${workflowPath} inline Node heredocs have valid JavaScript syntax`, () => {
-    const source = readFileSync(new URL(`../${workflowPath}`, import.meta.url), 'utf8');
+    const source = readFileSync(new URL(`../${workflowPath}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     const scripts = extractNodeHeredocs(source);
     assert.ok(scripts.length > 0, `expected at least one Node heredoc in ${workflowPath}`);
 

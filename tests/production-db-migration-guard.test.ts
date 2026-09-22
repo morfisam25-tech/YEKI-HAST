@@ -14,6 +14,10 @@ const productionDbVerifier = await readFile(
   new URL('../scripts/verify-production-db.mjs', import.meta.url),
   'utf8',
 );
+const currentMigrationManifest = await readFile(
+  new URL('../scripts/current-migration-manifest.mjs', import.meta.url),
+  'utf8',
+);
 const apiVercel = JSON.parse(
   await readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
 );
@@ -82,7 +86,9 @@ test('production DB migration is idempotent and followed by read-only verificati
 
 test('production DB verifier checks exact migration history and relation existence without regclass display-name assumptions', () => {
   assert.match(productionDbVerifier, /SELECT filename, sha256[\s\S]*ORDER BY filename/);
-  assert.match(productionDbVerifier, /46c8bc4e07420d2ec64192d8ab2aee40f29a42083192d989bcc2bdfef4dfb72b/);
+  assert.match(productionDbVerifier, /currentMigrationEntries/);
+  assert.match(currentMigrationManifest, /0006_internet_voice_server_sweeper\.sql/);
+  assert.match(currentMigrationManifest, /0009_booking_reservation_sweeper\.sql/);
   assert.doesNotMatch(productionDbVerifier, /efb704ec5b6233364f6987a347ecd48b4315728dc9c0ddb0f0e8b4b3b4d0f254/);
   assert.match(productionDbVerifier, /unexpected production migration record/);
   assert.match(productionDbVerifier, /production migration history is incomplete/);

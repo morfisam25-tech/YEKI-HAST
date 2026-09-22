@@ -37,6 +37,11 @@ test('technical-beta support identity is source-locked instead of accepting a se
   assert.match(envSync, /const supportEmail = DEFAULT_MAILBOX_EMAIL/);
 });
 
+test('production child-safety URL is source-locked to the canonical public route', () => {
+  assert.match(envSync, /const DEFAULT_CHILD_SAFETY_URL = 'https:\/\/yekihast\.app\/safety\/children'/);
+  assert.match(envSync, /setPlain\('CHILD_SAFETY_URL', childSafetyUrl\)/);
+});
+
 test('infrastructure deploy keeps caller closed and requires a truly ready legal bootstrap', () => {
   assert.match(workflow, /body\?\.features\?\.callerClosedBetaEnabled === false/);
   assert.match(workflow, /body\?\.legal\?\.ready === true/);

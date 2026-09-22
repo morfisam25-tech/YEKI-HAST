@@ -1,14 +1,28 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "git": {
     "deploymentEnabled": false
   },
   "rewrites": [
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/ready", "destination": "/api/index" },
-    { "source": "/v1/bootstrap", "destination": "/api/index" },
-    { "source": "/v1/:path*", "destination": "/api/runtime" }
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/ready",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/v1/bootstrap",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/v1/:path*",
+      "destination": "/api/runtime"
+    }
   ]
 }

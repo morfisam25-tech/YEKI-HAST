@@ -6,6 +6,7 @@ const API_ORIGIN = 'https://api.vercel.com';
 const DEFAULT_PRIVACY_POLICY_URL = 'https://yekihast.app/privacy';
 const DEFAULT_TERMS_OF_SERVICE_URL = 'https://yekihast.app/terms';
 const DEFAULT_ACCOUNT_DELETION_URL = 'https://yekihast.app/account/delete';
+const DEFAULT_CHILD_SAFETY_URL = 'https://yekihast.app/safety/children';
 const DEFAULT_MAILBOX_EMAIL = 'sales@uniqueholding.com.tr';
 const DEFAULT_GMAIL_FROM_NAME = 'یکی هست';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -160,16 +161,25 @@ if (!['true', 'false'].includes(commercialHostingApproved)) {
   throw new Error('PRODUCTION_COMMERCIAL_HOSTING_APPROVED must be true or false');
 }
 
+// Internal Beta remains the fail-closed default. Public Release must be selected
+// explicitly, but selection never opens Caller and never activates a provider.
+const releaseProfile = optional('PRODUCTION_RELEASE_PROFILE', 'internal_beta').toLowerCase();
+if (!['internal_beta', 'public_release'].includes(releaseProfile)) {
+  throw new Error('PRODUCTION_RELEASE_PROFILE must be internal_beta or public_release');
+}
+
 // Public legal routes are source-locked first-party canonical surfaces. Legacy
 // PRODUCTION_* URL secret values are ignored so stale optional overrides cannot
 // move bootstrap away from the domain verified and published by the Web release.
 const privacyPolicyUrl = DEFAULT_PRIVACY_POLICY_URL;
 const termsOfServiceUrl = DEFAULT_TERMS_OF_SERVICE_URL;
 const accountDeletionUrl = DEFAULT_ACCOUNT_DELETION_URL;
+const childSafetyUrl = DEFAULT_CHILD_SAFETY_URL;
 const supportEmail = DEFAULT_MAILBOX_EMAIL;
 validatePublicHttpsUrl(privacyPolicyUrl, 'PRIVACY_POLICY_URL');
 validatePublicHttpsUrl(termsOfServiceUrl, 'TERMS_OF_SERVICE_URL');
 validatePublicHttpsUrl(accountDeletionUrl, 'ACCOUNT_DELETION_URL');
+validatePublicHttpsUrl(childSafetyUrl, 'CHILD_SAFETY_URL');
 validateEmail(supportEmail, 'SUPPORT_EMAIL');
 
 const projectEnvUrl = new URL(`${API_ORIGIN}/v10/projects/${PROJECT_ID}/env`);
@@ -194,6 +204,7 @@ setSensitive('DATABASE_URL', runtimeDatabaseUrl);
 // couple of connections inside a warm instance without creating a connection storm.
 setPlain('DB_POOL_MAX', '2');
 setPlain('YEKI_HAST_RELEASE_SHA', releaseSha);
+setPlain('YEKI_HAST_RELEASE_PROFILE', releaseProfile);
 
 setPlain('EMAIL_PROVIDER', 'gmail_api');
 setSensitive('GMAIL_SERVICE_ACCOUNT_JSON', gmailServiceAccountJson);
@@ -204,6 +215,7 @@ setPlain('GMAIL_FROM_NAME', gmailFromName);
 setPlain('PRIVACY_POLICY_URL', privacyPolicyUrl);
 setPlain('TERMS_OF_SERVICE_URL', termsOfServiceUrl);
 setPlain('ACCOUNT_DELETION_URL', accountDeletionUrl);
+setPlain('CHILD_SAFETY_URL', childSafetyUrl);
 setPlain('SUPPORT_EMAIL', supportEmail);
 
 setPlain('SESSION_TTL_HOURS', '720');
@@ -215,20 +227,32 @@ setPlain('OTP_IP_LIMIT_PER_15M', '20');
 setPlain('OTP_GLOBAL_LIMIT_PER_15M', '1000');
 setPlain('DEV_EXPOSE_OTP', 'false');
 
-// A normal production sync always returns one-time and provider-gated launch surfaces to safe defaults.
+// Owner-test capability is never valid in Production, regardless of profile.
 setPlain('BOOTSTRAP_ADMIN_ENABLED', 'false');
 setPlain('BOOTSTRAP_ADMIN_PHONE_E164', '');
 setPlain('BOOTSTRAP_ADMIN_EMAIL', '');
 setPlain('BOOTSTRAP_ADMIN_EXPIRES_AT', '');
-setPlain('CALLER_CLOSED_BETA_ENABLED', 'false');
 setPlain('COMMERCIAL_HOSTING_APPROVED', commercialHostingApproved);
 setPlain('MANUAL_PHONE_VERIFICATION_BETA_ENABLED', 'false');
-setPlain('SMS_PROVIDER', '');
-setPlain('SMSIR_OTP_TEMPLATE_APPROVED', 'false');
-setPlain('PAYMENT_PROVIDER', '');
-setPlain('KYC_INQUIRY_PROVIDER', '');
-setPlain('PAYOUT_PROVIDER', '');
-setPlain('TELEPHONY_PROVIDER', '');
+setPlain('INTERNAL_BETA_OWNER_TEST_MODE', '0');
+setPlain('INTERNAL_BETA_ENVIRONMENT', '0');
+
+if (releaseProfile === 'internal_beta') {
+  // The beta profile is deliberately closed and provider-free.
+  setPlain('CALLER_CLOSED_BETA_ENABLED', 'false');
+  setPlain('SMS_PROVIDER', '');
+  setPlain('SMSIR_OTP_TEMPLATE_APPROVED', 'false');
+  setPlain('PAYMENT_PROVIDER', '');
+  setPlain('KYC_INQUIRY_PROVIDER', '');
+  setPlain('PAYOUT_PROVIDER', '');
+  setPlain('TELEPHONY_PROVIDER', '');
+} else {
+  // The public profile establishes the immutable 18+ consent contract. It does
+  // not write Caller/provider switches, so a sync neither opens them nor erases
+  // separately approved configuration.
+  setPlain('CALLER_MINIMUM_AGE', '18');
+  setPlain('CALLER_AGE_POLICY_VERSION', 'age-18-2026-09-13');
+}
 setPlain('DEFAULT_PRODUCT_CODE', 'yeki_hast');
 setPlain('DEFAULT_SERVICE_CODE', 'human_listening');
 setPlain('DEFAULT_MARKET_CODE', 'ir');

@@ -7,6 +7,11 @@ import {
   isListenerTrainingModule,
   listenerTrainingComplete,
 } from '../domain/listener-onboarding.ts';
+import {
+  listenerKycChecksComplete,
+  LISTENER_RULES_CONSENT_VERSION,
+} from '../domain/listener-approval.ts';
+import type { KycCheckKind, KycCheckStatus } from '../domain/kyc-verification.ts';
 
 const proficiencies = new Set(['conversational', 'fluent', 'native']);
 
@@ -174,6 +179,82 @@ export async function submitListenerAssessment(req: IncomingMessage, res: Server
   });
 
   sendJson(res, 202, { ok: true, attemptId, status: 'pending' });
+}
+
+export async function acceptListenerAgreement(req: IncomingMessage, res: ServerResponse) {
+  const { userId } = await requireAuth(req);
+  const body = await readJson<{ accepted?: unknown }>(req);
+  if (body.accepted !== true) throw new HttpError(400, 'listener_agreement_not_accepted');
+
+  const result = await withTransaction(async (client) => {
+    const applicationResult = await client.query<{ id: string; status: string }>(`
+      SELECT la.id::text, la.status::text
+      FROM app.listener_applications la
+      JOIN app.service_catalog s ON s.id=la.service_id AND s.code='human_listening'
+      WHERE la.user_id=$1
+      FOR UPDATE OF la
+    `, [userId]);
+    const application = applicationResult.rows[0];
+    if (!application) throw new HttpError(404, 'listener_application_not_found');
+
+    const existingConsent = await client.query(`
+      SELECT 1
+      FROM app.consents
+      WHERE user_id=$1
+        AND consent_type='listener_rules'
+        AND version=$2
+        AND granted=true
+        AND revoked_at IS NULL
+      LIMIT 1
+    `, [userId, LISTENER_RULES_CONSENT_VERSION]);
+
+    if (application.status === 'admin_review' || application.status === 'approved' || application.status === 'active') {
+      if (!existingConsent.rowCount) throw new HttpError(409, 'listener_agreement_evidence_missing');
+      return { applicationId: application.id, status: application.status, idempotent: true };
+    }
+    // `kyc_pending` is accepted here only as a compatibility state for a row
+    // whose provider checks already completed before W87 introduced the
+    // explicit KYC -> agreement_pending handoff. The evidence re-check below
+    // is authoritative; an actually pending KYC cannot advance.
+    if (!['agreement_pending', 'kyc_pending'].includes(application.status)) {
+      throw new HttpError(409, 'listener_agreement_not_available');
+    }
+
+    const kyc = await client.query<{ status: string }>(`
+      SELECT status::text FROM private_data.listener_kyc WHERE user_id=$1
+    `, [userId]);
+    const checks = await client.query<{ check_kind: KycCheckKind; status: KycCheckStatus }>(`
+      SELECT check_kind::text AS check_kind, status::text AS status
+      FROM private_data.listener_kyc_checks
+      WHERE user_id=$1
+      ORDER BY check_kind
+    `, [userId]);
+    const normalizedChecks = checks.rows.map((row) => ({ checkKind: row.check_kind, status: row.status }));
+    if (kyc.rows[0]?.status !== 'verified' || !listenerKycChecksComplete(normalizedChecks)) {
+      throw new HttpError(409, 'listener_kyc_incomplete');
+    }
+
+    await client.query(`
+      INSERT INTO app.consents(user_id, consent_type, version, granted, granted_at, revoked_at)
+      VALUES ($1,'listener_rules',$2,true,now(),NULL)
+      ON CONFLICT (user_id, consent_type, version) DO UPDATE SET
+        granted=true, granted_at=now(), revoked_at=NULL
+    `, [userId, LISTENER_RULES_CONSENT_VERSION]);
+    await client.query(`
+      UPDATE app.listener_applications
+      SET status='admin_review', updated_at=now()
+      WHERE id=$1 AND status IN ('agreement_pending','kyc_pending')
+    `, [application.id]);
+    await client.query(`
+      INSERT INTO app.audit_logs(actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1,'listener_rules_accepted','listener_application',$2,
+              jsonb_build_object('version',$3::text,'nextStatus','admin_review','fromStatus',$4::text))
+    `, [userId, application.id, LISTENER_RULES_CONSENT_VERSION, application.status]);
+
+    return { applicationId: application.id, status: 'admin_review', idempotent: false };
+  });
+
+  sendJson(res, 200, { ok: true, ...result, agreementVersion: LISTENER_RULES_CONSENT_VERSION });
 }
 
 export async function getListenerApplication(req: IncomingMessage, res: ServerResponse) {

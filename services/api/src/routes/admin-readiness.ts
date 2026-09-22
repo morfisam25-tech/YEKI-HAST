@@ -84,12 +84,15 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
   `, [productCode, serviceCode, marketCode]);
   const callerCatalogReady = Boolean(catalog.rows[0]?.pricing_ready && catalog.rows[0]?.language_ready);
   const callerAgePolicyReady = configured(process.env.CALLER_AGE_POLICY_VERSION)
-    && Number.isInteger(Number(process.env.CALLER_MINIMUM_AGE))
-    && Number(process.env.CALLER_MINIMUM_AGE) >= 13
-    && Number(process.env.CALLER_MINIMUM_AGE) <= 99;
+    && Number(process.env.CALLER_MINIMUM_AGE) === 18;
   const callerClosedBetaConfigured = isCallerClosedBetaConfigured();
   const callerClosedBetaEnabled = isCallerClosedBetaEnabled();
   const commercialHostingApproved = isCommercialHostingApproved();
+  // Both the payment rail and the Listener KYC inquiry provider are required
+  // Day-1 paid-marketplace dependencies: a Caller can fund a wallet without
+  // payment, but the marketplace has no honestly-onboardable Listener supply
+  // without KYC actually being executable. Neither may gate the other's
+  // absence -- the paid launch stays closed unless both are ready.
   const callerLaunchReady = callerClosedBetaConfigured
     && commercialHostingApproved
     && callerAgePolicyReady
@@ -97,6 +100,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
     && accountAuthReady
     && callTransportReady
     && paymentReady
+    && kycInquiryReady
     && sensitiveDataReady
     && adminBootstrapLockedDown
     && publicRelease.ready;
@@ -137,6 +141,7 @@ export async function getAdminIntegrationReadiness(req: IncomingMessage, res: Se
         privacyPolicyReady: Boolean(publicRelease.privacyPolicyUrl),
         termsOfServiceReady: Boolean(publicRelease.termsOfServiceUrl),
         accountDeletionReady: Boolean(publicRelease.accountDeletionUrl),
+        childSafetyReady: Boolean(publicRelease.childSafetyUrl),
         supportReady: Boolean(publicRelease.supportEmail),
       },
       adminBootstrap: {

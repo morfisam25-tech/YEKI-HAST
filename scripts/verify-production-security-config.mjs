@@ -116,10 +116,62 @@ function staticIceServersContainTurn(raw) {
   });
 }
 
+// RealtimeKit owns signaling/media relay on this path, mirroring
+// services/api/src/providers/recording-realtimekit.ts#readCloudflareRealtimeKitConfig:
+// presence of all three identifiers is required, no format beyond that.
+function requireRealtimeKitConfig() {
+  const accountId = process.env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID?.trim() || '';
+  const appId = process.env.CLOUDFLARE_REALTIMEKIT_APP_ID?.trim() || '';
+  const apiToken = process.env.CLOUDFLARE_REALTIMEKIT_API_TOKEN?.trim() || '';
+  if (!accountId || !appId || !apiToken) {
+    throw new Error('CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID, CLOUDFLARE_REALTIMEKIT_APP_ID, and CLOUDFLARE_REALTIMEKIT_API_TOKEN are required when CALL_MEDIA_PROVIDER=realtimekit');
+  }
+  required('CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME');
+}
+
+// Mirrors services/api/src/lib/recording-archive-r2.ts#readR2ArchiveConfig. A
+// required recording with no durable private archive silently loses the very
+// evidence it exists to keep: the provider's own download URLs are transient,
+// so the only lasting copy is the one this project writes to its own R2
+// bucket. Production must refuse to start in that state rather than record
+// into nothing. CALL_RECORDING_ARCHIVE_R2_PATH stays optional because the
+// library treats an empty prefix as a valid bucket root, and the data key ring
+// the stored references are encrypted with is already validated below.
+function requireDurableRecordingArchive() {
+  if (!boolean('CALL_RECORDING_ARCHIVE_R2_ENABLED')) {
+    throw new Error('Production Caller requires CALL_RECORDING_ARCHIVE_R2_ENABLED=true when CALL_RECORDING_REQUIRED=true');
+  }
+  required('CALL_RECORDING_ARCHIVE_R2_ACCOUNT_ID');
+  required('CALL_RECORDING_ARCHIVE_R2_BUCKET');
+  required('CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID');
+  required('CALL_RECORDING_ARCHIVE_R2_SECRET_ACCESS_KEY');
+}
+
+// Mirrors packages/domain/src/call-media.ts#resolveCallMediaProvider +
+// packages/domain/src/recording.ts#resolveRecordingRequirement: RealtimeKit is
+// the only production media path and never needs legacy TURN/static ICE;
+// legacy_p2p keeps the original TURN/static-ICE contract unchanged for the
+// non-public contexts that may still explicitly select it.
 function validateInternetVoiceLaunchTransport() {
   const primary = process.env.CALL_PRIMARY_TRANSPORT?.trim().toLowerCase() || 'internet_voice';
   if (!['internet_voice', 'masked_pstn'].includes(primary)) throw new Error('CALL_PRIMARY_TRANSPORT is invalid');
   if (primary !== 'internet_voice') return;
+
+  const mediaProvider = process.env.CALL_MEDIA_PROVIDER?.trim().toLowerCase();
+  if (mediaProvider === 'realtimekit') {
+    requireRealtimeKitConfig();
+    if (!boolean('CALL_RECORDING_REQUIRED')) {
+      throw new Error('Production Caller requires CALL_RECORDING_REQUIRED=true when CALL_MEDIA_PROVIDER=realtimekit');
+    }
+    required('CALL_RECORDING_PROVIDER');
+    required('CALL_RECORDING_CONSENT_POLICY_VERSION');
+    requireDurableRecordingArchive();
+    return;
+  }
+
+  if (mediaProvider !== 'legacy_p2p') {
+    throw new Error('CALL_MEDIA_PROVIDER must be realtimekit or legacy_p2p for Internet Voice');
+  }
 
   const cloudflareKeyId = process.env.CLOUDFLARE_TURN_KEY_ID?.trim() || '';
   const cloudflareApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN?.trim() || '';
@@ -218,8 +270,11 @@ if (callerClosedBetaEnabled) {
   publicHttpsUrl('PRIVACY_POLICY_URL');
   publicHttpsUrl('TERMS_OF_SERVICE_URL');
   publicHttpsUrl('ACCOUNT_DELETION_URL');
+  publicHttpsUrl('CHILD_SAFETY_URL');
   emailAddress('SUPPORT_EMAIL');
-  integer('CALLER_MINIMUM_AGE', undefined, 13, 99);
+  if (integer('CALLER_MINIMUM_AGE', undefined, 18, 18) !== 18) {
+    throw new Error('Public Caller requires CALLER_MINIMUM_AGE=18');
+  }
   required('CALLER_AGE_POLICY_VERSION');
   validateInternetVoiceLaunchTransport();
 }

@@ -626,11 +626,15 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
         const url = String(input);
         const method = (init?.method ?? 'GET').toUpperCase();
         if (url.includes('r2.cloudflarestorage.com')) {
-          if (method === 'DELETE') deletes.push(url);
-          return new Response('', { status: method === 'DELETE' ? 204 : 200 });
+          if (method === 'DELETE') {
+            deletes.push(url);
+            return new Response(null, { status: 204 });
+          }
+          return new Response('', { status: 200 });
         }
+        // The provider API wraps every payload as { success, data }.
         return new Response(
-          JSON.stringify({ id: 'provider-output', status: providerStatus, output_file_name: outputFileName }),
+          JSON.stringify({ success: true, data: { id: 'provider-output', status: providerStatus, output_file_name: outputFileName } }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         );
       }) as typeof fetch;

@@ -129,6 +129,24 @@ function requireRealtimeKitConfig() {
   required('CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME');
 }
 
+// Mirrors services/api/src/lib/recording-archive-r2.ts#readR2ArchiveConfig. A
+// required recording with no durable private archive silently loses the very
+// evidence it exists to keep: the provider's own download URLs are transient,
+// so the only lasting copy is the one this project writes to its own R2
+// bucket. Production must refuse to start in that state rather than record
+// into nothing. CALL_RECORDING_ARCHIVE_R2_PATH stays optional because the
+// library treats an empty prefix as a valid bucket root, and the data key ring
+// the stored references are encrypted with is already validated below.
+function requireDurableRecordingArchive() {
+  if (!boolean('CALL_RECORDING_ARCHIVE_R2_ENABLED')) {
+    throw new Error('Production Caller requires CALL_RECORDING_ARCHIVE_R2_ENABLED=true when CALL_RECORDING_REQUIRED=true');
+  }
+  required('CALL_RECORDING_ARCHIVE_R2_ACCOUNT_ID');
+  required('CALL_RECORDING_ARCHIVE_R2_BUCKET');
+  required('CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID');
+  required('CALL_RECORDING_ARCHIVE_R2_SECRET_ACCESS_KEY');
+}
+
 // Mirrors packages/domain/src/call-media.ts#resolveCallMediaProvider +
 // packages/domain/src/recording.ts#resolveRecordingRequirement: RealtimeKit is
 // the only production media path and never needs legacy TURN/static ICE;
@@ -147,6 +165,7 @@ function validateInternetVoiceLaunchTransport() {
     }
     required('CALL_RECORDING_PROVIDER');
     required('CALL_RECORDING_CONSENT_POLICY_VERSION');
+    requireDurableRecordingArchive();
     return;
   }
 

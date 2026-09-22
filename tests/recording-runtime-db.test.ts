@@ -579,4 +579,111 @@ test('W58 recording core foundation runtime', { skip }, async (t) => {
     const closedPayload = JSON.parse(closedRes.body);
     assert.equal(closedPayload.recording.legalHoldReviewDueAt, '2026-06-30T00:00:00.000Z');
   });
+
+  // W89 P1 regression: an archived recording that no admin ever played back has
+  // no persisted storage reference. A NULL reference must never be read as
+  // "already deleted" -- the provider's output has to be located and really
+  // deleted (or proven absent) before the session may be marked purged.
+  await t.test('never-played archive is reconciled and really deleted before the session may become purged', async () => {
+    const { purgeRecordingArchiveSession } = await import('../services/api/src/services/recording-archive.ts');
+
+    const ARCHIVE_ENV = {
+      CALL_RECORDING_ARCHIVE_R2_ENABLED: 'true',
+      CALL_RECORDING_ARCHIVE_R2_ACCOUNT_ID: '0123456789abcdef0123456789abcdef',
+      CALL_RECORDING_ARCHIVE_R2_BUCKET: 'yeki-hast-archive-test',
+      CALL_RECORDING_ARCHIVE_R2_PATH: 'listener-recordings-test',
+      CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID: 'FAKEACCESSKEY',
+      CALL_RECORDING_ARCHIVE_R2_SECRET_ACCESS_KEY: 'fake-secret-not-a-real-credential',
+      CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID: 'acct',
+      CLOUDFLARE_REALTIMEKIT_APP_ID: 'app',
+      CLOUDFLARE_REALTIMEKIT_API_TOKEN: 'token',
+    };
+
+    async function seedNeverPlayedArchive(providerOutputId: string): Promise<string> {
+      const { callId } = await seedCall('all_with_consent');
+      await query(
+        "INSERT INTO private_data.call_recording_sessions(call_session_id, provider, state, consent_policy_version, purge_eligible_at, legal_hold)"
+        + " VALUES ($1,'cloudflare_realtimekit','stored','rec-2026-09-14-v1', now() - interval '1 day', false)",
+        [callId],
+      );
+      const recordingSessionId = (await query<{ id: string }>(
+        'SELECT id::text FROM private_data.call_recording_sessions WHERE call_session_id=$1', [callId],
+      )).rows[0].id;
+      // Archived by the provider, but never played back, so reconciliation
+      // never ran and no storage reference was ever persisted.
+      await query(
+        "INSERT INTO private_data.call_recording_segments(recording_session_id, provider_output_id, state, storage_reference_ciphertext, encryption_key_version)"
+        + " VALUES ($1,$2,'stored',NULL,NULL)",
+        [recordingSessionId, providerOutputId],
+      );
+      return recordingSessionId;
+    }
+
+    function mockArchiveFetch(providerStatus: string, outputFileName: string | null) {
+      const deletes: string[] = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        const method = (init?.method ?? 'GET').toUpperCase();
+        if (url.includes('r2.cloudflarestorage.com')) {
+          if (method === 'DELETE') deletes.push(url);
+          return new Response('', { status: method === 'DELETE' ? 204 : 200 });
+        }
+        return new Response(
+          JSON.stringify({ id: 'provider-output', status: providerStatus, output_file_name: outputFileName }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }) as typeof fetch;
+      return { deletes, restore: () => { globalThis.fetch = originalFetch; } };
+    }
+
+    async function readState(recordingSessionId: string) {
+      return (await query<{
+        session_state: string; purged_at: string | null; segment_state: string; has_ref: boolean;
+      }>(
+        'SELECT s.state::text AS session_state, s.purged_at::text, g.state::text AS segment_state,'
+        + ' (g.storage_reference_ciphertext IS NOT NULL) AS has_ref'
+        + ' FROM private_data.call_recording_sessions s'
+        + ' JOIN private_data.call_recording_segments g ON g.recording_session_id=s.id WHERE s.id=$1',
+        [recordingSessionId],
+      )).rows[0];
+    }
+
+    await withEnv({ ...REQUIRED_ENV, ...ARCHIVE_ENV }, async () => {
+      // The provider still holds the output: it must be deleted for real.
+      const purgeable = await seedNeverPlayedArchive('11111111-1111-4111-8111-111111111111');
+      const uploaded = mockArchiveFetch('UPLOADED', 'never-played.mp4');
+      try {
+        assert.equal(await purgeRecordingArchiveSession(purgeable, new Date()), 'purged');
+        assert.equal(uploaded.deletes.length, 1, 'a never-played archive must still issue a real R2 delete');
+        assert.match(
+          uploaded.deletes[0],
+          /listener-recordings-test\/never-played\.mp4/,
+          'the delete must target the key reconciled from the provider output',
+        );
+      } finally {
+        uploaded.restore();
+      }
+      const after = await readState(purgeable);
+      assert.equal(after.session_state, 'purged');
+      assert.ok(after.purged_at);
+      assert.equal(after.segment_state, 'purged');
+      assert.equal(after.has_ref, false);
+
+      // The output is still in flight: absence is NOT proven, so the session
+      // must stay unpurged rather than orphan a real object.
+      const inFlight = await seedNeverPlayedArchive('22222222-2222-4222-8222-222222222222');
+      const uploading = mockArchiveFetch('UPLOADING', null);
+      try {
+        assert.equal(await purgeRecordingArchiveSession(inFlight, new Date()), 'archive_unverified');
+        assert.equal(uploading.deletes.length, 0, 'an unverifiable archive must not delete anything');
+      } finally {
+        uploading.restore();
+      }
+      const blocked = await readState(inFlight);
+      assert.equal(blocked.session_state, 'stored', 'an unverifiable archive must never be marked purged');
+      assert.equal(blocked.purged_at, null);
+      assert.equal(blocked.segment_state, 'stored');
+    });
+  });
 });

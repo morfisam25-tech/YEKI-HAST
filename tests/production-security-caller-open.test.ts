@@ -160,6 +160,12 @@ test('caller-open production security config accepts RealtimeKit fully configure
   env.CALL_RECORDING_REQUIRED = 'true';
   env.CALL_RECORDING_PROVIDER = 'cloudflare_realtimekit';
   env.CALL_RECORDING_CONSENT_POLICY_VERSION = 'rec-2026-09-14';
+  env.CALL_RECORDING_ARCHIVE_R2_ENABLED = 'true';
+  env.CALL_RECORDING_ARCHIVE_R2_ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
+  env.CALL_RECORDING_ARCHIVE_R2_BUCKET = 'yeki-hast-recording-archive';
+  env.CALL_RECORDING_ARCHIVE_R2_PATH = 'listener-recordings';
+  env.CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID = 'archive-access-key';
+  env.CALL_RECORDING_ARCHIVE_R2_SECRET_ACCESS_KEY = 'archive-secret-not-a-real-credential';
   const result = runVerifier(env);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /production security config verified/);
@@ -202,4 +208,43 @@ test('caller-open production security config fails closed when RealtimeKit recor
   const result = runVerifier(env);
   assert.notEqual(result.status, 0);
   assert.match(`${result.stderr}\n${result.stdout}`, /CALL_RECORDING_PROVIDER is required/);
+});
+
+
+function realtimeKitRecordingEnv(): NodeJS.ProcessEnv {
+  const env = baseEnv();
+  env.CALL_MEDIA_PROVIDER = 'realtimekit';
+  env.CLOUDFLARE_REALTIMEKIT_ACCOUNT_ID = 'acc';
+  env.CLOUDFLARE_REALTIMEKIT_APP_ID = 'app';
+  env.CLOUDFLARE_REALTIMEKIT_API_TOKEN = 'realtimekit-token';
+  env.CLOUDFLARE_REALTIMEKIT_VOICE_PRESET_NAME = 'voice-preset';
+  env.CALL_RECORDING_REQUIRED = 'true';
+  env.CALL_RECORDING_PROVIDER = 'cloudflare_realtimekit';
+  env.CALL_RECORDING_CONSENT_POLICY_VERSION = 'rec-2026-09-14';
+  return env;
+}
+
+// W89: a required recording with no durable private archive records into
+// nothing -- the provider's own download URLs expire, so the evidence the
+// recording exists to preserve would be lost.
+test('caller-open production security config fails closed when recording is required but no durable archive is configured', () => {
+  const env = realtimeKitRecordingEnv();
+  env.CALL_RECORDING_ARCHIVE_R2_ENABLED = 'false';
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}
+${result.stdout}`, /CALL_RECORDING_ARCHIVE_R2_ENABLED=true when CALL_RECORDING_REQUIRED=true/);
+});
+
+test('caller-open production security config fails closed when the durable archive is enabled but incomplete', () => {
+  const env = realtimeKitRecordingEnv();
+  env.CALL_RECORDING_ARCHIVE_R2_ENABLED = 'true';
+  env.CALL_RECORDING_ARCHIVE_R2_ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
+  env.CALL_RECORDING_ARCHIVE_R2_BUCKET = 'yeki-hast-recording-archive';
+  delete env.CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID;
+  delete env.CALL_RECORDING_ARCHIVE_R2_SECRET_ACCESS_KEY;
+  const result = runVerifier(env);
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}
+${result.stdout}`, /CALL_RECORDING_ARCHIVE_R2_ACCESS_KEY_ID is required/);
 });

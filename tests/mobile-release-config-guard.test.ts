@@ -45,6 +45,10 @@ test('Android Store build keeps microphone and blocks unused sensitive permissio
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.WRITE_EXTERNAL_STORAGE',
+      // W86/W89: @cloudflare/realtimekit-react-native's manifest would otherwise
+      // merge location permissions into this audio-only app.
+      'android.permission.ACCESS_FINE_LOCATION',
+      'android.permission.ACCESS_COARSE_LOCATION',
     ],
   );
   assert.ok(appConfig.expo.android.blockedPermissions.includes('android.permission.CAMERA'));

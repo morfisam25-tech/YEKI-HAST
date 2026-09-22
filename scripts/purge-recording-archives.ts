@@ -17,12 +17,17 @@ const rows = await query<{ id: string }>(`
 `);
 
 let purged = 0;
+let unverified = 0;
 try {
   for (const row of rows.rows) {
-    if (await purgeRecordingArchiveSession(row.id) === 'purged') purged += 1;
+    const outcome = await purgeRecordingArchiveSession(row.id);
+    if (outcome === 'purged') purged += 1;
+    // Left deliberately unpurged: the archived object could not be located or
+    // proven absent, so marking it purged would orphan it in R2.
+    else if (outcome === 'archive_unverified') unverified += 1;
   }
   // Counts only. Never print object keys, references, credentials, or signed URLs.
-  console.log(JSON.stringify({ ok: true, scanned: rows.rows.length, purged }));
+  console.log(JSON.stringify({ ok: true, scanned: rows.rows.length, purged, unverified }));
 } finally {
   await closePool();
 }

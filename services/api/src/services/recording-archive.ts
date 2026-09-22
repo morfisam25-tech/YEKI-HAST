@@ -6,6 +6,7 @@ import {
   realtimeKitArchiveObjectKey,
   r2ArchiveObjectExists,
   requireR2ArchiveConfig,
+  type R2ArchiveConfig,
   type RecordingArchiveReference,
 } from '../lib/recording-archive-r2.ts';
 import { getCloudflareRealtimeKitRecordingDetails } from '../providers/recording-realtimekit.ts';
@@ -168,13 +169,64 @@ export function isRecordingArchivePurgeEligible(input: {
   return Number.isFinite(at.getTime()) && at.getTime() <= now.getTime();
 }
 
+export type RecordingArchivePurgeOutcome = 'purged' | 'not_eligible' | 'archive_unverified';
+
+// Provider states that can never leave a durable object behind: the recording
+// failed outright, so there is nothing in R2 to orphan. Anything still in
+// flight (INVOKED / RECORDING / UPLOADING / PAUSED) is not proof of absence and
+// must block the purge rather than be assumed harmless.
+const PROVIDER_STATES_WITHOUT_ARCHIVE = new Set(['ERRORED']);
+
+type SegmentArchiveResolution =
+  | { kind: 'delete'; key: string }
+  | { kind: 'absent' }
+  | { kind: 'unverified' };
+
+// A NULL storage_reference_ciphertext is NOT evidence that the object was
+// already deleted -- the common cause is simply that no admin ever played the
+// recording, so reconciliation never ran and the reference was never
+// persisted. Treating that as "nothing to delete" marks the session purged
+// while the real private object survives in R2 forever. So a missing reference
+// falls back to the provider's authoritative view of the output.
+async function resolveSegmentArchiveObject(
+  segment: {
+    provider_output_id: string | null;
+    storage_reference_ciphertext: string | null;
+    encryption_key_version: string | null;
+  },
+  config: R2ArchiveConfig,
+): Promise<SegmentArchiveResolution> {
+  if (segment.storage_reference_ciphertext) {
+    const reference = decryptRecordingArchiveReference(
+      segment.storage_reference_ciphertext,
+      segment.encryption_key_version,
+    );
+    if (reference.bucket !== config.bucket) {
+      throw new Error('recording_archive_bucket_mismatch');
+    }
+    return { kind: 'delete', key: reference.key };
+  }
+
+  // No reference and no provider output to ask about: unverifiable.
+  if (!segment.provider_output_id) return { kind: 'unverified' };
+
+  const details = await getCloudflareRealtimeKitRecordingDetails(segment.provider_output_id);
+  if (details.providerStatus === 'UPLOADED' && details.outputFileName) {
+    // Derive the same key the archive reconciliation would have stored. The
+    // delete is idempotent, so an object already gone still ends absent.
+    return { kind: 'delete', key: realtimeKitArchiveObjectKey(details.outputFileName, config.path) };
+  }
+  if (PROVIDER_STATES_WITHOUT_ARCHIVE.has(details.providerStatus)) return { kind: 'absent' };
+  return { kind: 'unverified' };
+}
+
 // Legal-hold aware destructive path. The recording-session row is locked for
 // the entire object-delete + state-update operation, so a concurrent hold
 // request must wait and cannot slip between eligibility check and deletion.
 export async function purgeRecordingArchiveSession(
   recordingSessionId: string,
   now: Date = new Date(),
-): Promise<'purged' | 'not_eligible'> {
+): Promise<RecordingArchivePurgeOutcome> {
   return withTransaction(async (client) => {
     const session = await client.query<{
       legal_hold: boolean;
@@ -197,26 +249,35 @@ export async function purgeRecordingArchiveSession(
 
     const segments = await client.query<{
       id: string;
+      provider_output_id: string | null;
       storage_reference_ciphertext: string | null;
       encryption_key_version: string | null;
     }>(`
-      SELECT id::text, storage_reference_ciphertext, encryption_key_version
+      SELECT id::text, provider_output_id, storage_reference_ciphertext, encryption_key_version
       FROM private_data.call_recording_segments
       WHERE recording_session_id=$1
       FOR UPDATE
     `, [recordingSessionId]);
 
     const config = requireR2ArchiveConfig();
+
+    // Resolve every segment before deleting anything: if a later segment turns
+    // out to be unverifiable we must not already have destroyed an earlier
+    // one's object while leaving the session unpurged.
+    const keys: string[] = [];
     for (const segment of segments.rows) {
-      if (!segment.storage_reference_ciphertext) continue;
-      const reference = decryptRecordingArchiveReference(
-        segment.storage_reference_ciphertext,
-        segment.encryption_key_version,
-      );
-      if (reference.bucket !== config.bucket) {
-        throw new Error('recording_archive_bucket_mismatch');
+      const resolution = await resolveSegmentArchiveObject(segment, config);
+      if (resolution.kind === 'unverified') {
+        console.error(JSON.stringify({
+          event: 'recording_archive_diagnostic',
+          stage: 'archive_purge_unverified',
+        }));
+        return 'archive_unverified';
       }
-      await deleteR2ArchiveObject(reference.key, config);
+      if (resolution.kind === 'delete') keys.push(resolution.key);
+    }
+    for (const key of keys) {
+      await deleteR2ArchiveObject(key, config);
     }
 
     await client.query(`

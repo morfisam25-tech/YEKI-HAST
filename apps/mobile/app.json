@@ -29,7 +29,8 @@
             "compileSdkVersion": 36
           }
         }
-      ]
+      ],
+      "./plugins/withRealtimeKitAndroidCompat"
     ],
     "android": {
       "package": "app.yekihast.mobile",
@@ -43,7 +44,9 @@
         "android.permission.DUMP",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "icon": "./assets/generated/app-icon.png",
       "adaptiveIcon": {
